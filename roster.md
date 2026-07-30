@@ -1,6 +1,6 @@
 # Dates
 - **Roster Start Date**: 2026-08-01
-- **Roster End Date**: 2026-08-31
+- **Roster End Date**: 2026-08-14
 
 ## Monday
 - 1 D8

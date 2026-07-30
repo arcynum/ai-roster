@@ -67,19 +67,25 @@ def parse_definitions(content: str) -> Dict[str, ShiftDefinition]:
                 print(f"Error parsing time for {name}: {e}")
     return definitions
 
-def parse_roster(content: str) -> Dict[str, List[ShiftRequirement]]:
+def parse_roster(content: str) -> Tuple[datetime.date, datetime.date, Dict[str, List[ShiftRequirement]]]:
+    start_date = None
+    end_date = None
     roster = {}
     current_day = None
     for line in content.split('\n'):
         line = line.strip()
         if not line: continue
-        if line.startswith('## '):
+        if line.startswith('- **Roster Start Date**: '):
+            start_date = datetime.datetime.strptime(line.split(': ')[1], "%Y-%m-%d").date()
+        elif line.startswith('- **Roster End Date**: '):
+            end_date = datetime.datetime.strptime(line.split(': ')[1], "%Y-%m-%d").date()
+        elif line.startswith('## '):
             current_day = line[3:].strip()
             roster[current_day] = []
         elif line.startswith('- ') and current_day:
             m = re.match(r'- (\d+) (\w+)', line)
             if m: roster[current_day].append(ShiftRequirement(m.group(2), int(m.group(1))))
-    return roster
+    return start_date, end_date, roster
 
 def parse_staff(content: str) -> List[StaffMember]:
     staff = []
@@ -131,18 +137,25 @@ def parse_staff(content: str) -> List[StaffMember]:
                             if d_str: holidays.append((datetime.datetime.strptime(d_str, "%Y-%m-%d").date(), datetime.datetime.strptime(d_str, "%Y-%m-%d").date()))
                         except: pass
                         
-        # Rules and Preferences - these are on the next lines
-        # This is a bit tricky with regex. Let's use the previous line-by-line logic for these.
+        # Rules and Preferences
         lines = block.split('\n')
         for i, line in enumerate(lines):
             if "- **Rules**:" in line:
-                if i+1 < len(lines):
+                content = line.split("- **Rules**:")[1].strip()
+                if content:
+                    rules.append(content)
+                elif i + 1 < len(lines):
                     next_l = lines[i+1].strip()
-                    if next_l and not next_l.startswith("- **"): rules.append(next_l)
+                    if next_l and not next_l.startswith("- **"):
+                        rules.append(next_l)
             if "- **Preferences**:" in line:
-                if i+1 < len(lines):
+                content = line.split("- **Preferences**:")[1].strip()
+                if content:
+                    prefs.append(content)
+                elif i + 1 < len(lines):
                     next_l = lines[i+1].strip()
-                    if next_l and not next_l.startswith("- **"): prefs.append(next_l)
+                    if next_l and not next_l.startswith("- **"):
+                        prefs.append(next_l)
                     
         staff.append(StaffMember(name, level, training, fte, red, holidays, rules, prefs))
     return staff
@@ -186,7 +199,7 @@ class Solver:
                 elif as_start >= s_end:
                     if (as_start - s_end).total_seconds() < 11 * 3600: return False
                 
-                is_night = lambda sn: sn in ["N8", "N12", "DISCO"]
+                is_night = lambda sn: sn in ["N8", "N12"]
                 if is_night(shift_name) != is_night(ass_shift):
                     if abs((date - ass_date).days) <= 1: return False
 
@@ -228,9 +241,33 @@ class Solver:
                         # Priority:
                         # 1. Has not met FTE (if any_under_fte is true, this is already filtered)
                         # 2. Lower ratio of assigned/fte
+                        # 3. Preference: same shift yesterday
+                        # 4. Rule 18: Day/Night balance
                         met_fte = 1 if s.assigned_hours >= s.fte_hours else 0
                         ratio = s.assigned_hours / s.fte_hours
-                        return (met_fte, ratio)
+                        
+                        # Preference: same shift yesterday
+                        pref_score = 0 if (d - datetime.timedelta(days=1), req.shift_name) in s.assigned_shifts else 1
+                        
+                        # Rule 18: Day/Night balance
+                        s_day_count = 0
+                        s_night_count = 0
+                        for ass_date, ass_shift, ass_m in self.assignments:
+                            if ass_m.name == s.name:
+                                if ass_shift in ["N8", "N12"]:
+                                    s_night_count += 1
+                                else:
+                                    s_day_count += 1
+                        
+                        req_is_night = req.shift_name in ["N8", "N12"]
+                        balance_score = 1
+                        if req_is_night:
+                            if s_day_count > s_night_count:
+                                balance_score = 0
+                        elif s_night_count > s_day_count:
+                            balance_score = 0
+                            
+                        return (met_fte, ratio, pref_score, balance_score)
 
                     candidates.sort(key=candidate_key)
                     
@@ -254,14 +291,14 @@ class Solver:
                             best_staff = s
                             if req.shift_name == "D12":
                                 if s.level == "CN": d12_cn = True
-                                elif TRAINING_MAP.get(s.training_level, 0) == 3: d12_coord = True
-                                elif TRAINING_MAP.get(s.training_level, 0) == 2: d12_triage = True
-                                elif TRAINING_MAP.get(s.training_level, 0) == 1: d12_resus = True
+                                if TRAINING_MAP.get(s.training_level, 0) == 3: d12_coord = True
+                                if TRAINING_MAP.get(s.training_level, 0) == 2: d12_triage = True
+                                if TRAINING_MAP.get(s.training_level, 0) == 1: d12_resus = True
                             elif req.shift_name == "N12":
                                 if s.level == "CN": n12_cn = True
-                                elif TRAINING_MAP.get(s.training_level, 0) == 3: n12_coord = True
-                                elif TRAINING_MAP.get(s.training_level, 0) == 2: n12_triage = True
-                                elif TRAINING_MAP.get(s.training_level, 0) == 1: n12_resus = True
+                                if TRAINING_MAP.get(s.training_level, 0) == 3: n12_coord = True
+                                if TRAINING_MAP.get(s.training_level, 0) == 2: n12_triage = True
+                                if TRAINING_MAP.get(s.training_level, 0) == 1: n12_resus = True
                             break
                     
                     if not best_staff and candidates:
@@ -269,14 +306,14 @@ class Solver:
                         # Still need to update the requirement flags if we just pick someone
                         if req.shift_name == "D12":
                             if best_staff.level == "CN": d12_cn = True
-                            elif TRAINING_MAP.get(best_staff.training_level, 0) == 3: d12_coord = True
-                            elif TRAINING_MAP.get(best_staff.training_level, 0) == 2: d12_triage = True
-                            elif TRAINING_MAP.get(best_staff.training_level, 0) == 1: d12_resus = True
+                            if TRAINING_MAP.get(best_staff.training_level, 0) == 3: d12_coord = True
+                            if TRAINING_MAP.get(best_staff.training_level, 0) == 2: d12_triage = True
+                            if TRAINING_MAP.get(best_staff.training_level, 0) == 1: d12_resus = True
                         elif req.shift_name == "N12":
                             if best_staff.level == "CN": n12_cn = True
-                            elif TRAINING_MAP.get(best_staff.training_level, 0) == 3: n12_coord = True
-                            elif TRAINING_MAP.get(best_staff.training_level, 0) == 2: n12_triage = True
-                            elif TRAINING_MAP.get(best_staff.training_level, 0) == 1: n12_resus = True
+                            if TRAINING_MAP.get(best_staff.training_level, 0) == 3: n12_coord = True
+                            if TRAINING_MAP.get(best_staff.training_level, 0) == 2: n12_triage = True
+                            if TRAINING_MAP.get(best_staff.training_level, 0) == 1: n12_resus = True
 
                     if best_staff:
                         self.assignments.append((d, req.shift_name, best_staff))
@@ -300,28 +337,47 @@ class Solver:
                 day_ass = [a for a in self.assignments if a[0] == d]
                 if not day_ass: f.write("- No shifts scheduled\n")
                 for date, sn, sm in day_ass:
-                    f.write(f"- {sn}: {sm.name if sm else 'UNFILLED'}\n")
+                    if sm:
+                        f.write(f"- {sn}: {sm.name} ({sm.level}, {sm.training_level})\n")
+                    else:
+                        f.write(f"- {sn}: UNFILLED\n")
                 f.write("\n")
 
 if __name__ == "__main__":
     try:
         with open("definitions.md", "r") as f: defs = parse_definitions(f.read())
-        with open("roster.md", "r") as f: reqs = parse_roster(f.read())
+        with open("roster.md", "r") as f: 
+            start_date, end_date, reqs = parse_roster(f.read())
         with open("staff.md", "r") as f: staff = parse_staff(f.read())
         
         import sys
-        start_date = datetime.date(2026, 7, 31)
+        if start_date is None:
+            print("Roster start date not found in roster.md")
+            sys.exit(1)
+            
+        if end_date is None:
+            # Default to 14 days if no end date provided
+            end_date = start_date + datetime.timedelta(days=13)
+
+        days_count = (end_date - start_date).days + 1
+            
         if len(sys.argv) > 1:
             try:
                 start_date = datetime.datetime.strptime(sys.argv[1], "%Y-%m-%d").date()
+                days_count = 14 # If user provides start date, assume 14 days as before
             except ValueError:
                 print("Invalid date format. Use YYYY-MM-DD")
                 sys.exit(1)
         
-        solver = Solver(start_date, 14, defs, reqs, staff)
+        solver = Solver(start_date, days_count, defs, reqs, staff)
         solver.solve()
         solver.generate_results()
-        print("Roster built successfully.")
+        
+        unfilled = [a for a in solver.assignments if "UNFILLED" in a[1]]
+        if unfilled:
+            print(f"Roster built, but {len(unfilled)} shifts remain UNFILLED.")
+        else:
+            print("Roster built successfully.")
     except Exception as e:
         import traceback
         traceback.print_exc()
