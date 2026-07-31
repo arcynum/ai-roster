@@ -256,16 +256,16 @@ class CPSolver:
         else:
             return []
 
-    def get_rule_id(self, partial_desc: str) -> str:
+    def get_rule_id(self, rule_id: str) -> str:
         for rule in self.rules:
-            if partial_desc.lower() in rule.description.lower():
-                return f"[{rule.id}] " if rule.id else ""
+            if rule.id == rule_id:
+                return f"[{rule.id}] "
         return ""
 
-    def get_pref_id(self, partial_desc: str) -> str:
+    def get_pref_id(self, pref_id: str) -> str:
         for pref in self.preferences:
-            if partial_desc.lower() in pref.description.lower():
-                return f"[{pref.id}] " if pref.id else ""
+            if pref.id == pref_id:
+                return f"[{pref.id}] "
         return ""
 
     def validate_roster(self) -> List[str]:
@@ -278,21 +278,21 @@ class CPSolver:
                 daily_assignments[date] = []
             daily_assignments[date].append((shift_name, staff_m))
 
-        d12_cn_id = self.get_rule_id("CN classified staff member")
-        d12_coord_id = self.get_rule_id("Shift Coordinator trained staff member")
-        d12_triage_id = self.get_rule_id("Triage trained staff member")
-        d12_resus_id = self.get_rule_id("Resus trained staff member")
-        n12_cn_id = self.get_rule_id("CN classified staff member")
-        n12_coord_id = self.get_rule_id("Shift Coordinator trained staff member")
-        n12_triage_id = self.get_rule_id("Triage trained staff member")
-        n12_resus_id = self.get_rule_id("Resus trained staff member")
-        fte_id = self.get_rule_id("at least their FTE hours")
-        max_hours_id = self.get_rule_id("exceed 76 FTE hours")
-        consecutive_id = self.get_rule_id("3 days in a row")
-        rest_id = self.get_rule_id("minimum of 11 hours")
-        day_night_id = self.get_rule_id("swapping between night shifts and day shifts")
-        red_req_id = self.get_rule_id("red requested")
-        holiday_id = self.get_rule_id("on leave")
+        d12_cn_id = self.get_rule_id("R#a7f2c9d1")
+        d12_coord_id = self.get_rule_id("R#b8e3d0e2")
+        d12_triage_id = self.get_rule_id("R#c9f4e1f3")
+        d12_resus_id = self.get_rule_id("R#d0a5f2a4")
+        n12_cn_id = self.get_rule_id("R#e1b6a3b5")
+        n12_coord_id = self.get_rule_id("R#f2c7b4c6")
+        n12_triage_id = self.get_rule_id("R#a3d8c5d7")
+        n12_resus_id = self.get_rule_id("R#b4e9d6e8")
+        fte_id = self.get_rule_id("R#f8c3b0c2")
+        max_hours_id = self.get_rule_id("R#f0c5b2c4")
+        consecutive_id = self.get_rule_id("R#e3b8a5b7")
+        rest_id = self.get_rule_id("R#c1f6e3f5")
+        day_night_id = self.get_rule_id("R#f4c9b6c8")
+        red_req_id = self.get_rule_id("R#a5d0c7d9")
+        holiday_id = self.get_rule_id("R#b6e1d8e0")
 
         for date in self.dates:
             # Check D12 requirements

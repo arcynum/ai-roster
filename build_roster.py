@@ -1,6 +1,5 @@
 import re
 import datetime
-import random
 from typing import List, Dict, Optional, Set, Tuple
 from models import (
     ShiftDefinition,

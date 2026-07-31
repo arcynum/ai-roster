@@ -9,7 +9,6 @@ Everything in this file is a rule and MUST be followed. The final roster must be
 - [R#f2c7b4c6] 1 of the N12 shifts per day needs to be Shift Coordinator trained staff member.
 - [R#a3d8c5d7] 1 of the N12 shifts per day needs to be Triage trained staff member.
 - [R#b4e9d6e8] 1 of the N12 shifts per day needs to be Resus trained staff member.
-- [R#c5f0e7f9] The required CN classified staff member on the D12 and N12 shifts can also fill one of the required training levels. eg. A CN and Triage can be filled by 1 human who is classified as a CN and has a matching training level.
 - [R#d6a1f8a0] If it's not possible to create a roster because there is not enough staff FTE to fill the roster, let the user know.
 - [R#e7b2a9b1] If there is not enough staff FTE to cover all of the shifts, record the unfilled shifts as UNFILLED in the roster and record if any classification or training level is required.
 - [R#f8c3b0c2] Staff need to be rostered on for at least their FTE hours.
