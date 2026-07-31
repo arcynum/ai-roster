@@ -180,8 +180,8 @@ if __name__ == "__main__":
         with open("roster.md", "r") as f: 
             start_date, end_date, reqs = parse_roster(f.read())
         with open("staff.md", "r") as f: staff = parse_staff(f.read())
-        with open("rules.md", "r") as f: global_rules, _ = parse_rules_and_prefs(f.read(), "")
-        with open("preferences.md", "r") as f: _, global_prefs = parse_rules_and_prefs("", f.read())
+        with open("hard_constraints.md", "r") as f: global_rules, _ = parse_rules_and_prefs(f.read(), "")
+        with open("soft_constraints.md", "r") as f: _, global_prefs = parse_rules_and_prefs("", f.read())
         
         import sys
         if start_date is None:

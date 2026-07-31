@@ -39,8 +39,8 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - **`opencode.json`**: The definition of the model to use.
 - **`definitions.md`**: The definitions for all shifts, including start time, end time, duration and whether it crosses midnight.
 - **`roster.md`**: Inludes the start and end dates of the roster. The list of shifts that need to be filled each week. These shifts repeat exactly every week.
-- **`rules.md`**: The list of rules that each roster needs to follow. These are not negotiable.
-- **`preferences.md`**: The list of preferences that each roster should try to follow. If this is going not be followed for whatever reason, you must provide a reason why.
+- **`hard_constraints.md`**: The list of rules that each roster needs to follow. These are not negotiable.
+- **`soft_constraints.md`**: The list of preferences that each roster should try to follow. If this is going not be followed for whatever reason, you must provide a reason why.
 - **`staff.md`**: The list of all staff and their training levels and FTE hours.
 - **`training.md`**: The list of the different training levels for staff.
 - **`result.staff.md`**: The final roster grouped by staff member is printed here.
@@ -67,8 +67,15 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - The `result.staff.md` needs to include the the staff members Level, Training Level and FTE Hours per Fortnight.
 - Always print the shifts in the `result.roster.md` file in the following order: D8, D12, P8, P12, MD, L3, DISCO, N8, N12
 
-## Build
-When I say @BUILD then proceed to build a roster for the range listed in `roster.md` based on the markdown files in this directory. If any dates provided are outside of the date range then ignore those dates. Use the existing `build_roster.py` file if it helps, otherwise you can replace it.
+## Roster Engine: Constraint Programming (CP)
+The roster is generated using a Constraint Programming (CP) solver via Google OR-Tools (CP-SAT). This approach treats the problem as an optimization task rather than a greedy search.
+
+### Hard vs. Soft Constraints
+- **Hard Constraints (`hard_constraints.md`)**: These are non-negotiable requirements. The solver *must* satisfy every rule in this file to produce a valid roster. If rules conflict, the build will fail (Infeasible).
+- **Soft Constraints (`soft_constraints.md`)**: These are optimization objectives. The solver attempts to satisfy these as much as possible, but they may be violated to ensure all hard constraints are met.
+
+### Infeasibility Warning
+Adding conflicting or impossible requirements to `hard_constraints.md` will prevent a roster from being built entirely. If you encounter an "Infeasible" error, check for logical conflicts in your mandatory rules.
 
 ## Testing
 Whenever any code is changed, run the tests.
