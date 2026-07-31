@@ -8,7 +8,9 @@ from build_roster import (
     parse_staff,
     Solver,
     ShiftRequirement,
-    TRAINING_MAP
+    TRAINING_MAP,
+    Rule,
+    Preference
 )
 
 class TestParsers(unittest.TestCase):
@@ -53,8 +55,8 @@ class TestParsers(unittest.TestCase):
 **FTE Hours per Fortnight**: 48
 **Red Requests**: 2026-08-01
 **Holidays/Sickness**: 2026-08-05 to 2026-08-06
-- **Rules**: Never work monday
-**Preferences**: Prefers morning
+- **Rules**: [R#123] Never work monday
+**Preferences**: [P#456] Prefers morning
 """
         staff = parse_staff(content)
         self.assertEqual(len(staff), 1)
@@ -64,7 +66,10 @@ class TestParsers(unittest.TestCase):
         self.assertEqual(staff[0].fte_hours, 48)
         self.assertIn(datetime.date(2026, 8, 1), staff[0].red_requests)
         self.assertEqual(staff[0].holidays[0], (datetime.date(2026, 8, 5), datetime.date(2026, 8, 6)))
-        self.assertIn("Never work monday", staff[0].rules)
+        self.assertEqual(staff[0].rules[0].id, "R#123")
+        self.assertEqual(staff[0].rules[0].description, "Never work monday")
+        self.assertEqual(staff[0].preferences[0].id, "P#456")
+        self.assertEqual(staff[0].preferences[0].description, "Prefers morning")
 
 class TestValidation(unittest.TestCase):
     def setUp(self):
@@ -90,7 +95,7 @@ class TestValidation(unittest.TestCase):
         self.assertTrue(self.solver.is_valid(self.staff_m, datetime.date(2026, 8, 3), "D12"))
 
     def test_rules_monday(self):
-        self.staff_m.rules.append("Never work monday")
+        self.staff_m.rules.append(Rule("R#1", "Never work monday"))
         monday = datetime.date(2026, 8, 3)
         self.assertFalse(self.solver.is_valid(self.staff_m, monday, "D12"))
         self.assertTrue(self.solver.is_valid(self.staff_m, datetime.date(2026, 8, 1), "D12"))

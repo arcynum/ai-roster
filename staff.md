@@ -13,8 +13,8 @@
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-10, 2026-12-24 to 2026-12-26
-- **Rules**: Can never work monday.
-- **Preferences**: Prefers 3 of the same shifts in a row before a break.
+- **Rules**: [R#SOFIA1] Can never work monday.
+- **Preferences**: [P#SOFIA1] Prefers 3 of the same shifts in a row before a break.
 
 # Daniel Whitmore
 - **Classification**: RN
@@ -22,7 +22,7 @@
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: Can never work saturday.
+- **Rules**: [R#DANIEL1] Can never work saturday.
 - **Preferences**: 
 
 # Evelyn Cross
