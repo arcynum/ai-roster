@@ -19,7 +19,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
 
 ## Staff Definitions
 - Each staff member has the following options.
-    - **Level**: This is the staff members organisation level. RN = Registered Nurse. CN = Clinical Nurse.
+    - **Classification**: This is the staff members organisation level. RN = Registered Nurse. CN = Clinical Nurse.
     - **Training Level**: The level of training that the staff member has received. Acute < Resus < Triage < Shift Coordinator
     - **FTE Hours per Fortnight**: Hows many hours the staff member is contracted per fornight. They must be scheduled this number of hours minimum.
     - **Red Requests**: Staff members are allowed to choose a couple of days a month that they will not be roster on. These are those days. Not every staff member will make a red request each month.
@@ -35,6 +35,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
     - `result.roster.md` should be grouped by the roster days (by date) and show all of the people that are on shift for that day, including the specific shift.
 - The `result.roster.md` needs to include the the staff members level and training level.
 - The `result.staff.md` needs to include the the staff members Level, Training Level and FTE Hours per Fortnight.
+- Always print the shifts in the `result.roster.md` file in the following order: D8, D12, P8, P12, MD, L3, DISCO, N8, N12
 
 ## Build
 When I say @BUILD then proceed to build a roster for the range listed in `roster.md` based on the markdown files in this directory. If any dates provided are outside of the date range then ignore those dates. Use the existing `build_roster.py` file if it helps, otherwise you can replace it.

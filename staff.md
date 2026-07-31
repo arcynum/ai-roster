@@ -1,5 +1,5 @@
 # Marcus Ellington
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Acute
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
@@ -8,7 +8,7 @@
 - **Preferences**: 
 
 # Sofia Ramirez
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Acute
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
@@ -17,7 +17,7 @@
 - **Preferences**: Prefers 3 of the same shifts in a row before a break.
 
 # Daniel Whitmore
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Acute
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
@@ -26,7 +26,7 @@
 - **Preferences**: 
 
 # Evelyn Cross
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Acute
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -35,7 +35,7 @@
 - **Preferences**: 
 
 # Adrian Cole
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Resus
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 2026-08-27, 2026-08-29
@@ -44,7 +44,7 @@
 - **Preferences**: 
 
 # Lila Moreno
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Resus
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 2026-08-04, 2026-08-24
@@ -53,7 +53,7 @@
 - **Preferences**: 
 
 # Vincent Harper
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Resus
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
@@ -62,7 +62,7 @@
 - **Preferences**: 
 
 # Chloe Stanton
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Resus
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -71,7 +71,7 @@
 - **Preferences**: 
 
 # Samuel Grayson
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Resus
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -80,7 +80,7 @@
 - **Preferences**: 
 
 # Tessa Vaughan
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Resus
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -89,7 +89,7 @@
 - **Preferences**: 
 
 # Nathaniel Rhodes
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Resus
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -98,7 +98,7 @@
 - **Preferences**: 
 
 # Isla Montgomery
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 2026-08-27, 2026-08-15
@@ -107,7 +107,7 @@
 - **Preferences**: 
 
 # Derek Lawson
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -116,7 +116,7 @@
 - **Preferences**: 
 
 # Maya Serrano
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -125,7 +125,7 @@
 - **Preferences**: 
 
 # Julian Hartman
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -134,7 +134,7 @@
 - **Preferences**: 
 
 # Zoe Caldwell
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -143,7 +143,7 @@
 - **Preferences**: 
 
 # Oliver Keaton
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
@@ -152,7 +152,7 @@
 - **Preferences**: 
 
 # Ruby Sinclair
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
@@ -161,7 +161,7 @@
 - **Preferences**: 
 
 # Dominic Hayes
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
@@ -170,7 +170,7 @@
 - **Preferences**: 
 
 # Aria Thornton
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
@@ -179,7 +179,7 @@
 - **Preferences**: 
 
 # Caleb Donovan
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Triage
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
@@ -188,7 +188,7 @@
 - **Preferences**: 
 
 # Stella Monroe
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 2026-08-25, 2026-08-02
@@ -197,7 +197,7 @@
 - **Preferences**: 
 
 # Gabriel Preston
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
@@ -206,7 +206,7 @@
 - **Preferences**: 
 
 # Naomi Winters
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -215,7 +215,7 @@
 - **Preferences**: 
 
 # Elijah Carrington
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -224,7 +224,7 @@
 - **Preferences**: 
 
 # Clara Benson
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -233,7 +233,7 @@
 - **Preferences**: 
 
 # Tristan Lowell
-- **Level**: RN
+- **Classification**: RN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -242,7 +242,7 @@
 - **Preferences**: 
 
 # Ivy Sheridan
-- **Level**: CN
+- **Classification**: CN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 2026-08-20, 2026-08-12
@@ -251,7 +251,7 @@
 - **Preferences**: 
 
 # Max Donovan
-- **Level**: CN
+- **Classification**: CN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -260,7 +260,7 @@
 - **Preferences**: 
 
 # Leah Whitfield
-- **Level**: CN
+- **Classification**: CN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -269,7 +269,7 @@
 - **Preferences**: 
 
 # Freya Bennett
-- **Level**: CN
+- **Classification**: CN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
@@ -278,7 +278,7 @@
 - **Preferences**: 
 
 # Patrick O'Connell
-- **Level**: CN
+- **Classification**: CN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
@@ -287,7 +287,7 @@
 - **Preferences**: 
 
 # Aurora Blake
-- **Level**: CN
+- **Classification**: CN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
@@ -296,7 +296,7 @@
 - **Preferences**: 
 
 # Sebastian Clarke
-- **Level**: CN
+- **Classification**: CN
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
