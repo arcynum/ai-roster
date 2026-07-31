@@ -13,7 +13,7 @@
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-10, 2026-12-24 to 2026-12-26
-- **Rules**: Can never work mondays.
+- **Rules**: Can never work monday.
 - **Preferences**: Prefers 3 of the same shifts in a row before a break.
 
 # Daniel Whitmore
@@ -22,7 +22,7 @@
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
+- **Rules**: Can never work saturday.
 - **Preferences**: 
 
 # Evelyn Cross
@@ -190,7 +190,7 @@
 # Stella Monroe
 - **Level**: RN
 - **Training Level**: Shift Coordinator
-- **FTE Hours per Fortnight**: 60
+- **FTE Hours per Fortnight**: 48
 - **Red Requests**: 2026-08-25, 2026-08-02
 - **Holidays/Sickness**: 
 - **Rules**: 
@@ -199,7 +199,7 @@
 # Gabriel Preston
 - **Level**: RN
 - **Training Level**: Shift Coordinator
-- **FTE Hours per Fortnight**: 60
+- **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
 - **Rules**: 
@@ -271,7 +271,7 @@
 # Freya Bennett
 - **Level**: CN
 - **Training Level**: Shift Coordinator
-- **FTE Hours per Fortnight**: 72
+- **FTE Hours per Fortnight**: 60
 - **Red Requests**: 
 - **Holidays/Sickness**: 
 - **Rules**: 

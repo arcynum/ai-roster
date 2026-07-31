@@ -31,6 +31,7 @@ class StaffMember:
     preferences: List[str] = field(default_factory=list)
     assigned_hours: int = 0
     assigned_shifts: List[Tuple[datetime.date, str]] = field(default_factory=list)
+    weekend_hours: int = 0
 
 TRAINING_LEVELS = ["Acute", "Resus", "Triage", "Shift Coordinator"]
 TRAINING_MAP = {level: i for i, level in enumerate(TRAINING_LEVELS)}
@@ -71,7 +72,7 @@ def parse_roster(content: str) -> Tuple[datetime.date, datetime.date, Dict[str, 
     start_date = None
     end_date = None
     roster = {}
-    current_day = None
+    current_day_name = None
     for line in content.split('\n'):
         line = line.strip()
         if not line: continue
@@ -80,11 +81,19 @@ def parse_roster(content: str) -> Tuple[datetime.date, datetime.date, Dict[str, 
         elif line.startswith('- **Roster End Date**: '):
             end_date = datetime.datetime.strptime(line.split(': ')[1], "%Y-%m-%d").date()
         elif line.startswith('## '):
-            current_day = line[3:].strip()
-            roster[current_day] = []
-        elif line.startswith('- ') and current_day:
+            header = line[3:].strip()
+            # Match "YYYY-MM-DD (DayName)"
+            match = re.search(r'(\d{4}-\d{2}-\d{2})\s+\((\w+)\)', header)
+            if match:
+                current_day_name = match.group(2)
+            else:
+                current_day_name = header
+            
+            if current_day_name not in roster:
+                roster[current_day_name] = []
+        elif line.startswith('- ') and current_day_name:
             m = re.match(r'- (\d+) (\w+)', line)
-            if m: roster[current_day].append(ShiftRequirement(m.group(2), int(m.group(1))))
+            if m: roster[current_day_name].append(ShiftRequirement(m.group(2), int(m.group(1))))
     return start_date, end_date, roster
 
 def parse_staff(content: str) -> List[StaffMember]:
@@ -182,16 +191,16 @@ class Solver:
         for h_s, h_e in staff_m.holidays:
             if h_s <= date <= h_e: return False
         for rule in staff_m.rules:
-            if "mondays" in rule.lower() and date.strftime("%A").lower() == "monday": return False
+            if "monday" in rule.lower() and date.strftime("%A").lower() == "monday": return False
         for ass in self.assignments:
-            if ass[0] == date and ass[2].name == staff_m.name: return False
+            if ass[2] and ass[0] == date and ass[2].name == staff_m.name: return False
         
         sd = self.definitions[shift_name]
-        if staff_m.assigned_hours + sd.duration > 80: return False
+        if staff_m.assigned_hours + sd.duration > 76: return False
 
         s_start, s_end = self.get_shift_times(date, shift_name)
         for ass_date, ass_shift, ass_m in self.assignments:
-            if ass_m.name == staff_m.name:
+            if ass_m and ass_m.name == staff_m.name:
                 as_start, as_end = self.get_shift_times(ass_date, ass_shift)
                 if not (s_end <= as_start or s_start >= as_end): return False
                 if s_start >= as_end:
@@ -204,10 +213,14 @@ class Solver:
                     if abs((date - ass_date).days) <= 1: return False
 
         same_shift_count = 0
-        for ass_date, ass_shift, ass_m in self.assignments:
-            if ass_m.name == staff_m.name and ass_shift == shift_name:
-                if abs((date - ass_date).days) == 1: same_shift_count += 1
-        if same_shift_count >= 2: return False
+        for i in range(1, 4):
+            prev_date = date - datetime.timedelta(days=i)
+            match = any(a[2] and a[0] == prev_date and a[1] == shift_name and a[2].name == staff_m.name for a in self.assignments)
+            if match:
+                same_shift_count += 1
+            else:
+                break
+        if same_shift_count >= 3: return False
         return True
 
     def solve(self):
@@ -253,7 +266,7 @@ class Solver:
                         s_day_count = 0
                         s_night_count = 0
                         for ass_date, ass_shift, ass_m in self.assignments:
-                            if ass_m.name == s.name:
+                            if ass_m and ass_m.name == s.name:
                                 if ass_shift in ["N8", "N12"]:
                                     s_night_count += 1
                                 else:
@@ -267,7 +280,7 @@ class Solver:
                         elif s_night_count > s_day_count:
                             balance_score = 0
                             
-                        return (met_fte, ratio, pref_score, balance_score)
+                        return (met_fte, s.weekend_hours, pref_score, ratio, balance_score)
 
                     candidates.sort(key=candidate_key)
                     
@@ -319,15 +332,124 @@ class Solver:
                         self.assignments.append((d, req.shift_name, best_staff))
                         best_staff.assigned_hours += self.definitions[req.shift_name].duration
                         best_staff.assigned_shifts.append((d, req.shift_name))
+                        if d.weekday() >= 5:
+                            best_staff.weekend_hours += self.definitions[req.shift_name].duration
                     else:
                         self.assignments.append((d, f"UNFILLED {req.shift_name}", None))
         return self.assignments
+
+    def validate_roster(self) -> List[str]:
+        violations = []
+        
+        # Group assignments by date
+        daily_assignments = {}
+        for date, shift_name, staff_m in self.assignments:
+            if date not in daily_assignments:
+                daily_assignments[date] = []
+            daily_assignments[date].append((shift_name, staff_m))
+
+        for date in self.dates:
+            # Check D12 requirements
+            d12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "D12" and a[1] is not None]
+            if d12_shifts:
+                if not any(s.level == "CN" for _, s in d12_shifts):
+                    violations.append(f"{date}: D12 shift missing CN staff member")
+                if not any(TRAINING_MAP.get(s.training_level, 0) == 3 for _, s in d12_shifts):
+                    violations.append(f"{date}: D12 shift missing Shift Coordinator")
+                if not any(TRAINING_MAP.get(s.training_level, 0) == 2 for _, s in d12_shifts):
+                    violations.append(f"{date}: D12 shift missing Triage training")
+                if not any(TRAINING_MAP.get(s.training_level, 0) == 1 for _, s in d12_shifts):
+                    violations.append(f"{date}: D12 shift missing Resus training")
+
+            # Check N12 requirements
+            n12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "N12" and a[1] is not None]
+            if n12_shifts:
+                if not any(s.level == "CN" for _, s in n12_shifts):
+                    violations.append(f"{date}: N12 shift missing CN staff member")
+                if not any(TRAINING_MAP.get(s.training_level, 0) == 3 for _, s in n12_shifts):
+                    violations.append(f"{date}: N12 shift missing Shift Coordinator")
+                if not any(TRAINING_MAP.get(s.training_level, 0) == 2 for _, s in n12_shifts):
+                    violations.append(f"{date}: N12 shift missing Triage training")
+                if not any(TRAINING_MAP.get(s.training_level, 0) == 1 for _, s in n12_shifts):
+                    violations.append(f"{date}: N12 shift missing Resus training")
+
+        # FTE and Max Hours
+        for s in self.staff:
+            if s.assigned_hours < s.fte_hours:
+                violations.append(f"Staff {s.name} under FTE: {s.assigned_hours}/{s.fte_hours}")
+            if s.assigned_hours > 76:
+                violations.append(f"Staff {s.name} exceeded 76 hours: {s.assigned_hours}")
+
+        # Consecutive shifts and Rest period
+        for s in self.staff:
+            # Consecutive shifts (Rule 19)
+            shift_history = {} # (shift_name) -> list of dates
+            for d, sn, sm in self.assignments:
+                if sm and sm.name == s.name:
+                    if sn not in shift_history: shift_history[sn] = []
+                    shift_history[sn].append(d)
+            
+            for sn, dates in shift_history.items():
+                dates.sort()
+                consecutive = 1
+                for i in range(1, len(dates)):
+                    if (dates[i] - dates[i-1]).days == 1:
+                        consecutive += 1
+                        if consecutive >= 4:
+                            violations.append(f"Staff {s.name} worked {sn} for 4 consecutive days ending {dates[i]}")
+                            break
+                    else:
+                        consecutive = 1
+
+            # Rest period and Day/Night transition (Rule 17 & 20)
+            s_assignments = []
+            for d, sn, sm in self.assignments:
+                if sm and sm.name == s.name:
+                    s_start, s_end = self.get_shift_times(d, sn)
+                    is_night = sn in ["N8", "N12"]
+                    s_assignments.append({'date': d, 'start': s_start, 'end': s_end, 'is_night': is_night})
+            s_assignments.sort(key=lambda x: x['date'])
+
+            for i in range(len(s_assignments)):
+                curr = s_assignments[i]
+                
+                # Check against other assignments for rest period (Rule 17)
+                for j in range(i + 1, len(s_assignments)):
+                    other = s_assignments[j]
+                    if not (curr['end'] <= other['start'] or curr['start'] >= other['end']):
+                        violations.append(f"Staff {s.name} has overlapping shifts on {curr['date']} and {other['date']}")
+                    
+                    if curr['start'] >= other['end']:
+                        if (curr['start'] - other['end']).total_seconds() < 11 * 3600:
+                            violations.append(f"Staff {s.name} has less than 11h rest between {other['end']} and {curr['start']}")
+                    elif other['start'] >= curr['end']:
+                        if (other['start'] - curr['end']).total_seconds() < 11 * 3600:
+                            violations.append(f"Staff {s.name} has less than 11h rest between {curr['end']} and {other['start']}")
+
+                # Check Day/Night transition (Rule 20)
+                if i < len(s_assignments) - 1:
+                    next_as = s_assignments[i+1]
+                    if curr['is_night'] != next_as['is_night']:
+                        if (next_as['date'] - curr['date']).days <= 1:
+                            violations.append(f"Staff {s.name} swapped between day and night without a day off between {curr['date']} and {next_as['date']}")
+
+        # Red requests and Holidays (Rule 21 & 22)
+        for s in self.staff:
+            for d, sn, sm in self.assignments:
+                if sm and sm.name == s.name:
+                    if d in s.red_requests:
+                        violations.append(f"Staff {s.name} rostered on red request day {d}")
+                    for hs, he in s.holidays:
+                        if hs <= d <= he:
+                            violations.append(f"Staff {s.name} rostered during holiday {hs} to {he}")
+
+        return violations
 
     def generate_results(self):
         with open("result.staff.md", "w") as f:
             f.write("# Staff Roster\n\n")
             for s in self.staff:
-                f.write(f"## {s.name}\n- Level: {s.level}\n- Training Level: {s.training_level}\n- Total Hours: {s.assigned_hours}\n\n### Shifts\n")
+                f.write(f"## {s.name}\n- Level: {s.level}\n- Training Level: {s.training_level}\n- FTE Hours per Fortnight: {s.fte_hours}\n- Total Hours: {s.assigned_hours}\n- Weekend Hours: {s.weekend_hours}\n\n### Shifts\n")
                 for d, sn in s.assigned_shifts: f.write(f"- {d.strftime('%Y-%m-%d')}: {sn}\n")
                 f.write("\n")
         with open("result.roster.md", "w") as f:

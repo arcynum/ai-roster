@@ -5,14 +5,24 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Homelab (local)",
       "options": {
-        "baseURL": "https://chat.ifti.dev/v1"
+        "baseURL": "https://chat.ifti.dev/v1",
+        "timeout": 900000,
+        "chunkTimeout": 60000
       },
       "models": {
         "Gemma-4-26B-A4B-Q4_K_XL": {
           "name": "Gemma-4-26B-A4B-Q4",
-          "limit": { "context": 62000, "output": 8192 }
+          "limit": {
+            "context": 131072,
+            "output": 32768
+          }
         }
       }
     }
+  },
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "reserved": 16000
   }
 }

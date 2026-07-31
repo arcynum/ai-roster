@@ -10,6 +10,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - **`definitions.md`**: The definitions for all shifts, including start time, end time, duration and whether it crosses midnight.
 - **`roster.md`**: Inludes the start and end dates of the roster. The list of shifts that need to be filled each week. These shifts repeat exactly every week.
 - **`rules.md`**: The list of rules that each roster needs to follow. These are not negotiable.
+- **`preferences.md`**: The list of preferences that each roster should try to follow. If this is going not be followed for whatever reason, you must provide a reason why.
 - **`staff.md`**: The list of all staff and their training levels and FTE hours.
 - **`training.md`**: The list of the different training levels for staff.
 - **`result.staff.md`**: The final roster grouped by staff member is printed here.
@@ -39,4 +40,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
 When I say @BUILD then proceed to build a roster for the range listed in `roster.md` based on the markdown files in this directory. If any dates provided are outside of the date range then ignore those dates. Use the existing `build_roster.py` file if it helps, otherwise you can replace it.
 
 ## Testing
+Whenever any code is changed, run the tests.
+Whenever any code is changed, ensure the tests are updated to reflect the changes.
+All unit tests should test for a positive and negative result to ensure the functions are working correctly.
 After the roster has been produced, scan through it and compare it to the rules and preferences to ensure it complies.

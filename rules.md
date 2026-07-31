@@ -10,6 +10,7 @@ Everything in this file is a rule and MUST be followed. The final roster must be
 - 1 of the N12 shifts per day needs to be Triage trained staff member.
 - 1 of the N12 shifts per day needs to be Resus trained staff member.
 - The required CN on the D12 and N12 shifts can also fill one of the required training levels. eg. CN and Triage can be filled by 1 person who meets both.
+- If a shift is unfilled and requires a specific level or training level, include what is level in the final output report for manual human review.
 - Staff need to be rostered on for at least their FTE hours.
 - Staff can be schduled in for more than their FTE hours, but never less.
 - If it's not possible to create a roster based on the FTE required versus the FTE available, let the user know.
@@ -22,5 +23,6 @@ Everything in this file is a rule and MUST be followed. The final roster must be
 - Never roster any staff members on the days that they are on leave.
 - Shifts considered days are: D8, D12, P8, P12, MD, L3, DISCO
 - Shifts considered nights are: N8, N12
-- Do not allocate any more shifts to a staff member once they have hit their required FTE hours unless all other staff have hit their required FTE levels.
-- Never exceed 80 FTE hours allocated to a single staff member.
+- Do not allocate any more shifts to a staff member once they have hit their required FTE hours unless all other staff are within 4 hours of their required FTE.
+- Never exceed 76 FTE hours allocated to a single staff member.
+- Saturday and Sunday hours have extra penalty loading pay. Saturday and Sunday hours should be shared amongst different staff to keep it fair.
