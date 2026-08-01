@@ -102,7 +102,7 @@
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
-- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
+- **Holidays/Sickness**: 2026-08-07 to 2026-08-31
 - **Rules**: 
 - **Preferences**: 
 

@@ -45,6 +45,15 @@ class CPSolver:
         # Scaling factor for floats to integers
         self.SCALE = 100
 
+    def _get_adjusted_fte(self, staff_member, block_start_idx, block_end_idx):
+        working_days = 0
+        for d_idx in range(block_start_idx, block_end_idx):
+            date = self.dates[d_idx]
+            is_on_holiday = any(h_s <= date <= h_e for h_s, h_e in staff_member.holidays)
+            if not is_on_holiday:
+                working_days += 1
+        return staff_member.fte_hours * (working_days / 14.0)
+
     def solve(self):
         model = cp_model.CpModel()
         
@@ -213,10 +222,10 @@ class CPSolver:
             for block_idx in range(self.days_count // 14):
                 block_start = block_idx * 14
                 block_end = (block_idx + 1) * 14
-                target_fte_scaled = int(self.staff[s].fte_hours * self.SCALE)
+                target_fte_scaled = int(self._get_adjusted_fte(self.staff[s], block_start, block_end) * self.SCALE)
                 current_fte_scaled = sum(x[s, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
                                          for d in range(block_start, block_end) for h_name in shift_names)
-                under_fte = model.NewIntVar(0, target_fte_scaled, f'under_fte_{s}_{block_idx}')
+                under_fte = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'under_fte_{s}_{block_idx}')
                 model.Add(under_fte >= target_fte_scaled - current_fte_scaled)
                 model.Add(under_fte >= 0)
                 fte_violations.append(under_fte)
@@ -432,9 +441,10 @@ class CPSolver:
             
             for s in self.staff:
                 block_hours = sum(self.definitions[sn].duration for d, sn, sm in self.assignments if d in block_dates and sm.name == s.name)
+                target_fte = self._get_adjusted_fte(s, block_start, block_end)
                 
-                if block_hours < (s.fte_hours - 0.01):
-                    violations.append(f"Staff {s.name} {fte_id} under FTE in block {block_idx+1}: {block_hours:.2f}/{s.fte_hours:.2f}")
+                if block_hours < (target_fte - 0.01):
+                    violations.append(f"Staff {s.name} {fte_id} under FTE in block {block_idx+1}: {block_hours:.2f}/{target_fte:.2f}")
                 if block_hours > 76.01:
                     violations.append(f"Staff {s.name} {max_hours_id} exceeded 76.00 hours in block {block_idx+1}: {block_hours:.2f}")
 
