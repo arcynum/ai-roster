@@ -95,21 +95,21 @@ class CPSolver:
             date = self.dates[d_idx]
             day_name = date.strftime("%A")
             
-            # D12 requirements
+            # D12 requirements [H#12c6090b]
             d12_reqs = [r for r in self.roster_reqs.get(day_name, []) if r.shift_name == "D12"]
             if d12_reqs:
                 model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
                 model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 4) >= 1)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 3) >= 1)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 2) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 3) >= 2)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 2) >= 3)
 
-            # N12 requirements
+            # N12 requirements [H#62281944]
             n12_reqs = [r for r in self.roster_reqs.get(day_name, []) if r.shift_name == "N12"]
             if n12_reqs:
                 model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
                 model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 4) >= 1)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 3) >= 1)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 2) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 3) >= 2)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 2) >= 3)
 
         # [H#c1f6e3f5] Rest Period Constraint (min 11 hours)
         for s in staff_indices:
@@ -351,25 +351,35 @@ class CPSolver:
         for date in self.dates:
             d12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "D12" and a[1] is not None]
             if d12_shifts:
-                if not any(s.level == "CN" for _, s in d12_shifts):
-                    violations.append(f"{date}: {d12_cn_id}D12 shift missing CN staff member")
-                if not any(TRAINING_MAP.get(s.training_level, 0) >= 4 for _, s in d12_shifts):
-                    violations.append(f"{date}: {d12_coord_id}D12 shift missing Shift Coordinator")
-                if not any(TRAINING_MAP.get(s.training_level, 0) >= 3 for _, s in d12_shifts):
-                    violations.append(f"{date}: {d12_triage_id}D12 shift missing Triage training")
-                if not any(TRAINING_MAP.get(s.training_level, 0) >= 2 for _, s in d12_shifts):
-                    violations.append(f"{date}: {d12_resus_id}D12 shift missing Resus training")
+                cn_count = sum(1 for _, s in d12_shifts if s.level == "CN")
+                coord_count = sum(1 for _, s in d12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 4)
+                triage_count = sum(1 for _, s in d12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 3)
+                resus_count = sum(1 for _, s in d12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 2)
+
+                if cn_count < 1:
+                    violations.append(f"{date}: [H#12c6090b]D12 shift missing CN staff member")
+                if coord_count < 1:
+                    violations.append(f"{date}: [H#12c6090b]D12 shift missing Shift Coordinator")
+                if triage_count < 2:
+                    violations.append(f"{date}: [H#12c6090b]D12 shift missing Triage training (needs >= 2 people L>=3)")
+                if resus_count < 3:
+                    violations.append(f"{date}: [H#12c6090b]D12 shift missing Resus training (needs >= 3 people L>=2)")
 
             n12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "N12" and a[1] is not None]
             if n12_shifts:
-                if not any(s.level == "CN" for _, s in n12_shifts):
-                    violations.append(f"{date}: {n12_cn_id}N12 shift missing CN staff member")
-                if not any(TRAINING_MAP.get(s.training_level, 0) >= 4 for _, s in n12_shifts):
-                    violations.append(f"{date}: {n12_coord_id}N12 shift missing Shift Coordinator")
-                if not any(TRAINING_MAP.get(s.training_level, 0) >= 3 for _, s in n12_shifts):
-                    violations.append(f"{date}: {n12_triage_id}N12 shift missing Triage training")
-                if not any(TRAINING_MAP.get(s.training_level, 0) >= 2 for _, s in n12_shifts):
-                    violations.append(f"{date}: {n12_resus_id}N12 shift missing Resus training")
+                cn_count = sum(1 for _, s in n12_shifts if s.level == "CN")
+                coord_count = sum(1 for _, s in n12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 4)
+                triage_count = sum(1 for _, s in n12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 3)
+                resus_count = sum(1 for _, s in n12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 2)
+
+                if cn_count < 1:
+                    violations.append(f"{date}: [H#62281944]N12 shift missing CN staff member")
+                if coord_count < 1:
+                    violations.append(f"{date}: [H#62281944]N12 shift missing Shift Coordinator")
+                if triage_count < 2:
+                    violations.append(f"{date}: [H#62281944]N12 shift missing Triage training (needs >= 2 people L>=3)")
+                if resus_count < 3:
+                    violations.append(f"{date}: [H#62281944]N12 shift missing Resus training (needs >= 3 people L>=2)")
 
         fortnights = len(self.dates) / 14.0
         max_hours_limit = 76 * fortnights
