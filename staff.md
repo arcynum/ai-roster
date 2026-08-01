@@ -66,7 +66,7 @@
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 76
 - **Red Requests**: 
-- **Holidays/Sickness**: 
+- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
 - **Rules**: 
 - **Preferences**: 
 
@@ -93,7 +93,7 @@
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
-- **Holidays/Sickness**: 
+- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
 - **Rules**: 
 - **Preferences**: 
 
@@ -102,7 +102,7 @@
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
-- **Holidays/Sickness**: 
+- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
 - **Rules**: 
 - **Preferences**: 
 
@@ -138,7 +138,7 @@
 - **Training Level**: Shift Coordinator
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
-- **Holidays/Sickness**: 
+- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
 - **Rules**: 
 - **Preferences**: 
 
@@ -327,7 +327,7 @@
 - **Training Level**: Acute
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
-- **Holidays/Sickness**: 
+- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
 - **Rules**: 
 - **Preferences**: 
 

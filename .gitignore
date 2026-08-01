@@ -5,3 +5,4 @@ result.violations.md
 __pycache__/
 .venv/
 venv/
+.pytest_cache/

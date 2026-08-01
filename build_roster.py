@@ -210,10 +210,14 @@ if __name__ == "__main__":
             solver.generate_results()
             violations = solver.validate_roster()
             if violations:
-                print(f"Roster built, but {len(violations)} rule violations found:")
-                for v in violations:
-                    print(f"- {v}")
+                with open("result.violations.md", "w") as f:
+                    f.write("# Roster Rule Violations\n\n")
+                    for v in violations:
+                        f.write(f"- {v}\n")
+                print(f"Roster built, but {len(violations)} rule violations found. See result.violations.md for details.")
             else:
+                with open("result.violations.md", "w") as f:
+                    f.write("# Roster Rule Violations\n\nNo violations found.\n")
                 print("Roster built successfully with no violations.")
 
     except Exception as e:

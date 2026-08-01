@@ -45,6 +45,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - **`training.md`**: The list of the different training levels for staff.
 - **`result.staff.md`**: The final roster grouped by staff member is printed here.
 - **`result.roster.md`**: The final roster grouped by roster date is printed here.
+- **`result.violations.md`**: Any rule violations found in the generated roster are listed here.
 - **`build_roster.py`**: The python script that actually builds the roster.
 - **Fortnightly Blocks**: Rosters must be multiples of 14 days. All constraints (FTE, Max Hours, etc.) are applied within discrete 14-day blocks rather than being averaged across the entire roster period. **If the start/end dates in `roster.md` do not span a whole multiple of 14 days, the script must error out with a clear message and refuse to build the roster** — do not silently round, truncate, or prorate. Fix the dates in `roster.md` and re-run.
 
