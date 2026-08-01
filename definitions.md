@@ -18,11 +18,6 @@
 - **End Time**: 22:00:00
 - **Duration**: 12.5
 
-# MD
-- **Start Time**: 12:00:00
-- **End Time**: 00:30:00
-- **Duration**: 12.5
-
 # L3
 - **Start Time**: 14:30:00
 - **End Time**: 23:00:00

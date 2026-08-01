@@ -82,3 +82,9 @@ Whenever any code is changed, run the tests.
 Whenever any code is changed, ensure the tests are updated to reflect the changes.
 All unit tests should test for a positive and negative result to ensure the functions are working correctly.
 After the roster has been produced, scan through it and compare it to the rules and preferences to ensure it complies.
+
+## Operational Definitions
+- If it's not possible to create a roster because there is not enough staff FTE to fill the roster, let the user know.
+- If there is not enough staff FTE to cover all of the shifts, record the unfilled shifts as UNFILLED in the roster and record if any classification or training level is required.
+- Day shifts are: D8, D12, P8, P12, L3, DISCO
+- Night shifts are: N8, N12

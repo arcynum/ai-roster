@@ -1,13 +1,13 @@
 # Dates
-- **Roster Start Date**: 2026-08-01
-- **Roster End Date**: 2026-08-14
+- **Roster Start Date**: 2026-08-03
+- **Roster End Date**: 2026-08-30
 
 ## Monday
 - 1 D8
 - 4 D12
 - 1 P8
 - 1 P12
-- 1 L3
+- 2 L3
 - 1 DISCO
 - 1 N8
 - 4 N12
@@ -57,8 +57,7 @@
 - 4 D12
 - 1 P8
 - 1 P12
-- 1 MD
-- 1 L3
+- 2 L3
 - 1 DISCO
 - 1 N8
 - 4 N12
@@ -68,8 +67,7 @@
 - 4 D12
 - 1 P8
 - 1 P12
-- 1 MD
-- 1 L3
+- 2 L3
 - 1 DISCO
 - 1 N8
 - 4 N12

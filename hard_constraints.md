@@ -10,6 +10,7 @@ Everything in this file is a rule and MUST be followed. The final roster must ob
 - [H#f2c7b4c6] 1 of the N12 shifts per day needs to be Shift Coordinator trained staff member.
 - [H#a3d8c5d7] 1 of the N12 shifts per day needs to be Triage trained staff member.
 - [H#b4e9d6e8] 1 of the N12 shifts per day needs to be Resus trained staff member.
+- [H#30479c74] Graduate trained staff members can only work the following shifts: D8, P8, L3, DISCO, N8
 
 ## Staff Welfare and Safety
 - [H#c1f6e3f5] Staff must have a minimum of 11 hours between each shift.
@@ -18,9 +19,3 @@ Everything in this file is a rule and MUST be followed. The final roster must ob
 - [H#a5d0c7d9] Never roster any staff members on the days that they have red requested.
 - [H#b6e1d8e0] Never roster any staff members on the days that they are on leave.
 - [H#f0c5b2c4] Never exceed 76 FTE hours allocated to a single staff member.
-
-## Operational Definitions
-- [H#d6a1f8a0] If it's not possible to create a roster because there is not enough staff FTE to fill the roster, let the user know.
-- [H#e7b2a9b1] If there is not enough staff FTE to cover all of the shifts, record the unfilled shifts as UNFILLED in the roster and record if any classification or training level is required.
-- [H#c7f2e9f1] Day shifts are: D8, D12, P8, P12, MD, L3, DISCO
-- [H#d8a3f0a2] Night shifts are: N8, N12
