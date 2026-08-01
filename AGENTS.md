@@ -46,17 +46,23 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - **`result.staff.md`**: The final roster grouped by staff member is printed here.
 - **`result.roster.md`**: The final roster grouped by roster date is printed here.
 - **`build_roster.py`**: The python script that actually builds the roster.
-- **Fortnightly Blocks**: Rosters must be multiples of 14 days. All constraints (FTE, Max Hours, etc.) are applied within discrete 14-day blocks rather than being averaged across the entire roster period.
+- **Fortnightly Blocks**: Rosters must be multiples of 14 days. All constraints (FTE, Max Hours, etc.) are applied within discrete 14-day blocks rather than being averaged across the entire roster period. **If the start/end dates in `roster.md` do not span a whole multiple of 14 days, the script must error out with a clear message and refuse to build the roster** — do not silently round, truncate, or prorate. Fix the dates in `roster.md` and re-run.
+
+## Data File Validation
+`staff.md`, `roster.md`, `definitions.md`, `hard_constraints.md`, `soft_constraints.md`, and `training.md` are hand-edited by humans and are a trust boundary — treat parsing them as input validation, not just data loading. If a row is malformed, missing a required field, references an undefined training level/shift/staff member, or a date is out of range, fail loudly with a message naming the file, the row, and the problem, rather than silently skipping it or guessing a default.
 
 ## Staff Definitions
 - Each staff member has the following options.
     - **Classification**: This is the staff members organisation level. RN = Registered Nurse. CN = Clinical Nurse.
-    - **Training Level**: The level of training that the staff member has received. Acute < Resus < Triage < Shift Coordinator
-    - **FTE Hours per Fortnight**: Hows many hours the staff member is contracted per fornight. They must be scheduled this number of hours minimum.
-    - **Red Requests**: Staff members are allowed to choose a couple of days a month that they will not be roster on. These are those days. Not every staff member will make a red request each month.
+    - **Training Level**: The level of training that the staff member has received. Graduate < Acute < Resus < Triage < Shift Coordinator
+    - **FTE Hours per Fortnight**: How many hours the staff member is contracted per fortnight. This is a **floor, not a ceiling** — see "Coverage Shortfalls & Overtime" below for what happens when total contracted FTE isn't enough to cover all shifts.
+    - **Red Requests**: Staff members are allowed to choose a couple of days a month that they will not be rostered on. These are those days. Not every staff member will make a red request each month. **Red requests are a hard constraint** — never schedule a staff member on a day they've made a red request for.
     - **Holidays/Sickness**: The dates and date ranges people are on holidays. Do not schedule people on during these days.
     - **Rules**: These are the individual staff members rules. They must be followed.
     - **Preferences**: These are the preferences of the staff members - they are optional, but following it if possible.
+
+### Overnight Shift Attribution
+A shift that crosses midnight (e.g. an N12 starting at 22:00) counts entirely toward the date and 14-day block **it starts on** — not the date it ends on, and not split across both. This applies consistently to hours totals, weekend-hours percentages, and night-shift-hours percentages in `result.staff.md`.
 
 ## Output
 - You can overwrite/replace the existing `results.*.md` files on disk.
@@ -71,7 +77,9 @@ The project contains a list of staff, list of shifts that need to be filled, and
         - A full list of all shifts assigned during the entire period.
     - `result.roster.md` should be grouped by the roster days (by date) and show all of the people that are on shift for that day, including the specific shift.
 - The `result.roster.md` needs to include the the staff members level and training level.
-- Always print the shifts in the `result.roster.md` file in the following order: D8, D12, P8, P12, MD, L3, DISCO, N8, N12
+- Always print the shifts in the `result.roster.md` file in the following order: D8, D12, P8, P12, L3, DISCO, N8, N12
+- Within a single shift's list of staff, order by **classification first (CN before RN, or per the hierarchy in `staff.md`), then by training level (highest first) within the same classification**.
+- `weights.json` values are relative ordering signals for the objective function, not literal cost units — a weight of 100 should be treated as "prioritise avoiding this violation over one weighted 50," not as "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
 
 ## Technical Implementation Guide
 
@@ -103,14 +111,22 @@ The `cp_solver.py` uses Google OR-Tools CP-SAT. When implementing or modifying c
     - Every hard/soft constraint in the code is tagged with its corresponding ID from the markdown files (e.g., `# [H#a7f2c9d1]`). Use these IDs when searching for or modifying logic.
 
 ## Testing
-Whenever any code is changed, run the tests.
-Whenever any code is changed, ensure the tests are updated to reflect the changes.
-All unit tests should test for a positive and negative result to ensure the functions are working correctly.
-After the roster has been produced, scan through it and compare it to the rules and preferences to ensure it complies.
+- **Framework & location**: Unit tests for `cp_solver.py` and other core logic live in `tests/` and use `pytest`. Run them with `./venv/bin/python -m pytest tests/`.
+- Whenever any code is changed, run the tests.
+- Whenever any code is changed, ensure the tests are updated to reflect the changes.
+- All unit tests should test for a positive and negative result to ensure the functions are working correctly.
+- After the roster has been produced, scan through it and compare it to the rules and preferences to ensure it complies.
+- The lazy-mode "one runnable check" convention (see Ponytail rules above) is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
 
 ## Operational Definitions
-If it's not possible to create a roster because there is not enough staff FTE to fill the roster, let the user know.
-If there is not enough staff FTE to cover all of the shifts, record the unfilled shifts as UNFILLED in the roster and record if any classification or training level is required.
+
+### Coverage Shortfalls & Overtime
+FTE Hours per Fortnight is a **minimum**, not a cap. If total contracted FTE across all staff is insufficient to cover every shift in a 14-day block:
+1. First try to cover the shortfall with overtime — hours scheduled above a staff member's FTE floor — distributed as **evenly as possible across all eligible staff** (don't stack overtime onto the same few people).
+2. All other hard constraints still apply on top of this — e.g. maximum hours per fortnight, red requests, holidays, training-level requirements. Overtime never overrides a hard constraint.
+3. Only if a shift still cannot be covered after fair overtime distribution and respecting all hard constraints — e.g. no staff member with the required training level is available, or covering it would breach someone's max-hours cap — record it as `UNFILLED` in the roster output, and note which classification/training level was required but unavailable.
+4. If hard constraints make it impossible to produce **any** valid roster at all (not just some unfilled shifts — e.g. a required Shift Coordinator role has zero qualified staff in the entire roster), stop and tell the user why, rather than producing a broken or partial file.
+
 Day shifts are: D8, D12, P8, P12, L3, DISCO
 Night shifts are: N8, N12
 
@@ -130,4 +146,3 @@ Strict adherence to these rules is mandatory for all code modifications to preve
 
 3. **Verification**:
    - After editing, if the file is a `.py` file, verify that no `IndentationError` or `SyntaxError` was introduced by attempting to run relevant scripts or linting tools.
-
