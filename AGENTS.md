@@ -62,10 +62,15 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - You can overwrite/replace the existing `results.*.md` files on disk.
 - The `result.*.md` outputs should contain all of the auxillery information like level and training level.
 - The final roster should be printed in multiple different formats.
-    - `result.staff.md` should be grouped by the staff member and the shifts that they have in the roster. It should also summarise the amount of hours allocated.
+    - `result.staff.md` should be grouped by the staff member. It MUST include:
+        - Summary of Level, Training Level, and FTE Hours per Fortnight for the whole period.
+        - A block-by-block breakdown (14-day increments) containing:
+            - Total hours worked in that block.
+            - Weekend hours and their percentage relative to the total hours worked in that block (to allow human audit of fairness).
+            - Night shift hours and their percentage relative to the total hours worked in that block (to allow human audit of fairness).
+        - A full list of all shifts assigned during the entire period.
     - `result.roster.md` should be grouped by the roster days (by date) and show all of the people that are on shift for that day, including the specific shift.
 - The `result.roster.md` needs to include the the staff members level and training level.
-- The `result.staff.md` needs to include the the staff members Level, Training Level and FTE Hours per Fortnight.
 - Always print the shifts in the `result.roster.md` file in the following order: D8, D12, P8, P12, MD, L3, DISCO, N8, N12
 
 ## Technical Implementation Guide

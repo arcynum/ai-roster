@@ -492,12 +492,39 @@ class CPSolver:
             f.write("# Staff Roster\n\n")
             fortnights = len(self.dates) / 14.0
             for s in self.staff:
-                weekend_pct = (s.weekend_hours / s.fte_hours * 100) if s.fte_hours > 0 else 0
-                night_pct = (s.night_hours / s.fte_hours * 100) if s.fte_hours > 0 else 0
                 required_period = s.fte_hours * fortnights
-                f.write(f"## {s.name}\n- Level: {s.level}\n- Training Level: {s.training_level}\n- FTE Hours per Fortnight: {s.fte_hours}\n- Required Hours (Period): {required_period:.2f}\n- Total Allocated Hours: {s.assigned_hours:.2f}\n- Weekend % of FTE: {weekend_pct:.2f}%\n- Night Shift % of FTE: {night_pct:.2f}%\n\n### Shifts\n")
-                for d, sn in s.assigned_shifts: f.write(f"- {d.strftime('%Y-%m-%d')}: {sn}\n")
+                f.write(f"## {s.name}\n- Level: {s.level}\n- Training Level: {s.training_level}\n- FTE Hours per Fortnight: {s.fte_hours}\n- Required Hours (Period): {required_period:.2f}\n- Total Allocated Hours (Period): {s.assigned_hours:.2f}\n\n")
+
+                for block_idx in range(self.days_count // 14):
+                    block_start = block_idx * 14
+                    block_end = (block_idx + 1) * 14
+                    block_dates = self.dates[block_start:block_end]
+                    
+                    b_total = 0.0
+                    b_weekend = 0.0
+                    b_night = 0.0
+                    for d, sn, sm in self.assignments:
+                        if d in block_dates and sm.name == s.name:
+                            duration = self.definitions[sn].duration
+                            b_total += duration
+                            if d.weekday() >= 5:
+                                b_weekend += duration
+                            if sn in ["N8", "N12"]:
+                                b_night += duration
+
+                    b_weekend_pct = (b_weekend / b_total * 100) if b_total > 0 else 0
+                    b_night_pct = (b_night / b_total * 100) if b_total > 0 else 0
+
+                    f.write(f"### Block {block_idx+1} ({block_dates[0].strftime('%Y-%m-%d')} to {block_dates[-1].strftime('%Y-%m-%d')})\n")
+                    f.write(f"- **Total**: {b_total:.2f}h\n")
+                    f.write(f"- **Weekend**: {b_weekend:.2f}h ({b_weekend_pct:.1f}% of block total)\n")
+                    f.write(f"- **Night**: {b_night:.2f}h ({b_night_pct:.1f}% of block total)\n\n")
+
+                f.write("### Shifts Assigned (Full Period)\n")
+                for d, sn in s.assigned_shifts: 
+                    f.write(f"- {d.strftime('%Y-%m-%d')}: {sn}\n")
                 f.write("\n")
+
         with open("result.roster.md", "w") as f:
             f.write("# Roster by Date\n\n")
             shift_order = {"D8": 0, "D12": 1, "P8": 2, "P12": 3, "L3": 4, "DISCO": 5, "N8": 6, "N12": 7}
