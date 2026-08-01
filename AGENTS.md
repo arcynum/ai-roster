@@ -46,6 +46,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - **`result.staff.md`**: The final roster grouped by staff member is printed here.
 - **`result.roster.md`**: The final roster grouped by roster date is printed here.
 - **`build_roster.py`**: The python script that actually builds the roster.
+- **Fortnightly Blocks**: Rosters must be multiples of 14 days. All constraints (FTE, Max Hours, etc.) are applied within discrete 14-day blocks rather than being averaged across the entire roster period.
 
 ## Staff Definitions
 - Each staff member has the following options.
@@ -103,7 +104,25 @@ All unit tests should test for a positive and negative result to ensure the func
 After the roster has been produced, scan through it and compare it to the rules and preferences to ensure it complies.
 
 ## Operational Definitions
-- If it's not possible to create a roster because there is not enough staff FTE to fill the roster, let the user know.
-- If there is not enough staff FTE to cover all of the shifts, record the unfilled shifts as UNFILLED in the roster and record if any classification or training level is required.
-- Day shifts are: D8, D12, P8, P12, L3, DISCO
-- Night shifts are: N8, N12
+If it's not possible to create a roster because there is not enough staff FTE to fill the roster, let the user know.
+If there is not enough staff FTE to cover all of the shifts, record the unfilled shifts as UNFILLED in the roster and record if any classification or training level is required.
+Day shifts are: D8, D12, P8, P12, L3, DISCO
+Night shifts are: N8, N12
+
+## Python Coding Standards
+Strict adherence to these rules is mandatory for all code modifications to prevent structural errors and maintain codebase integrity.
+
+1. **Indentation**:
+   - ALWAYS use exactly 4 spaces per indentation level.
+   - NEVER use tabs.
+   - BEFORE adding any logic, read the surrounding lines to verify the current indentation context of the scope you are entering.
+   - Ensure that `if`, `for`, `while`, `def`, and `class` blocks are aligned correctly with their parent scopes.
+
+2. **Spacing & Style**:
+   - Use spaces around operators (e.g., `a = b + c`).
+   - Follow PEP 8 conventions for naming (snake_case for functions/variables, PascalCase for classes).
+   - Maintain consistent vertical whitespace between method definitions.
+
+3. **Verification**:
+   - After editing, if the file is a `.py` file, verify that no `IndentationError` or `SyntaxError` was introduced by attempting to run relevant scripts or linting tools.
+

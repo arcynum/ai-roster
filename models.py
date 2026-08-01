@@ -47,6 +47,7 @@ class StaffMember:
     assigned_hours: float = 0.0
     assigned_shifts: List[Tuple[datetime.date, str]] = field(default_factory=list)
     weekend_hours: float = 0.0
+    night_hours: float = 0.0
 
 TRAINING_LEVELS = ["Graduate", "Acute", "Resus", "Triage", "Shift Coordinator"]
 TRAINING_MAP = {level: i for i, level in enumerate(TRAINING_LEVELS)}

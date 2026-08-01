@@ -12,4 +12,4 @@ Everything in this file is a rule and MUST be followed. The final roster must ob
 - [H#f4c9b6c8] When swapping between night shifts and day shifts at least 1 day off should be rostered in between to help them recover as its extremely tiring.
 - [H#a5d0c7d9] Never roster any staff members on the days that they have red requested.
 - [H#b6e1d8e0] Never roster any staff members on the days that they are on leave.
-- [H#f0c5b2c4] Never exceed 76 FTE hours allocated to a single staff member in a single fortnight.
+- [H#f0c5b2c4] Never exceed 76 hours allocated to a single staff member per discrete 14-day fortnight block.

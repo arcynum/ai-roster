@@ -14,6 +14,8 @@ from models import (
 
 class CPSolver:
     def __init__(self, start_date, days_count, definitions, roster_reqs, staff, rules=None, preferences=None):
+        if days_count % 14 != 0:
+            raise ValueError(f"Roster duration ({days_count} days) must be a multiple of 14 to ensure complete fortnightly blocks.")
         self.start_date = start_date
         self.days_count = days_count
         self.definitions = definitions
@@ -76,19 +78,27 @@ class CPSolver:
                 else:
                     print(f"DEBUG:   Warning: {h_name} not in shift_indices")
             
-        # 2. Night Shift Fairness (S#d2a7f4a6)
+        # 2. Night Shift Fairness (S#d2a7f4a6): Proportional distribution of night hours per block.
         night_shift_names = [h for h in shift_names if h in ["N8", "N12"]]
-        total_nights_requested = sum(req.count for d_idx in day_indices for req in self.roster_reqs.get(self.dates[d_idx].strftime("%A"), []) if req.shift_name in night_shift_names)
         night_fairness_violations = []
-        if total_nights_requested > 0:
-            total_fte_sum = sum(s.fte_hours for s in self.staff)
-            for s_idx in staff_indices:
-                staff_m = self.staff[s_idx]
-                night_shifts_s = sum(x[s_idx, d_idx, h_name] for d_idx in day_indices for h_name in night_shift_names)
-                target_nights_s = int(round((staff_m.fte_hours / total_fte_sum) * total_nights_requested)) if total_fte_sum > 0 else 0
-                diff_night_s = model.NewIntVar(0, self.days_count, f'diff_night_{s_idx}')
-                model.AddAbsEquality(diff_night_s, night_shifts_s - target_nights_s)
-                night_fairness_violations.append(diff_night_s)
+        total_fte_sum = sum(s.fte_hours for s in self.staff)
+
+        for block_idx in range(self.days_count // 14):
+            block_start = block_idx * 14
+            block_end = (block_idx + 1) * 14
+            
+            total_nights_hours_in_block_scaled = sum(req.count * int(self.definitions[req.shift_name].duration * self.SCALE) 
+                                                     for d in range(block_start, block_end) 
+                                                     for req in self.roster_reqs.get(self.dates[d].strftime("%A"), []) if req.shift_name in night_shift_names)
+            
+            if total_nights_hours_in_block_scaled > 0:
+                for s_idx in staff_indices:
+                    current_night_hours_s_scaled = sum(x[s_idx, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
+                                                       for d in range(block_start, block_end) for h_name in night_shift_names)
+                    target_night_hours_s_scaled = int(round((self.staff[s_idx].fte_hours / total_fte_sum) * (total_nights_hours_in_block_scaled / self.SCALE))) * self.SCALE if total_fte_sum > 0 else 0
+                    diff_night_s = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'diff_night_{s_idx}_{block_idx}')
+                    model.AddAbsEquality(diff_night_s, current_night_hours_s_scaled - target_night_hours_s_scaled)
+                    night_fairness_violations.append(diff_night_s)
 
         # [D12/N12 Requirements] Training and Classification threshold checks
         for d_idx in day_indices:
@@ -158,13 +168,13 @@ class CPSolver:
                         for h_name in shift_names:
                             model.Add(x[s, d_idx, h_name] == 0)
 
-        # [H#f0c5b2c4] Max Hours Constraint (76h per fortnight)
-        fortnights_in_roster = self.days_count / 14.0
-        max_hours_limit = 76 * fortnights_in_roster
+        # [H#f0c5b2c4] Max Hours Constraint (76h per fortnight block)
         for s in staff_indices:
-            total_hours_scaled = sum(x[s, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
-                                     for d in day_indices for h_name in shift_names)
-            model.Add(total_hours_scaled <= int(max_hours_limit * self.SCALE))
+            for block_idx in range(self.days_count // 14):
+                block_start = block_idx * 14
+                block_end = (block_idx + 1) * 14
+                model.Add(sum(x[s, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
+                              for d in range(block_start, block_end) for h_name in shift_names) <= 76 * self.SCALE)
 
         # [One Shift Per Day] Hard constraint: max 1 shift/day
         for s in staff_indices:
@@ -197,16 +207,19 @@ class CPSolver:
         penalty_excess_fte = self.weights.get("S#e9b4a1b3", 20)       # [S#e9b4a1b3] Excess FTE Distribution Penalty
         penalty_preference = self.weights.get("S#f5e6d7c8", 10)       # [S#f5e6d7c8] Preference Violation Penalty
 
-        # 1. FTE Deviation (S#f8c3b0c2): Minimize being under contracted hours.
+        # 1. FTE Deviation (S#f8c3b0c2): Minimize being under contracted hours per fortnight block.
         fte_violations = []
         for s in staff_indices:
-            target_fte_scaled = int(self.staff[s].fte_hours * self.SCALE)
-            current_fte_scaled = sum(x[s, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
-                                     for d in day_indices for h_name in shift_names)
-            under_fte = model.NewIntVar(0, target_fte_scaled, f'under_fte_{s}')
-            model.Add(under_fte >= target_fte_scaled - current_fte_scaled)
-            model.Add(under_fte >= 0)
-            fte_violations.append(under_fte)
+            for block_idx in range(self.days_count // 14):
+                block_start = block_idx * 14
+                block_end = (block_idx + 1) * 14
+                target_fte_scaled = int(self.staff[s].fte_hours * self.SCALE)
+                current_fte_scaled = sum(x[s, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
+                                         for d in range(block_start, block_end) for h_name in shift_names)
+                under_fte = model.NewIntVar(0, target_fte_scaled, f'under_fte_{s}_{block_idx}')
+                model.Add(under_fte >= target_fte_scaled - current_fte_scaled)
+                model.Add(under_fte >= 0)
+                fte_violations.append(under_fte)
 
         # 2. Night Shift Fairness (S#d2a7f4a6): Proportional distribution of night hours based on FTE.
         night_shift_names = [h for h in shift_names if h in ["N8", "N12"]]
@@ -223,36 +236,53 @@ class CPSolver:
                 model.AddAbsEquality(diff_night_s, current_night_hours_scaled - target_night_hours_scaled)
                 night_fairness_violations.append(diff_night_s)
 
-        # 3. Weekend Deviation (S#a1d6c3d5): Proportional distribution of weekend hours based on FTE.
-        total_weekend_hours_scaled = sum(req.count * int(self.definitions[req.shift_name].duration * self.SCALE) 
-                                         for d_idx in day_indices for req in self.roster_reqs.get(self.dates[d_idx].strftime("%A"), []) if self.dates[d_idx].weekday() >= 5)
+        # 3. Weekend Deviation (S#a1d6c3d5): Proportional distribution of weekend hours per block.
         weekend_violations = []
-        if total_weekend_hours_scaled > 0:
-            total_fte_sum = sum(s.fte_hours for s in self.staff)
-            for s_idx in staff_indices:
-                current_weekend_hours_scaled = sum(x[s_idx, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
-                                                   for d in day_indices for h_name in shift_names if self.dates[d].weekday() >= 5)
-                target_weekend_hours_scaled = int(round((self.staff[s_idx].fte_hours / total_fte_sum) * (total_weekend_hours_scaled / self.SCALE))) * self.SCALE if total_fte_sum > 0 else 0
-                diff_weekend_s = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'diff_weekend_{s_idx}')
-                model.AddAbsEquality(diff_weekend_s, current_weekend_hours_scaled - target_weekend_hours_scaled)
-                weekend_violations.append(diff_weekend_s)
+        total_fte_sum = sum(s.fte_hours for s in self.staff)
 
-        # 4. Excess FTE Distribution (S#e9b4a1b3): Fairly distribute hours above FTE if requirements > staff capacity.
+        for block_idx in range(self.days_count // 14):
+            block_start = block_idx * 14
+            block_end = (block_idx + 1) * 14
+            
+            total_weekend_hours_in_block_scaled = sum(req.count * int(self.definitions[req.shift_name].duration * self.SCALE) 
+                                                      for d in range(block_start, block_end) 
+                                                      for req in self.roster_reqs.get(self.dates[d].strftime("%A"), []) if self.dates[d].weekday() >= 5)
+            
+            if total_weekend_hours_in_block_scaled > 0:
+                for s_idx in staff_indices:
+                    current_weekend_hours_s_scaled = sum(x[s_idx, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
+                                                         for d in range(block_start, block_end) for h_name in shift_names if self.dates[d].weekday() >= 5)
+                    target_weekend_hours_s_scaled = int(round((self.staff[s_idx].fte_hours / total_fte_sum) * (total_weekend_hours_in_block_scaled / self.SCALE))) * self.SCALE if total_fte_sum > 0 else 0
+                    diff_weekend_s = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'diff_weekend_{s_idx}_{block_idx}')
+                    model.AddAbsEquality(diff_weekend_s, current_weekend_hours_s_scaled - target_weekend_hours_s_scaled)
+                    weekend_violations.append(diff_weekend_s)
+
+
+        # 4. Excess FTE Distribution (S#e9b4a1b3): Fairly distribute hours above FTE per block if requirements > staff capacity in that block.
         excess_fte_violations = []
-        total_req_hours_scaled = sum(req.count * int(self.definitions[req.shift_name].duration * self.SCALE) for d in day_indices for req in self.roster_reqs.get(self.dates[d].strftime("%A"), []))
-        total_fte_hours_scaled = sum(int(s.fte_hours * self.SCALE) for s in self.staff)
-        if total_req_hours_scaled > total_fte_hours_scaled:
-            total_excess_scaled = total_req_hours_scaled - total_fte_hours_scaled
-            num_staff = len(self.staff)
-            target_excess_per_person_scaled = total_excess_scaled // num_staff
-            for s in staff_indices:
-                current_hours_scaled = sum(x[s, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) for d in day_indices for h_name in shift_names)
-                target_fte_scaled = int(self.staff[s].fte_hours * self.SCALE)
-                excess_s = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'excess_{s}')
-                model.AddMaxEquality(excess_s, [0, current_hours_scaled - target_fte_scaled])
-                diff_excess = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'diff_excess_{s}')
-                model.AddAbsEquality(diff_excess, excess_s - target_excess_per_person_scaled)
-                excess_fte_violations.append(diff_excess)
+        for block_idx in range(self.days_count // 14):
+            block_start = block_idx * 14
+            block_end = (block_idx + 1) * 14
+            
+            total_req_hours_in_block_scaled = sum(req.count * int(self.definitions[req.shift_name].duration * self.SCALE) 
+                                                 for d in range(block_start, block_end) 
+                                                 for req in self.roster_reqs.get(self.dates[d].strftime("%A"), []) )
+            
+            total_fte_hours_in_block_scaled = int(sum(s.fte_hours for s in self.staff) * self.SCALE)
+            
+            if total_req_hours_in_block_scaled > total_fte_hours_in_block_scaled:
+                total_excess_scaled = total_req_hours_in_block_scaled - total_fte_hours_in_block_scaled
+                num_staff = len(self.staff)
+                target_excess_per_person_scaled = total_excess_scaled // num_staff
+                for s_idx in staff_indices:
+                    current_hours_s_scaled = sum(x[s_idx, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
+                                                 for d in range(block_start, block_end) for h_name in shift_names)
+                    target_fte_s_scaled = int(self.staff[s_idx].fte_hours * self.SCALE)
+                    excess_s = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'excess_{s_idx}_{block_idx}')
+                    model.AddMaxEquality(excess_s, [0, current_hours_s_scaled - target_fte_s_scaled])
+                    diff_excess = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'diff_excess_{s_idx}_{block_idx}')
+                    model.AddAbsEquality(diff_excess, excess_s - target_excess_per_person_scaled)
+                    excess_fte_violations.append(diff_excess)
 
         # 5. Preference Violations (S#f5e6d7c8): Minimize shift type changes on consecutive days worked.
         pref_violations = []
@@ -293,6 +323,7 @@ class CPSolver:
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = 30.0
         status = solver.Solve(model)
+        print(f"DEBUG: Solver status: {status}")
 
         if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             for d_idx in day_indices:
@@ -308,6 +339,10 @@ class CPSolver:
                             staff_m.assigned_hours += duration
                             if is_weekend:
                                 staff_m.weekend_hours += duration
+                            if h_name in ["N8", "N12"]:
+                                staff_m.night_hours += duration
+
+
             return self.assignments
         else:
             return []
@@ -381,13 +416,19 @@ class CPSolver:
                 if resus_count < 3:
                     violations.append(f"{date}: [H#62281944]N12 shift missing Resus training (needs >= 3 people L>=2)")
 
-        fortnights = len(self.dates) / 14.0
-        max_hours_limit = 76 * fortnights
-        for s in self.staff:
-            if s.assigned_hours < s.fte_hours:
-                violations.append(f"Staff {s.name} {fte_id}under FTE: {s.assigned_hours}/{s.fte_hours}")
-            if s.assigned_hours > max_hours_limit:
-                violations.append(f"Staff {s.name} {max_hours_id}exceeded {max_hours_limit} hours: {s.assigned_hours}")
+        # Block-based check for FTE and Max Hours
+        for block_idx in range(self.days_count // 14):
+            block_start = block_idx * 14
+            block_end = (block_idx + 1) * 14
+            block_dates = self.dates[block_start:block_end]
+            
+            for s in self.staff:
+                block_hours = sum(self.definitions[sn].duration for d, sn, sm in self.assignments if d in block_dates and sm.name == s.name)
+                
+                if block_hours < (s.fte_hours - 0.01):
+                    violations.append(f"Staff {s.name} {fte_id} under FTE in block {block_idx+1}: {block_hours:.2f}/{s.fte_hours:.2f}")
+                if block_hours > 76.01:
+                    violations.append(f"Staff {s.name} {max_hours_id} exceeded 76.00 hours in block {block_idx+1}: {block_hours:.2f}")
 
         for s in self.staff:
             shift_history = {} # (shift_name) -> list of dates
@@ -449,8 +490,12 @@ class CPSolver:
     def generate_results(self):
         with open("result.staff.md", "w") as f:
             f.write("# Staff Roster\n\n")
+            fortnights = len(self.dates) / 14.0
             for s in self.staff:
-                f.write(f"## {s.name}\n- Level: {s.level}\n- Training Level: {s.training_level}\n- FTE Hours per Fortnight: {s.fte_hours}\n- Total Hours: {s.assigned_hours}\n- Weekend Hours: {s.weekend_hours}\n\n### Shifts\n")
+                weekend_pct = (s.weekend_hours / s.fte_hours * 100) if s.fte_hours > 0 else 0
+                night_pct = (s.night_hours / s.fte_hours * 100) if s.fte_hours > 0 else 0
+                required_period = s.fte_hours * fortnights
+                f.write(f"## {s.name}\n- Level: {s.level}\n- Training Level: {s.training_level}\n- FTE Hours per Fortnight: {s.fte_hours}\n- Required Hours (Period): {required_period:.2f}\n- Total Allocated Hours: {s.assigned_hours:.2f}\n- Weekend % of FTE: {weekend_pct:.2f}%\n- Night Shift % of FTE: {night_pct:.2f}%\n\n### Shifts\n")
                 for d, sn in s.assigned_shifts: f.write(f"- {d.strftime('%Y-%m-%d')}: {sn}\n")
                 f.write("\n")
         with open("result.roster.md", "w") as f:
