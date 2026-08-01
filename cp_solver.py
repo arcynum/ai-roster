@@ -61,7 +61,7 @@ class CPSolver:
                 for h_name in shift_names:
                     x[s, d, h_name] = model.NewBoolVar(f'x_{s}_{d}_{h_name}')
                     
-        # 1. Requirement Constraint: Sum of staff assigned to shift h on day d must match roster requirements
+        # 1. Requirement Constraint [Requirement]: Sum of staff assigned to shift h on day d must match roster requirements
         for d_idx in day_indices:
             date = self.dates[d_idx]
             day_name = date.strftime("%A")
@@ -90,7 +90,7 @@ class CPSolver:
                 model.AddAbsEquality(diff_night_s, night_shifts_s - target_nights_s)
                 night_fairness_violations.append(diff_night_s)
 
-        # D12 and N12 requirements (updated indices for Graduate hierarchy)
+        # [D12/N12 Requirements] Training and Classification threshold checks
         for d_idx in day_indices:
             date = self.dates[d_idx]
             day_name = date.strftime("%A")
@@ -111,7 +111,7 @@ class CPSolver:
                 model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 3) >= 1)
                 model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 2) >= 1)
 
-        # 4. Rest Period Constraint (11 hours)
+        # [H#c1f6e3f5] Rest Period Constraint (min 11 hours)
         for s in staff_indices:
             for d1_idx in day_indices:
                 date1 = self.dates[d1_idx]
@@ -139,13 +139,13 @@ class CPSolver:
                             if overlap or gap_too_small:
                                 model.AddForbiddenAssignments([x[s, d1_idx, h1_name], x[s, d2_idx, h2_name]], [(1, 1)])
 
-        # 5. Consecutive Shift Constraint (max 2 in a row)
+        # [H#e3b8a5b7] Consecutive Shift Constraint (max 2 in a row)
         for s in staff_indices:
             for h_name in shift_names:
                 for d_idx in range(self.days_count - 2):
                     model.Add(x[s, d_idx, h_name] + x[s, d_idx+1, h_name] + x[s, d_idx+2, h_name] <= 2)
 
-        # 6. Red Requests and Holidays
+        # [H#a5d0c7d9] Red Requests and [H#b6e1d8e0] Holidays
         for s in staff_indices:
             staff_m = self.staff[s]
             for d_idx in day_indices:
@@ -158,7 +158,7 @@ class CPSolver:
                         for h_name in shift_names:
                             model.Add(x[s, d_idx, h_name] == 0)
 
-        # 7. Max Hours Constraint (76h per fortnight)
+        # [H#f0c5b2c4] Max Hours Constraint (76h per fortnight)
         fortnights_in_roster = self.days_count / 14.0
         max_hours_limit = 76 * fortnights_in_roster
         for s in staff_indices:
@@ -166,12 +166,12 @@ class CPSolver:
                                      for d in day_indices for h_name in shift_names)
             model.Add(total_hours_scaled <= int(max_hours_limit * self.SCALE))
 
-        # 0. One Shift Per Day (Hard)
+        # [One Shift Per Day] Hard constraint: max 1 shift/day
         for s in staff_indices:
             for d in day_indices:
                 model.Add(sum(x[s, d, h] for h in shift_names) <= 1)
 
-        # Graduate Constraint (H#30479c74): Graduates can only work D8, P8, L3, DISCO, N8
+        # [H#30479c74] Graduate training restrictions
         graduate_allowed_shifts = {"D8", "P8", "L3", "DISCO", "N8"}
         for s in staff_indices:
             if self.staff[s].training_level == "Graduate":
@@ -180,7 +180,7 @@ class CPSolver:
                         if h_name not in graduate_allowed_shifts:
                             model.Add(x[s, d, h_name] == 0)
 
-        # 8. Night/Day Transition Constraint
+        # [H#f4c9b6c8] Night/Day Transition Constraint
         night_shifts = [h for h in shift_names if h in ["N8", "N12"]]
         day_shifts = [h for h in shift_names if h not in night_shifts]
         for s in staff_indices:
@@ -191,11 +191,11 @@ class CPSolver:
                         model.AddForbiddenAssignments([x[s, d_idx, h_day], x[s, d_idx+1, h_night]], [(1, 1)])
 
         # --- OBJECTIVE FUNCTION ---
-        penalty_fte = self.weights.get("S#f8c3b0c2", 1000)
-        penalty_night_fairness = self.weights.get("S#d2a7f4a6", 50)
-        penalty_weekend = self.weights.get("S#a1d6c3d5", 50)
-        penalty_excess_fte = self.weights.get("S#e9b4a1b3", 20)
-        penalty_preference = self.weights.get("S#f5e6d7c8", 10)
+        penalty_fte = self.weights.get("S#f8c3b0c2", 1000)             # [S#f8c3b0c2] FTE Deviation Penalty
+        penalty_night_fairness = self.weights.get("S#d2a7f4a6", 50)    # [S#d2a7f4a6] Night Fairness Penalty
+        penalty_weekend = self.weights.get("S#a1d6c3d5", 50)          # [S#a1d6c3d5] Weekend Deviation Penalty
+        penalty_excess_fte = self.weights.get("S#e9b4a1b3", 20)       # [S#e9b4a1b3] Excess FTE Distribution Penalty
+        penalty_preference = self.weights.get("S#f5e6d7c8", 10)       # [S#f5e6d7c8] Preference Violation Penalty
 
         # 1. FTE Deviation (S#f8c3b0c2): Minimize being under contracted hours.
         fte_violations = []

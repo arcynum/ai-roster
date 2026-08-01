@@ -67,15 +67,34 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - The `result.staff.md` needs to include the the staff members Level, Training Level and FTE Hours per Fortnight.
 - Always print the shifts in the `result.roster.md` file in the following order: D8, D12, P8, P12, MD, L3, DISCO, N8, N12
 
-## Roster Engine: Constraint Programming (CP)
-The roster is generated using a Constraint Programming (CP) solver via Google OR-Tools (CP-SAT). This approach treats the problem as an optimization task rather than a greedy search.
+## Technical Implementation Guide
 
-### Hard vs. Soft Constraints
-- **Hard Constraints (`hard_constraints.md`)**: These are non-negotiable requirements. The solver *must* satisfy every rule in this file to produce a valid roster. If rules conflict, the build will fail (Infeasible).
-- **Soft Constraints (`soft_constraints.md`)**: These are optimization objectives. The solver attempts to satisfy these as much as possible, but they may be violated to ensure all hard constraints are met.
+### Environment & Execution
+- **Python Version**: Python 3.x
+- **Virtual Environment**: A virtual environment is provided in the `./venv/` directory. 
+- **Running Commands**: Always use the python interpreter from the virtual environment to ensure dependencies are found. Use `./venv/bin/python <script_name>.py`.
 
-### Infeasibility Warning
-Adding conflicting or impossible requirements to `hard_constraints.md` will prevent a roster from being built entirely. If you encounter an "Infeasible" error, check for logical conflicts in your mandatory rules.
+### Core Solver Logic (CP-SAT)
+The `cp_solver.py` uses Google OR-Tools CP-SAT. When implementing or modifying constraints, follow these technical requirements:
+
+1.  **Integer Arithmetic (Scaling)**: 
+    - CP-SAT only works with integers. 
+    - All floating-point values (e.g., FTE hours like `37.5`, shift durations like `8.5`) must be scaled to integers using `self.SCALE` (which is `100`).
+    - *Example*: An FTE of `37.5` becomes `3750`.
+
+2.  **Training Level Hierarchy**: 
+    - Training levels are implemented as an ordered hierarchy: `Graduate < Acute < Resus < Triage < Shift Coordinator`.
+    - In the solver, requirements for a specific level should be checked using thresholding (e.g., `TRAINING_MAP[level] >= required_rank`) rather than exact equality to allow higher-qualified staff to fill lower roles.
+
+3.  **Constraint Lifecycle**: 
+    To add a new constraint or preference, follow this pattern:
+    - **Step 1: Variables**: Define the necessary decision variables (e.g., `model.NewBoolVar`).
+    - **Step 2: Constraints**: Apply the logic using `model.Add(...)` or `model.AddForbiddenAssignments(...)`.
+    - **Step 3: Penalties (Soft Only)**: For soft constraints, create an integer variable to represent the "violation amount" and add it to the objective function multiplied by its weight from `weights.json`.
+    - **Step 4: Objective**: Ensure all new penalty variables are included in the `model.Minimize(...)` call.
+
+4.  **Linkage via IDs**: 
+    - Every hard/soft constraint in the code is tagged with its corresponding ID from the markdown files (e.g., `# [H#a7f2c9d1]`). Use these IDs when searching for or modifying logic.
 
 ## Testing
 Whenever any code is changed, run the tests.
