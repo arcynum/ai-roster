@@ -1,6 +1,7 @@
 .DS_Store
 result.staff.md
 result.roster.md
+result.violations.md
 __pycache__/
 .venv/
 venv/

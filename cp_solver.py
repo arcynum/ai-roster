@@ -221,20 +221,28 @@ class CPSolver:
                 model.Add(under_fte >= 0)
                 fte_violations.append(under_fte)
 
-        # 2. Night Shift Fairness (S#d2a7f4a6): Proportional distribution of night hours based on FTE.
+        # 2. Night Shift Fairness (S#d2a7f4a6): Proportional distribution of night hours per block.
         night_shift_names = [h for h in shift_names if h in ["N8", "N12"]]
-        total_nights_hours_scaled = sum(req.count * int(self.definitions[req.shift_name].duration * self.SCALE) 
-                                       for d_idx in day_indices for req in self.roster_reqs.get(self.dates[d_idx].strftime("%A"), []) if req.shift_name in night_shift_names)
         night_fairness_violations = []
-        if total_nights_hours_scaled > 0:
-            total_fte_sum = sum(s.fte_hours for s in self.staff)
-            for s_idx in staff_indices:
-                current_night_hours_scaled = sum(x[s_idx, d_idx, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
-                                                 for d_idx in day_indices for h_name in night_shift_names)
-                target_night_hours_scaled = int(round((self.staff[s_idx].fte_hours / total_fte_sum) * (total_nights_hours_scaled / self.SCALE))) * self.SCALE if total_fte_sum > 0 else 0
-                diff_night_s = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'diff_night_{s_idx}')
-                model.AddAbsEquality(diff_night_s, current_night_hours_scaled - target_night_hours_scaled)
-                night_fairness_violations.append(diff_night_s)
+        total_fte_sum = sum(s.fte_hours for s in self.staff)
+
+        for block_idx in range(self.days_count // 14):
+            block_start = block_idx * 14
+            block_end = (block_idx + 1) * 14
+            
+            total_nights_hours_in_block_scaled = sum(req.count * int(self.definitions[req.shift_name].duration * self.SCALE) 
+                                                      for d in range(block_start, block_end) 
+                                                      for req in self.roster_reqs.get(self.dates[d].strftime("%A"), []) if req.shift_name in night_shift_names)
+            
+            if total_nights_hours_in_block_scaled > 0:
+                for s_idx in staff_indices:
+                    current_night_hours_s_scaled = sum(x[s_idx, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
+                                                        for d in range(block_start, block_end) for h_name in night_shift_names)
+                    target_night_hours_s_scaled = int(round((self.staff[s_idx].fte_hours / total_fte_sum) * (total_nights_hours_in_block_scaled / self.SCALE))) * self.SCALE if total_fte_sum > 0 else 0
+                    diff_night_s = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'diff_night_{s_idx}_{block_idx}')
+                    model.AddAbsEquality(diff_night_s, current_night_hours_s_scaled - target_night_hours_s_scaled)
+                    night_fairness_violations.append(diff_night_s)
+
 
         # 3. Weekend Deviation (S#a1d6c3d5): Proportional distribution of weekend hours per block.
         weekend_violations = []
