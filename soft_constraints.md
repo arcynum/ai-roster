@@ -2,7 +2,6 @@
 Everything in this file is a preference and should be followed if possible. The solver will treat these as optimization objectives.
 
 ## Staffing & FTE Optimization
-- [S#a9d4c1d3] Staff can be scheduled in for more than their FTE hours, but never less.
 - [S#e9b4a1b3] If you need to exceed a staff members FTE hours to fill the roster due to a FTE shortfall, ensure these extra shifts are evenly distributed between all staff. All additional FTE needs to be fairly distributed to keep staff safe and healthy.
 
 ## Fairness & Distribution
