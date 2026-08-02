@@ -12,3 +12,4 @@ Everything in this file is a preference and should be followed if possible. The 
 
 ## Scheduling Preferences
 - [S#f5e6d7c8] For each shift, the same person should be scheduled on the same shift the next day.
+- [S#30c6f5ad] Staff should ideally work the same shift type for two consecutive days (to avoid gaps), but working three or more consecutive days of the same shift is discouraged.

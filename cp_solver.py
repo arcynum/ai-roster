@@ -158,11 +158,7 @@ class CPSolver:
                             if overlap or gap_too_small:
                                 model.AddForbiddenAssignments([x[s, d1_idx, h1_name], x[s, d2_idx, h2_name]], [(1, 1)])
 
-        # [H#e3b8a5b7] Consecutive Shift Constraint (max 2 in a row)
-        for s in staff_indices:
-            for h_name in shift_names:
-                for d_idx in range(self.days_count - 2):
-                    model.Add(x[s, d_idx, h_name] + x[s, d_idx+1, h_name] + x[s, d_idx+2, h_name] <= 2)
+
 
         # [H#a5d0c7d9] Red Requests and [H#b6e1d8e0] Holidays
         for s in staff_indices:
@@ -215,6 +211,7 @@ class CPSolver:
         penalty_weekend = self.weights.get("S#a1d6c3d5", 50)          # [S#a1d6c3d5] Weekend Deviation Penalty
         penalty_excess_fte = self.weights.get("S#e9b4a1b3", 20)       # [S#e9b4a1b3] Excess FTE Distribution Penalty
         penalty_preference = self.weights.get("S#f5e6d7c8", 10)       # [S#f5e6d7c8] Preference Violation Penalty
+        penalty_pattern = self.weights.get("S#30c6f5ad", 30)          # [S#30c6f5ad] Shift Pattern (Streak/Gap) Penalty
 
         # 1. FTE Deviation (S#f8c3b0c2): Minimize being under contracted hours per fortnight block.
         fte_violations = []
@@ -330,11 +327,33 @@ class CPSolver:
                 model.AddMultiplicationEquality(violation, [both, diff_type])
                 pref_violations.append(violation)
 
+        # 6. Shift Pattern Violations (S#30c6f5ad): Encourage pairs and avoid streaks/gaps.
+        pattern_violations = []
+        for s in staff_indices:
+            for h_idx, h_name in enumerate(shift_names):
+                for d in day_indices:
+                    if d < self.days_count - 2:
+                        streak_viol = model.NewBoolVar(f'streak_{s}_{d}_{h_idx}')
+                        model.Add(streak_viol == 1).OnlyEnforceIf([x[s, d, h_name], x[s, d+1, h_name], x[s, d+2, h_name]])
+                        pattern_violations.append(streak_viol)
+
+                    is_isolated = model.NewBoolVar(f'iso_{s}_{d}_{h_idx}')
+                    model.Add(is_isolated == 1).OnlyEnforceIf(x[s, d, h_name])
+                    if d > 0 and d < self.days_count - 1:
+                        model.Add(is_isolated == 0).OnlyEnforceIf([x[s, d, h_name], x[s, d-1, h_name]])
+                        model.Add(is_isolated == 0).OnlyEnforceIf([x[s, d, h_name], x[s, d+1, h_name]])
+                    elif d == 0 and self.days_count > 1:
+                        model.Add(is_isolated == 0).OnlyEnforceIf([x[s, d, h_name], x[s, d+1, h_name]])
+                    elif d == self.days_count - 1 and self.days_count > 1:
+                        model.Add(is_isolated == 0).OnlyEnforceIf([x[s, d, h_name], x[s, d-1, h_name]])
+                    pattern_violations.append(is_isolated)
+
         model.Minimize(penalty_fte * sum(fte_violations) + 
                        penalty_night_fairness * sum(night_fairness_violations) +
                        penalty_weekend * sum(weekend_violations) +
                        penalty_excess_fte * sum(excess_fte_violations) +
-                       penalty_preference * sum(pref_violations))
+                       penalty_preference * sum(pref_violations) +
+                       penalty_pattern * sum(pattern_violations))
 
         # Solve
         solver = cp_model.CpSolver()

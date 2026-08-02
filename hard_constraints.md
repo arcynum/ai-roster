@@ -8,7 +8,6 @@ Everything in this file is a rule and MUST be followed. The final roster must ob
 
 ## Staff Welfare and Safety
 - [H#c1f6e3f5] Staff must have a minimum of 11 hours between each shift.
-- [H#e3b8a5b7] Never roster a person on the same shift for 3 days in a row. 2 days in a row is fine, never 3 unless the individual staff members rules or preferences want this.
 - [H#f4c9b6c8] When swapping between night shifts and day shifts at least 1 day off should be rostered in between to help them recover as its extremely tiring.
 - [H#a5d0c7d9] Never roster any staff members on the days that they have red requested.
 - [H#b6e1d8e0] Never roster any staff members on the days that they are on leave.
