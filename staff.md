@@ -93,7 +93,7 @@
 - **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
-- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
+- **Holidays/Sickness**:
 - **Rules**: 
 - **Preferences**: 
 
@@ -138,7 +138,7 @@
 - **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
-- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
+- **Holidays/Sickness**:
 - **Rules**: 
 - **Preferences**: 
 
@@ -327,7 +327,7 @@
 - **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
-- **Holidays/Sickness**: 2026-08-01 to 2026-08-31
+- **Holidays/Sickness**:
 - **Rules**: 
 - **Preferences**: 
 
