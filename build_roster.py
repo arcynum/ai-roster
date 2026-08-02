@@ -187,7 +187,7 @@ def parse_staff(content: str) -> List[StaffMember]:
         staff.append(StaffMember(name, level, training_levels, fte, red, holidays, rules, prefs))
     return staff
 
-def generate_staff_shifts_html(solver, staff, dates):
+def generate_staff_shifts_html(solver, staff, dates, assignments=None):
     """Generate HTML table showing staff shifts."""
     
     # Define shift colors
@@ -202,21 +202,114 @@ def generate_staff_shifts_html(solver, staff, dates):
         'N12': '#E91E63'   # Pink/Magenta
     }
     
-    # Get assignments from solver
-    assignments = solver.assignments
+    # Check if assignments exist (feasible solution)
+    has_assignments = assignments is not None and len(assignments) > 0
     
-    # Create a mapping of date -> shift assignments for easier access
-    assignment_map = {}
-    for date, shift_name, staff_member in assignments:
-        if date not in assignment_map:
-            assignment_map[date] = {}
-        assignment_map[date][shift_name] = staff_member
+    if not has_assignments:
+        # Generate HTML for infeasible case with diagnostics
+        html_content = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Staff Shift Schedule</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        .shift-cell { min-width: 80px; }
+        .shift-header { font-weight: bold; }
+        .staff-header { font-weight: bold; }
+        .shift-D8 { background-color: """ + shift_colors['D8'] + """; color: white; }
+        .shift-D12 { background-color: """ + shift_colors['D12'] + """; color: white; }
+        .shift-P8 { background-color: """ + shift_colors['P8'] + """; color: white; }
+        .shift-P12 { background-color: """ + shift_colors['P12'] + """; color: white; }
+        .shift-L3 { background-color: """ + shift_colors['L3'] + """; color: white; }
+        .shift-DISCO { background-color: """ + shift_colors['DISCO'] + """; color: white; }
+        .shift-N8 { background-color: """ + shift_colors['N8'] + """; color: white; }
+        .shift-N12 { background-color: """ + shift_colors['N12'] + """; color: white; }
+        .staff-info { font-size: 0.9em; }
+        .training-levels { font-size: 0.8em; color: #666; }
+        .note { background-color: #fff3cd; padding: 10px; border: 1px solid #ffeaa7; margin: 10px 0; }
+        .error-section { background-color: #ffebee; padding: 15px; border: 1px solid #ffcdd2; margin: 10px 0; }
+        .error-title { color: #c62828; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Staff Shift Schedule</h1>
+    <p class="note">Roster could not be generated due to infeasibility.</p>
     
-    # Get staff names in order
-    staff_names = [s.name for s in staff]
+    <div class="error-section">
+        <h2 class="error-title">Feasibility Analysis</h2>
+        <p>The solver could not find a feasible roster that satisfies all constraints.</p>
+        <p>Below are the diagnostic details explaining the infeasibility:</p>
+    </div>
+"""
+        
+        # Add the diagnostic information that was previously printed to stdout
+        # This will be populated by the calling code
+        html_content += """
+    <div class="error-section">
+        <h2>Diagnostic Information</h2>
+        <p>Training level distribution: <strong>""" + str(getattr(solver, 'training_counts', {})) + """</strong></p>
+        <p>Classification distribution: <strong>""" + str(getattr(solver, 'level_counts', {})) + """</strong></p>
+"""
+        
+        if hasattr(solver, 'period_holidays') and solver.period_holidays:
+            html_content += "<p>Staff on full-period holidays:</p><ul>"
+            for name, start, end in solver.period_holidays:
+                html_content += f"<li>- {name}: {start} to {end}</li>"
+            html_content += "</ul>"
+        
+        html_content += """
+        <p>Staffing Requirements:</p>
+        <ul>
+            <li>Total D12 shifts needed: """ + str(getattr(solver, 'total_d12_shifts', 0)) + """</li>
+            <li>Required staff per shift: 4</li>
+            <li>Total required staff-shifts: """ + str(getattr(solver, 'total_required_staff', 0)) + """</li>
+        </ul>
+        
+        <p>Total available FTE hours: <strong>""" + str(getattr(solver, 'total_fte', 0)) + """</strong></p>
+        <p>Required FTE for 14-day block: <strong>""" + str(getattr(solver, 'required_fte', 0)) + """</strong></p>
+        
+        <p><strong>Key Issue:</strong> The staffing levels don't meet shift requirements</p>
+        <ul>
+            <li>Need 4 Triage trained staff (L>=3) but only have <strong>""" + str(getattr(solver, 'training_counts', {}).get('Triage', 0)) + """</strong></li>
+            <li>Need 4 Resus trained staff (L>=2) but only have <strong>""" + str(getattr(solver, 'training_counts', {}).get('Resus', 0)) + """</strong></li>
+        </ul>
+"""
+        
+        if len(staff) < 10:
+            html_content += "<p><strong>WARNING:</strong> Very limited staff available - may not be enough to meet requirements</p>"
+        
+        html_content += """
+    </div>
     
-    # Create HTML content
-    html_content = """
+    <h2>Staff Assignment Table (Not Available - Roster Infeasible)</h2>
+    <p>No staff assignments could be generated due to infeasibility.</p>
+</body>
+</html>
+    """
+        
+        return html_content
+    
+    else:
+        # Generate HTML for feasible case with assignments
+        # Get assignments from solver
+        assignments = solver.assignments
+        
+        # Create a mapping of date -> shift assignments for easier access
+        assignment_map = {}
+        for date, shift_name, staff_member in assignments:
+            if date not in assignment_map:
+                assignment_map[date] = {}
+            assignment_map[date][shift_name] = staff_member
+        
+        # Get staff names in order
+        staff_names = [s.name for s in staff]
+        
+        # Create HTML content
+        html_content = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -256,47 +349,47 @@ def generate_staff_shifts_html(solver, staff, dates):
             </tr>
         </thead>
         <tbody>
-    """
-    
-    # Add staff rows
-    for staff_name in staff_names:
-        staff_member = next((s for s in staff if s.name == staff_name), None)
-        if not staff_member:
-            continue
-            
-        html_content += f"<tr>\n"
-        # Staff info
-        html_content += f"    <td class='staff-header'>{staff_member.name}</td>\n"
-        html_content += f"    <td>{staff_member.level}</td>\n"
-        html_content += f"    <td class='training-levels'>{', '.join(staff_member.training_levels)}</td>\n"
+        """
         
-        # Add shift assignments for each date
-        for date in dates:
-            # Find if staff member is assigned to any shift on this date
-            shift_cell_content = ""
-            if date in assignment_map:
-                for shift_name, assigned_staff in assignment_map[date].items():
-                    if assigned_staff.name == staff_member.name:
-                        shift_cell_content = shift_name
-                        break
+        # Add staff rows
+        for staff_name in staff_names:
+            staff_member = next((s for s in staff if s.name == staff_name), None)
+            if not staff_member:
+                continue
+                
+            html_content += f"<tr>\n"
+            # Staff info
+            html_content += f"    <td class='staff-header'>{staff_member.name}</td>\n"
+            html_content += f"    <td>{staff_member.level}</td>\n"
+            html_content += f"    <td class='training-levels'>{', '.join(staff_member.training_levels)}</td>\n"
             
-            # Add cell with shift info or empty
-            if shift_cell_content:
-                shift_class = f"shift-{shift_cell_content}"
-                html_content += f"    <td class='shift-cell {shift_class}'>{shift_cell_content}</td>\n"
-            else:
-                html_content += f"    <td class='shift-cell'></td>\n"
+            # Add shift assignments for each date
+            for date in dates:
+                # Find if staff member is assigned to any shift on this date
+                shift_cell_content = ""
+                if date in assignment_map:
+                    for shift_name, assigned_staff in assignment_map[date].items():
+                        if assigned_staff.name == staff_member.name:
+                            shift_cell_content = shift_name
+                            break
+                
+                # Add cell with shift info or empty
+                if shift_cell_content:
+                    shift_class = f"shift-{shift_cell_content}"
+                    html_content += f"    <td class='shift-cell {shift_class}'>{shift_cell_content}</td>\n"
+                else:
+                    html_content += f"    <td class='shift-cell'></td>\n"
+            
+            html_content += "</tr>\n"
         
-        html_content += "</tr>\n"
-    
-    html_content += """
+        html_content += """
         </tbody>
     </table>
 </body>
 </html>
-    """
-    
-    return html_content
+        """
+        
+        return html_content
 
 if __name__ == "__main__":
     try:
@@ -348,6 +441,10 @@ if __name__ == "__main__":
                     training_counts[level] = training_counts.get(level, 0) + 1
                 level_counts[s.level] = level_counts.get(s.level, 0) + 1
             
+            # Store diagnostic info in solver for HTML generation
+            solver.training_counts = training_counts
+            solver.level_counts = level_counts
+            
             print(f"Training level distribution: {training_counts}")
             print(f"Classification distribution: {level_counts}")
             
@@ -359,6 +456,8 @@ if __name__ == "__main__":
                         if start_date <= end_date:  # Valid date range
                             period_holidays.append((s.name, start_date, end_date))
             
+            solver.period_holidays = period_holidays
+            
             if period_holidays:
                 print(f"\nStaff on full-period holidays: {len(period_holidays)}")
                 for name, start, end in period_holidays:
@@ -369,6 +468,9 @@ if __name__ == "__main__":
             total_d12_shifts = 4 * total_days  # 4 D12 shifts per day
             required_staff_per_d12 = 4  # CN + Shift Coordinator + Triage + Resus
             
+            solver.total_d12_shifts = total_d12_shifts
+            solver.total_required_staff = total_d12_shifts * required_staff_per_d12
+            
             print(f"\nStaffing Requirements:")
             print(f"Total D12 shifts needed: {total_d12_shifts}")
             print(f"Required staff per shift: 4")
@@ -376,6 +478,9 @@ if __name__ == "__main__":
             
             # Show FTE summary
             total_fte = sum(s.fte_hours for s in staff)
+            solver.total_fte = total_fte
+            solver.required_fte = total_d12_shifts * required_staff_per_d12 * 12.5  # Assuming ~12.5h per shift
+            
             print(f"\nTotal available FTE hours: {total_fte:.1f}")
             print(f"Required FTE for 14-day block: {total_d12_shifts * required_staff_per_d12 * 12.5}")  # Assuming ~12.5h per shift
             
@@ -404,7 +509,7 @@ if __name__ == "__main__":
                 print("Roster built successfully with no violations.")
             
         # Generate HTML output
-        html_content = generate_staff_shifts_html(solver, staff, solver.dates)
+        html_content = generate_staff_shifts_html(solver, staff, solver.dates, assignments)
         with open("result.staff_shifts.html", "w") as f:
             f.write(html_content)
         print("HTML shift schedule generated: result.staff_shifts.html")
