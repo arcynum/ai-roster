@@ -3,71 +3,116 @@
 - **Roster End Date**: 2026-08-30
 
 ## Monday
-- 1 D8
-- 4 D12
-- 1 P8
-- 1 P12
-- 2 L3
-- 1 DISCO
-- 1 N8
-- 4 N12
+- D8 skill_tag["*"]
+- D12 skill_tag["Shift Coordinator"]
+- D12 skill_tag["Triage"]
+- D12 skill_tag["Resus"]
+- D12 skill_tag["*"]
+- P8 skill_tag["*"]
+- P12 skill_tag["*"]
+- L3 skill_tag["*"]
+- L3 skill_tag["*"]
+- DISCO skill_tag["*"]
+- N8 skill_tag["*"]
+- N12 skill_tag["Shift Coordinator"]
+- N12 skill_tag["Triage"]
+- N12 skill_tag["Resus"]
+- N12 skill_tag["*"]
 
 ## Tuesday
-- 1 D8
-- 4 D12
-- 1 P8
-- 1 P12
-- 1 L3
-- 1 DISCO
-- 1 N8
-- 4 N12
+- D8
+- D12 skill_tag["Shift Coordinator"]
+- D12 skill_tag["Triage"]
+- D12 skill_tag["Resus"]
+- D12 skill_tag["*"]
+- P8 skill_tag["*"]
+- P12 skill_tag["*"]
+- L3 skill_tag["*"]
+- DISCO skill_tag["*"]
+- N8 skill_tag["*"]
+- N12 skill_tag["Shift Coordinator"]
+- N12 skill_tag["Triage"]
+- N12 skill_tag["Resus"]
+- N12 skill_tag["*"]
 
 ## Wednesday
-- 1 D8
-- 4 D12
-- 1 P8
-- 1 P12
-- 1 L3
-- 1 DISCO
-- 1 N8
-- 4 N12
+- D8
+- D12 skill_tag["Shift Coordinator"]
+- D12 skill_tag["Triage"]
+- D12 skill_tag["Resus"]
+- D12 skill_tag["*"]
+- P8 skill_tag["*"]
+- P12 skill_tag["*"]
+- L3 skill_tag["*"]
+- DISCO skill_tag["*"]
+- N8 skill_tag["*"]
+- N12 skill_tag["Shift Coordinator"]
+- N12 skill_tag["Triage"]
+- N12 skill_tag["Resus"]
+- N12 skill_tag["*"]
 
 ## Thursday
-- 1 D8
-- 4 D12
-- 1 P8
-- 1 P12
-- 1 L3
-- 1 DISCO
-- 1 N8
-- 4 N12
+- D8
+- D12 skill_tag["Shift Coordinator"]
+- D12 skill_tag["Triage"]
+- D12 skill_tag["Resus"]
+- D12 skill_tag["*"]
+- P8 skill_tag["*"]
+- P12 skill_tag["*"]
+- L3 skill_tag["*"]
+- DISCO skill_tag["*"]
+- N8 skill_tag["*"]
+- N12 skill_tag["Shift Coordinator"]
+- N12 skill_tag["Triage"]
+- N12 skill_tag["Resus"]
+- N12 skill_tag["*"]
 
 ## Friday
-- 1 D8
-- 4 D12
-- 1 P8
-- 1 P12
-- 1 L3
-- 1 DISCO
-- 1 N8
-- 4 N12
+- D8
+- D12 skill_tag["Shift Coordinator"]
+- D12 skill_tag["Triage"]
+- D12 skill_tag["Resus"]
+- D12 skill_tag["*"]
+- P8 skill_tag["*"]
+- P12 skill_tag["*"]
+- L3 skill_tag["*"]
+- DISCO skill_tag["*"]
+- N8 skill_tag["*"]
+- N12 skill_tag["Shift Coordinator"]
+- N12 skill_tag["Triage"]
+- N12 skill_tag["Resus"]
+- N12 skill_tag["*"]
 
 ## Saturday
-- 1 D8
-- 4 D12
-- 1 P8
-- 1 P12
-- 2 L3
-- 1 DISCO
-- 1 N8
-- 4 N12
+- D8
+- D12 skill_tag["Shift Coordinator"]
+- D12 skill_tag["Triage"]
+- D12 skill_tag["Resus"]
+- D12 skill_tag["*"]
+- P8 skill_tag["*"]
+- P12 skill_tag["*"]
+- L3 skill_tag["*"]
+- L3 skill_tag["*"]
+- DISCO skill_tag["*"]
+- N8 skill_tag["*"]
+- N12 skill_tag["Shift Coordinator"]
+- N12 skill_tag["Triage"]
+- N12 skill_tag["Resus"]
+- N12 skill_tag["*"]
 
 ## Sunday
-- 1 D8
-- 4 D12
-- 1 P8
-- 1 P12
-- 2 L3
-- 1 DISCO
-- 1 N8
-- 4 N12
+- D8
+- D12 skill_tag["Shift Coordinator"]
+- D12 skill_tag["Triage"]
+- D12 skill_tag["Resus"]
+- D12 skill_tag["*"]
+- P8 skill_tag["*"]
+- P12 skill_tag["*"]
+- L3 skill_tag["*"]
+- L3 skill_tag["*"]
+- DISCO skill_tag["*"]
+- N8 skill_tag["*"]
+- N12 skill_tag["Shift Coordinator"]
+- N12 skill_tag["Triage"]
+- N12 skill_tag["Resus"]
+- N12 skill_tag["*"]
