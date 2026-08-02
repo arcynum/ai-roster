@@ -1,0 +1,221 @@
+# Roster Requirements - New Source of Truth
+dates:
+  start: 2026-08-03
+  end: 2026-08-30
+
+shift_requirements:
+  Monday:
+    - shift: D8
+      required_skills: ["*"]
+    - shift: D12
+      required_skills: ["Shift Coordinator"]
+    - shift: D12
+      required_skills: ["Triage"]
+    - shift: D12
+      required_skills: ["Resus"]
+    - shift: D12
+      required_skills: ["*"]
+    - shift: P8
+      required_skills: ["*"]
+    - shift: P12
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: DISCO
+      required_skills: ["*"]
+    - shift: N8
+      required_skills: ["*"]
+    - shift: N12
+      required_skills: ["Shift Coordinator"]
+    - shift: N12
+      required_skills: ["Triage"]
+    - shift: N12
+      required_skills: ["Resus"]
+    - shift: N12
+      required_skills: ["*"]
+
+  Tuesday:
+    - shift: D8
+      required_skills: ["*"]
+    - shift: D12
+      required_skills: ["Shift Coordinator"]
+    - shift: D12
+      required_skills: ["Triage"]
+    - shift: D12
+      required_skills: ["Resus"]
+    - shift: D12
+      required_skills: ["*"]
+    - shift: P8
+      required_skills: ["*"]
+    - shift: P12
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: DISCO
+      required_skills: ["*"]
+    - shift: N8
+      required_skills: ["*"]
+    - shift: N12
+      required_skills: ["Shift Coordinator"]
+    - shift: N12
+      required_skills: ["Triage"]
+    - shift: N12
+      required_skills: ["Resus"]
+    - shift: N12
+      required_skills: ["*"]
+
+  Wednesday:
+    - shift: D8
+      required_skills: ["*"]
+    - shift: D12
+      required_skills: ["Shift Coordinator"]
+    - shift: D12
+      required_skills: ["Triage"]
+    - shift: D12
+      required_skills: ["Resus"]
+    - shift: D12
+      required_skills: ["*"]
+    - shift: P8
+      required_skills: ["*"]
+    - shift: P12
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: DISCO
+      required_skills: ["*"]
+    - shift: N8
+      required_skills: ["*"]
+    - shift: N12
+      required_skills: ["Shift Coordinator"]
+    - shift: N12
+      required_skills: ["Triage"]
+    - shift: N12
+      required_skills: ["Resus"]
+    - shift: N12
+      required_skills: ["*"]
+
+  Thursday:
+    - shift: D8
+      required_skills: ["*"]
+    - shift: D12
+      required_skills: ["Shift Coordinator"]
+    - shift: D12
+      required_skills: ["Triage"]
+    - shift: D12
+      required_skills: ["Resus"]
+    - shift: D12
+      required_skills: ["*"]
+    - shift: P8
+      required_skills: ["*"]
+    - shift: P12
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: DISCO
+      required_skills: ["*"]
+    - shift: N8
+      required_skills: ["*"]
+    - shift: N12
+      required_skills: ["Shift Coordinator"]
+    - shift: N12
+      required_skills: ["Triage"]
+    - shift: N12
+      required_skills: ["Resus"]
+    - shift: N12
+      required_skills: ["*"]
+
+  Friday:
+    - shift: D8
+      required_skills: ["*"]
+    - shift: D12
+      required_skills: ["Shift Coordinator"]
+    - shift: D12
+      required_skills: ["Triage"]
+    - shift: D12
+      required_skills: ["Resus"]
+    - shift: D12
+      required_skills: ["*"]
+    - shift: P8
+      required_skills: ["*"]
+    - shift: P12
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: DISCO
+      required_skills: ["*"]
+    - shift: N8
+      required_skills: ["*"]
+    - shift: N12
+      required_skills: ["Shift Coordinator"]
+    - shift: N12
+      required_skills: ["Triage"]
+    - shift: N12
+      required_skills: ["Resus"]
+    - shift: N12
+      required_skills: ["*"]
+
+  Saturday:
+    - shift: D8
+      required_skills: ["*"]
+    - shift: D12
+      required_skills: ["Shift Coordinator"]
+    - shift: D12
+      required_skills: ["Triage"]
+    - shift: D12
+      required_skills: ["Resus"]
+    - shift: D12
+      required_skills: ["*"]
+    - shift: P8
+      required_skills: ["*"]
+    - shift: P12
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: DISCO
+      required_skills: ["*"]
+    - shift: N8
+      required_skills: ["*"]
+    - shift: N12
+      required_skills: ["Shift Coordinator"]
+    - shift: N12
+      required_skills: ["Triage"]
+    - shift: N12
+      required_skills: ["Resus"]
+    - shift: N12
+      required_skills: ["*"]
+
+  Sunday:
+    - shift: D8
+      required_skills: ["*"]
+    - shift: D12
+      required_skills: ["Shift Coordinator"]
+    - shift: D12
+      required_skills: ["Triage"]
+    - shift: D12
+      required_skills: ["Resus"]
+    - shift: D12
+      required_skills: ["*"]
+    - shift: P8
+      required_skills: ["*"]
+    - shift: P12
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: L3
+      required_skills: ["*"]
+    - shift: DISCO
+      required_skills: ["*"]
+    - shift: N8
+      required_skills: ["*"]
+    - shift: N12
+      required_skills: ["Shift Coordinator"]
+    - shift: N12
+      required_skills: ["Triage"]
+    - shift: N12
+      required_skills: ["Resus"]
+    - shift: N12
+      required_skills: ["*"]

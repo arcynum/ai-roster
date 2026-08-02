@@ -1,5 +1,6 @@
 import re
 import datetime
+import yaml
 from typing import List, Dict, Optional, Set, Tuple
 from models import (
     ShiftDefinition,
@@ -12,6 +13,10 @@ from models import (
     get_shift_times_helper
 )
 from cp_solver import CPSolver
+
+# This script supports both roster.yaml (new preferred format) and roster.md (legacy format)
+# The YAML format provides a more structured and maintainable way to define roster requirements
+# Each shift instance requires exactly one skill tag
 
 def parse_definitions(content: str) -> Dict[str, ShiftDefinition]:
     definitions = {}
@@ -45,32 +50,23 @@ def parse_definitions(content: str) -> Dict[str, ShiftDefinition]:
                 print(f"Error parsing time for {name}: {e}")
     return definitions
 
-def parse_roster(content: str) -> Tuple[datetime.date, datetime.date, Dict[str, List[ShiftRequirement]]]:
-    start_date = None
-    end_date = None
+def parse_roster_yaml(content: str) -> Tuple[datetime.date, datetime.date, Dict[str, List[ShiftRequirement]]]:
+    """Parse roster requirements from YAML format."""
+    data = yaml.safe_load(content)
+    
+    start_date = data['dates']['start']
+    end_date = data['dates']['end']
+    
     roster = {}
-    current_day_name = None
-    for line in content.split('\n'):
-        line = line.strip()
-        if not line: continue
-        if line.startswith('- **Roster Start Date**: '):
-            start_date = datetime.datetime.strptime(line.split(': ')[1], "%Y-%m-%d").date()
-        elif line.startswith('- **Roster End Date**: '):
-            end_date = datetime.datetime.strptime(line.split(': ')[1], "%Y-%m-%d").date()
-        elif line.startswith('## '):
-            header = line[3:].strip()
-            # Match "YYYY-MM-DD (DayName)"
-            match = re.search(r'(\d{4}-\d{2}-\d{2})\s+\((\w+)\)', header)
-            if match:
-                current_day_name = match.group(2)
-            else:
-                current_day_name = header
-            
-            if current_day_name not in roster:
-                roster[current_day_name] = []
-        elif line.startswith('- ') and current_day_name:
-            m = re.match(r'- (\d+) (\w+)', line)
-            if m: roster[current_day_name].append(ShiftRequirement(m.group(2), int(m.group(1))))
+    for day_name, shifts in data['shift_requirements'].items():
+        roster[day_name] = []
+        for shift_data in shifts:
+            shift_name = shift_data['shift']
+            required_skills = shift_data['required_skills']
+            # For now, we'll assume the count is 1 for each shift requirement
+            # In the future, this could be expanded to support multiple counts
+            roster[day_name].append(ShiftRequirement(shift_name, 1, required_skills))
+    
     return start_date, end_date, roster
 
 def parse_rule_or_pref(text: str) -> Tuple[Optional[str], str]:
@@ -394,8 +390,13 @@ def generate_staff_shifts_html(solver, staff, dates, assignments=None):
 if __name__ == "__main__":
     try:
         with open("definitions.md", "r") as f: defs = parse_definitions(f.read())
-        with open("roster.md", "r") as f: 
-            start_date, end_date, reqs = parse_roster(f.read())
+        # Check if roster.yaml exists, otherwise fall back to roster.md
+        try:
+            with open("roster.yaml", "r") as f: 
+                start_date, end_date, reqs = parse_roster_yaml(f.read())
+        except FileNotFoundError:
+            with open("roster.md", "r") as f: 
+                start_date, end_date, reqs = parse_roster(f.read())
         with open("staff.md", "r") as f: staff = parse_staff(f.read())
         with open("hard_constraints.md", "r") as f: global_rules, _ = parse_rules_and_prefs(f.read(), "")
         with open("soft_constraints.md", "r") as f: _, global_prefs = parse_rules_and_prefs("", f.read())

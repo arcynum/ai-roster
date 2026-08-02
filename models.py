@@ -23,6 +23,7 @@ def get_shift_times_helper(date, shift_name, definitions):
 class ShiftRequirement:
     shift_name: str
     count: int
+    required_skills: List[str] = None
 
 @dataclass
 class Rule:
