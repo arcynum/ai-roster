@@ -226,8 +226,15 @@ if __name__ == "__main__":
             training_counts = {}
             level_counts = {}
             for s in staff:
-                level = s.training_level
-                training_counts[level] = training_counts.get(level, 0) + 1
+                # Handle both old and new formats for compatibility
+                if hasattr(s, 'training_levels'):
+                    # New format: training_levels is an array
+                    for level in s.training_levels:
+                        training_counts[level] = training_counts.get(level, 0) + 1
+                else:
+                    # Old format: training_level is a string
+                    level = s.training_level
+                    training_counts[level] = training_counts.get(level, 0) + 1
                 level_counts[s.level] = level_counts.get(s.level, 0) + 1
             
             print(f"Training level distribution: {training_counts}")

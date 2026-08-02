@@ -122,13 +122,13 @@ class CPSolver:
                 model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
                 
                 # Ensure at least one Shift Coordinator (training level 4 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 3 for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Shift Coordinator" for level in self.staff[s].training_levels)) >= 1)
                 
                 # Ensure at least one Triage trained worker (training level 3 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 2 for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Triage" for level in self.staff[s].training_levels)) >= 1)
                 
                 # Ensure at least one Resus trained worker (training level 2 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 1 for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Resus" for level in self.staff[s].training_levels)) >= 1)
 
             # N12 requirements [H#62281944] - Need 1 CN, 1 Shift Coordinator, 1 Triage, and 1 Resus
             n12_reqs = [r for r in self.roster_reqs.get(day_name, []) if r.shift_name == "N12"]
@@ -137,13 +137,13 @@ class CPSolver:
                 model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
                 
                 # Ensure at least one Shift Coordinator (training level 4 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 3 for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Shift Coordinator" for level in self.staff[s].training_levels)) >= 1)
                 
                 # Ensure at least one Triage trained worker (training level 3 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 2 for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Triage" for level in self.staff[s].training_levels)) >= 1)
                 
                 # Ensure at least one Resus trained worker (training level 2 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 1 for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Resus" for level in self.staff[s].training_levels)) >= 1)
 
         # [H#c1f6e3f5] Rest Period Constraint (min 11 hours)
         for s in staff_indices:
@@ -205,10 +205,10 @@ class CPSolver:
             for d in day_indices:
                 model.Add(sum(x[s, d, h] for h in shift_names) <= 1)
 
-        # [H#30479c74] Graduate training restrictions
+        # [H#30479c74] Graduate classification restrictions
         graduate_allowed_shifts = {"D8", "P8", "L3", "DISCO", "N8"}
         for s in staff_indices:
-            if "Graduate" in self.staff[s].training_levels:
+            if self.staff[s].level == "Graduate":
                 for d in day_indices:
                     for h_name in shift_names:
                         if h_name not in graduate_allowed_shifts:
@@ -493,9 +493,9 @@ class CPSolver:
             d12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "D12" and a[1] is not None]
             if d12_shifts:
                 cn_count = sum(1 for _, s in d12_shifts if s.level == "CN")
-                coord_count = sum(1 for _, s in d12_shifts if any(TRAINING_MAP.get(level, 0) >= 4 for level in s.training_levels))
-                triage_count = sum(1 for _, s in d12_shifts if any(TRAINING_MAP.get(level, 0) >= 3 for level in s.training_levels))
-                resus_count = sum(1 for _, s in d12_shifts if any(TRAINING_MAP.get(level, 0) >= 2 for level in s.training_levels))
+                coord_count = sum(1 for _, s in d12_shifts if any(level == "Shift Coordinator" for level in s.training_levels))
+                triage_count = sum(1 for _, s in d12_shifts if any(level == "Triage" for level in s.training_levels))
+                resus_count = sum(1 for _, s in d12_shifts if any(level == "Resus" for level in s.training_levels))
 
                 if cn_count < 1:
                     violations.append(f"{date}: [H#12c6090b]D12 shift missing CN staff member")
@@ -509,9 +509,9 @@ class CPSolver:
             n12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "N12" and a[1] is not None]
             if n12_shifts:
                 cn_count = sum(1 for _, s in n12_shifts if s.level == "CN")
-                coord_count = sum(1 for _, s in n12_shifts if any(TRAINING_MAP.get(level, 0) >= 4 for level in s.training_levels))
-                triage_count = sum(1 for _, s in n12_shifts if any(TRAINING_MAP.get(level, 0) >= 3 for level in s.training_levels))
-                resus_count = sum(1 for _, s in n12_shifts if any(TRAINING_MAP.get(level, 0) >= 2 for level in s.training_levels))
+                coord_count = sum(1 for _, s in n12_shifts if any(level == "Shift Coordinator" for level in s.training_levels))
+                triage_count = sum(1 for _, s in n12_shifts if any(level == "Triage" for level in s.training_levels))
+                resus_count = sum(1 for _, s in n12_shifts if any(level == "Resus" for level in s.training_levels))
 
                 if cn_count < 1:
                     violations.append(f"{date}: [H#62281944]N12 shift missing CN staff member")

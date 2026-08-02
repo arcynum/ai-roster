@@ -68,7 +68,7 @@ def test_parse_roster():
 def test_parse_staff():
     content = """# Test Staff
 **Classification**: RN
-**Training Level**: Resus
+**Training Levels**: [\"Resus\"]
 **FTE Hours per Fortnight**: 48.0
 **Red Requests**: 2026-08-01
 **Holidays/Sickness**: 2026-08-05 to 2026-08-06
@@ -79,13 +79,13 @@ def test_parse_staff():
     s = staff[0]
     assert s.name == "Test Staff"
     assert s.level == "RN"
-    assert s.training_level == "Resus"
+    assert "Resus" in s.training_levels
     assert s.fte_hours == 48.0
-    assert datetime.date(2026, 8, 1) in s.red_requests
+    assert datetime.date(2026, 8, 1) in s.red
     assert len(s.holidays) == 1
     assert s.holidays[0] == (datetime.date(2026, 8, 5), datetime.date(2026, 8, 6))
     assert s.rules[0].id == "R1"
-    assert s.preferences[0].id == "P1"
+    assert s.prefs[0].id == "P1"
 
 def test_coverage(solver_setup):
     start_date, days_count, definitions, roster_reqs, staff = solver_setup
@@ -106,16 +106,16 @@ def test_training_requirements(solver_setup):
     # We need enough high-training and CN staff to satisfy requirements over 14 days.
     # Requirements per day for D12: >=1 CN, >=1 L>=4, >=2 L>=3, >=3 L>=2.
     staff = [
-        StaffMember("CN_L4_1", "CN", "Shift Coordinator", 500.0), # CN, L=4 (Covers all)
-        StaffMember("CN_L4_2", "CN", "Shift Coordinator", 500.0), # CN, L=4 (Covers all)
-        StaffMember("CN_L4_3", "CN", "Shift Coordinator", 500.0), # CN, L=4 (Covers all)
-        StaffMember("RN_L3_1", "RN", "Triage", 500.0),             # RN, L=3
-        StaffMember("RN_L3_2", "RN", "Triage", 500.0),             # RN, L=3
-        StaffMember("RN_L2_1", "RN", "Resus", 500.0),              # RN, L=2
-        StaffMember("RN_L2_2", "RN", "Resus", 500.0),              # RN, L=2
-        StaffMember("RN_L2_3", "RN", "Resus", 500.0),              # RN, L=2
-        StaffMember("RN_Acute1", "RN", "Acute", 500.0),            # RN, L=1
-        StaffMember("RN_Acute2", "RN", "Acute", 500.0),            # RN, L=1
+        StaffMember("CN_L4_1", "CN", ["Shift Coordinator"], 500.0), # CN, L=4 (Covers all)
+        StaffMember("CN_L4_2", "CN", ["Shift Coordinator"], 500.0), # CN, L=4 (Covers all)
+        StaffMember("CN_L4_3", "CN", ["Shift Coordinator"], 500.0), # CN, L=4 (Covers all)
+        StaffMember("RN_L3_1", "RN", ["Triage"], 500.0),             # RN, L=3
+        StaffMember("RN_L3_2", "RN", ["Triage"], 500.0),             # RN, L=3
+        StaffMember("RN_L2_1", "RN", ["Resus"], 500.0),              # RN, L=2
+        StaffMember("RN_L2_2", "RN", ["Resus"], 500.0),              # RN, L=2
+        StaffMember("RN_L2_3", "RN", ["Resus"], 500.0),              # RN, L=2
+        StaffMember("RN_Acute1", "RN", ["Acute"], 500.0),            # RN, L=1
+        StaffMember("RN_Acute2", "RN", ["Acute"], 500.0),            # RN, L=1
     ]
     roster_reqs = {day: [ShiftRequirement("D12", 3)] for day in ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]}
     solver = CPSolver(start_date, days_count, definitions, roster_reqs, staff)
@@ -127,10 +127,10 @@ def test_training_requirements(solver_setup):
 def test_rest_period(solver_setup):
     start_date, days_count, definitions, _, _ = solver_setup
     staff = [
-        StaffMember("S1", "CN", "Shift Coordinator", 500.0),
-        StaffMember("S2", "RN", "Triage", 500.0),
-        StaffMember("S3", "RN", "Resus", 500.0),
-        StaffMember("S4", "RN", "Acute", 500.0),
+        StaffMember("S1", "CN", ["Shift Coordinator"], 500.0),
+        StaffMember("S2", "RN", ["Triage"], 500.0),
+        StaffMember("S3", "RN", ["Resus"], 500.0),
+        StaffMember("S4", "RN", ["Acute"], 500.0),
     ]
     roster_reqs = {
         "Saturday": [ShiftRequirement("N12", 1)],
