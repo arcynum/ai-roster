@@ -16,6 +16,13 @@
             "context": 131072,
             "output": 32768
           }
+        },
+        "Qwen3-Coder-30B-A3B-Q4_K_XL": {
+          "name": "Qwen3-Coder-30B-A3B-Q4",
+          "limit": {
+            "context": 98304,
+            "output": 24576
+          }
         }
       }
     }
