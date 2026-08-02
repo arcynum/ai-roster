@@ -274,8 +274,8 @@ def generate_staff_shifts_html(solver, staff, dates, assignments=None):
         
         <p><strong>Key Issue:</strong> The staffing levels don't meet shift requirements</p>
         <ul>
-            <li>Need 4 Triage trained staff (L>=3) but only have <strong>""" + str(getattr(solver, 'training_counts', {}).get('Triage', 0)) + """</strong></li>
-            <li>Need 4 Resus trained staff (L>=2) but only have <strong>""" + str(getattr(solver, 'training_counts', {}).get('Resus', 0)) + """</strong></li>
+            <li>Need 1 Triage trained staff (L>=3) but only have <strong>""" + str(getattr(solver, 'training_counts', {}).get('Triage', 0)) + """</strong></li>
+            <li>Need 1 Resus trained staff (L>=2) but only have <strong>""" + str(getattr(solver, 'training_counts', {}).get('Resus', 0)) + """</strong></li>
         </ul>
 """
         
@@ -486,8 +486,8 @@ if __name__ == "__main__":
             
             # Highlight the core staffing issue
             print(f"\n⚠️  Key Issue: The staffing levels don't meet shift requirements")
-            print(f"   - Need 4 Triage trained staff (L>=3) but only have {training_counts.get('Triage', 0)}")
-            print(f"   - Need 4 Resus trained staff (L>=2) but only have {training_counts.get('Resus', 0)}")
+            print(f"   - Need 1 Triage trained staff (L>=3) but only have {training_counts.get('Triage', 0)}")
+            print(f"   - Need 1 Resus trained staff (L>=2) but only have {training_counts.get('Resus', 0)}")
             print(f"   - This is the main reason for infeasibility")
             
             # Show the core staffing problem
