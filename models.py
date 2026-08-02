@@ -38,7 +38,7 @@ class Preference:
 class StaffMember:
     name: str
     level: str
-    training_level: str
+    training_levels: List[str]
     fte_hours: float
     red_requests: Set[datetime.date] = field(default_factory=set)
     holidays: List[Tuple[datetime.date, datetime.date]] = field(default_factory=list)
@@ -49,5 +49,5 @@ class StaffMember:
     weekend_hours: float = 0.0
     night_hours: float = 0.0
 
-TRAINING_LEVELS = ["Graduate", "Acute", "Resus", "Triage", "Shift Coordinator"]
+TRAINING_LEVELS = ["Acute", "Resus", "Triage", "Shift Coordinator"]
 TRAINING_MAP = {level: i for i, level in enumerate(TRAINING_LEVELS)}

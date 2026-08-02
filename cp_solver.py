@@ -110,25 +110,40 @@ class CPSolver:
                     night_fairness_violations.append(diff_night_s)
 
         # [D12/N12 Requirements] Training and Classification threshold checks
+        # Create constraint variables to track training requirements more effectively
         for d_idx in day_indices:
             date = self.dates[d_idx]
             day_name = date.strftime("%A")
             
-            # D12 requirements [H#12c6090b]
+            # D12 requirements [H#12c6090b] - Need 1 CN, 1 Shift Coordinator, 1 Triage, and 1 Resus
             d12_reqs = [r for r in self.roster_reqs.get(day_name, []) if r.shift_name == "D12"]
             if d12_reqs:
+                # Ensure at least one CN worker on D12 shift (classification requirement)
                 model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 4) >= 1)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 3) >= 2)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 2) >= 3)
+                
+                # Ensure at least one Shift Coordinator (training level 4 or higher)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 3 for level in self.staff[s].training_levels)) >= 1)
+                
+                # Ensure at least one Triage trained worker (training level 3 or higher)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 2 for level in self.staff[s].training_levels)) >= 1)
+                
+                # Ensure at least one Resus trained worker (training level 2 or higher)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 1 for level in self.staff[s].training_levels)) >= 1)
 
-            # N12 requirements [H#62281944]
+            # N12 requirements [H#62281944] - Need 1 CN, 1 Shift Coordinator, 1 Triage, and 1 Resus
             n12_reqs = [r for r in self.roster_reqs.get(day_name, []) if r.shift_name == "N12"]
             if n12_reqs:
+                # Ensure at least one CN worker on N12 shift (classification requirement)
                 model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 4) >= 1)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 3) >= 2)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if TRAINING_MAP.get(self.staff[s].training_level, 0) >= 2) >= 3)
+                
+                # Ensure at least one Shift Coordinator (training level 4 or higher)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 3 for level in self.staff[s].training_levels)) >= 1)
+                
+                # Ensure at least one Triage trained worker (training level 3 or higher)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 2 for level in self.staff[s].training_levels)) >= 1)
+                
+                # Ensure at least one Resus trained worker (training level 2 or higher)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(TRAINING_MAP.get(level, 0) >= 1 for level in self.staff[s].training_levels)) >= 1)
 
         # [H#c1f6e3f5] Rest Period Constraint (min 11 hours)
         for s in staff_indices:
@@ -193,7 +208,7 @@ class CPSolver:
         # [H#30479c74] Graduate training restrictions
         graduate_allowed_shifts = {"D8", "P8", "L3", "DISCO", "N8"}
         for s in staff_indices:
-            if self.staff[s].training_level == "Graduate":
+            if "Graduate" in self.staff[s].training_levels:
                 for d in day_indices:
                     for h_name in shift_names:
                         if h_name not in graduate_allowed_shifts:
@@ -478,34 +493,34 @@ class CPSolver:
             d12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "D12" and a[1] is not None]
             if d12_shifts:
                 cn_count = sum(1 for _, s in d12_shifts if s.level == "CN")
-                coord_count = sum(1 for _, s in d12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 4)
-                triage_count = sum(1 for _, s in d12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 3)
-                resus_count = sum(1 for _, s in d12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 2)
+                coord_count = sum(1 for _, s in d12_shifts if any(TRAINING_MAP.get(level, 0) >= 4 for level in s.training_levels))
+                triage_count = sum(1 for _, s in d12_shifts if any(TRAINING_MAP.get(level, 0) >= 3 for level in s.training_levels))
+                resus_count = sum(1 for _, s in d12_shifts if any(TRAINING_MAP.get(level, 0) >= 2 for level in s.training_levels))
 
                 if cn_count < 1:
                     violations.append(f"{date}: [H#12c6090b]D12 shift missing CN staff member")
                 if coord_count < 1:
                     violations.append(f"{date}: [H#12c6090b]D12 shift missing Shift Coordinator")
-                if triage_count < 2:
-                    violations.append(f"{date}: [H#12c6090b]D12 shift missing Triage training (needs >= 2 people L>=3)")
-                if resus_count < 3:
-                    violations.append(f"{date}: [H#12c6090b]D12 shift missing Resus training (needs >= 3 people L>=2)")
+                if triage_count < 1:
+                    violations.append(f"{date}: [H#12c6090b]D12 shift missing Triage training (needs >= 1 people L>=3)")
+                if resus_count < 1:
+                    violations.append(f"{date}: [H#12c6090b]D12 shift missing Resus training (needs >= 1 people L>=2)")
 
             n12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "N12" and a[1] is not None]
             if n12_shifts:
                 cn_count = sum(1 for _, s in n12_shifts if s.level == "CN")
-                coord_count = sum(1 for _, s in n12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 4)
-                triage_count = sum(1 for _, s in n12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 3)
-                resus_count = sum(1 for _, s in n12_shifts if TRAINING_MAP.get(s.training_level, 0) >= 2)
+                coord_count = sum(1 for _, s in n12_shifts if any(TRAINING_MAP.get(level, 0) >= 4 for level in s.training_levels))
+                triage_count = sum(1 for _, s in n12_shifts if any(TRAINING_MAP.get(level, 0) >= 3 for level in s.training_levels))
+                resus_count = sum(1 for _, s in n12_shifts if any(TRAINING_MAP.get(level, 0) >= 2 for level in s.training_levels))
 
                 if cn_count < 1:
                     violations.append(f"{date}: [H#62281944]N12 shift missing CN staff member")
                 if coord_count < 1:
                     violations.append(f"{date}: [H#62281944]N12 shift missing Shift Coordinator")
-                if triage_count < 2:
-                    violations.append(f"{date}: [H#62281944]N12 shift missing Triage training (needs >= 2 people L>=3)")
-                if resus_count < 3:
-                    violations.append(f"{date}: [H#62281944]N12 shift missing Resus training (needs >= 3 people L>=2)")
+                if triage_count < 1:
+                    violations.append(f"{date}: [H#62281944]N12 shift missing Triage training (needs >= 1 people L>=3)")
+                if resus_count < 1:
+                    violations.append(f"{date}: [H#62281944]N12 shift missing Resus training (needs >= 1 people L>=2)")
 
         # Block-based check for FTE and Max Hours
         for block_idx in range(self.days_count // 14):

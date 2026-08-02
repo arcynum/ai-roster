@@ -1,6 +1,6 @@
 # Amanda Bartley
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -9,7 +9,7 @@
 
 # Jennifer Brodie
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -18,7 +18,7 @@
 
 # Michelle Caine
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -27,7 +27,7 @@
 
 # Christine Cardos
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -36,7 +36,7 @@
 
 # Tracey Cole
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -45,7 +45,7 @@
 
 # Kellie Fursdon
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -54,7 +54,7 @@
 
 # Katie Gay
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -63,7 +63,7 @@
 
 # Shiny Joy
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 76
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-01 to 2026-08-31
@@ -72,7 +72,7 @@
 
 # Sandy Manderson
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -81,7 +81,7 @@
 
 # Tanya Mountford
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 8
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -90,7 +90,7 @@
 
 # Premshankar Ramachandran
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-01 to 2026-08-31
@@ -99,7 +99,7 @@
 
 # Laura Rogers
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-07 to 2026-08-31
@@ -108,7 +108,7 @@
 
 # Jodie Bullock
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -117,7 +117,7 @@
 
 # Suzanne Coughlan
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 40
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -126,7 +126,7 @@
 
 # Ange Cowper
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -135,7 +135,7 @@
 
 # Alexia Fallis
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-01 to 2026-08-31
@@ -144,7 +144,7 @@
 
 # Rebekah Gillespie
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 32
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -153,7 +153,7 @@
 
 # Danielle Hardley
 - **Classification**: CN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 24
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -162,7 +162,7 @@
 
 # Lauren Hodge
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -171,7 +171,7 @@
 
 # Resmi Joseph
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -180,7 +180,7 @@
 
 # Alexandra Lyons
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 32
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -189,7 +189,7 @@
 
 # Nisha Mathew
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -198,7 +198,7 @@
 
 # Irina Ovsyankina
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -207,7 +207,7 @@
 
 # Bec Rafter
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -216,7 +216,7 @@
 
 # Rebecca Trew
 - **Classification**: RN
-- **Training Level**: Shift Coordinator
+- **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 32
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -225,7 +225,7 @@
 
 # Allie O'Brien
 - **Classification**: RN
-- **Training Level**: Triage
+- **Training Levels**: ["Acute", "Resus", "Triage"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -234,7 +234,7 @@
 
 # Shana Stokes
 - **Classification**: RN
-- **Training Level**: Triage
+- **Training Levels**: ["Acute", "Resus", "Triage"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -243,7 +243,7 @@
 
 # Maddy Thompson
 - **Classification**: RN
-- **Training Level**: Triage
+- **Training Levels**: ["Acute", "Resus", "Triage"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -252,7 +252,7 @@
 
 # Alyce Tozer
 - **Classification**: RN
-- **Training Level**: Triage
+- **Training Levels**: ["Acute", "Resus", "Triage"]
 - **FTE Hours per Fortnight**: 40
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -261,7 +261,7 @@
 
 # Jodie Armstrong
 - **Classification**: RN
-- **Training Level**: Resus
+- **Training Levels**: ["Acute", "Resus"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -270,7 +270,7 @@
 
 # Jehan Musasinghe
 - **Classification**: RN
-- **Training Level**: Resus
+- **Training Levels**: ["Acute", "Resus"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -279,7 +279,7 @@
 
 # Jessica O'Neill-Yee
 - **Classification**: RN
-- **Training Level**: Resus
+- **Training Levels**: ["Acute", "Resus"]
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -288,7 +288,7 @@
 
 # Cynthia Tran
 - **Classification**: RN
-- **Training Level**: Resus
+- **Training Levels**: ["Acute", "Resus"]
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -297,7 +297,7 @@
 
 # Alex Babu
 - **Classification**: RN
-- **Training Level**: Acute
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -306,7 +306,7 @@
 
 # Brianna Born
 - **Classification**: RN
-- **Training Level**: Acute
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -315,7 +315,7 @@
 
 # Luca Brahn
 - **Classification**: RN
-- **Training Level**: Acute
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -324,7 +324,7 @@
 
 # Olivia Knowles
 - **Classification**: RN
-- **Training Level**: Acute
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-01 to 2026-08-31
@@ -333,7 +333,7 @@
 
 # Olivia Ots
 - **Classification**: RN
-- **Training Level**: Acute
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -342,7 +342,7 @@
 
 # Charlee Rayner
 - **Classification**: RN
-- **Training Level**: Acute
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -350,8 +350,8 @@
 - **Preferences**: 
 
 # Nicola Odessa
-- **Classification**: RN
-- **Training Level**: Graduate
+- **Classification**: Graduate
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -359,8 +359,8 @@
 - **Preferences**: 
 
 # Rianna Rimpos
-- **Classification**: RN
-- **Training Level**: Graduate
+- **Classification**: Graduate
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
@@ -368,8 +368,8 @@
 - **Preferences**: 
 
 # Rose Turner
-- **Classification**: RN
-- **Training Level**: Graduate
+- **Classification**: Graduate
+- **Training Levels**: ["Acute"]
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 

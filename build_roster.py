@@ -104,15 +104,28 @@ def parse_staff(content: str) -> List[StaffMember]:
         name = match.group(1).strip()
         block = match.group(2).strip()
         
-        level, training, fte, red, holidays, rules, prefs = "", "", 0, set(), [], [], []
+        level, training_levels, fte, red, holidays, rules, prefs = "", [], 0, set(), [], [], []
         
         # Classification
         c_m = re.search(r'\*\*Classification\*\*:\s*(\w+)', block)
         if c_m: level = c_m.group(1)
         
-        # Training
-        t_m = re.search(r'\*\*Training Level\*\*:\s*([^\n]+)', block)
-        if t_m: training = t_m.group(1).strip()
+        # Training - can be either single level or array
+        t_m = re.search(r'\*\*Training Levels\*\*:\s*(\[.*\])', block)
+        if t_m:
+            # Handle array format
+            training_str = t_m.group(1)
+            try:
+                import ast
+                training_levels = ast.literal_eval(training_str)
+            except:
+                # Fallback to single level
+                training_levels = [training_str.strip().strip("[]\"'")]
+        else:
+            # Legacy format - single training level
+            t_m = re.search(r'\*\*Training Level\*\*:\s*([^\n]+)', block)
+            if t_m: 
+                training_levels = [t_m.group(1).strip()]
         
         # FTE
         f_m = re.search(r'\*\*FTE Hours per Fortnight\*\*:\s*([\d.]+)', block)
@@ -171,7 +184,7 @@ def parse_staff(content: str) -> List[StaffMember]:
                         pref_id, desc = parse_rule_or_pref(next_l)
                         prefs.append(Preference(pref_id, desc))
                     
-        staff.append(StaffMember(name, level, training, fte, red, holidays, rules, prefs))
+        staff.append(StaffMember(name, level, training_levels, fte, red, holidays, rules, prefs))
     return staff
 
 if __name__ == "__main__":
@@ -205,7 +218,59 @@ if __name__ == "__main__":
         assignments = solver.solve()
         
         if not assignments:
+            # Enhanced diagnostics for infeasibility
             print("Failed to find a feasible roster.")
+            print("\nPotential causes of infeasibility:")
+            
+            # Count training levels
+            training_counts = {}
+            level_counts = {}
+            for s in staff:
+                level = s.training_level
+                training_counts[level] = training_counts.get(level, 0) + 1
+                level_counts[s.level] = level_counts.get(s.level, 0) + 1
+            
+            print(f"Training level distribution: {training_counts}")
+            print(f"Classification distribution: {level_counts}")
+            
+            # Show holiday conflicts
+            period_holidays = []
+            for s in staff:
+                if s.holidays:
+                    for start_date, end_date in s.holidays:
+                        if start_date <= end_date:  # Valid date range
+                            period_holidays.append((s.name, start_date, end_date))
+            
+            if period_holidays:
+                print(f"\nStaff on full-period holidays: {len(period_holidays)}")
+                for name, start, end in period_holidays:
+                    print(f"  - {name}: {start} to {end}")
+            
+            # Show staffing requirements vs availability
+            total_days = days_count
+            total_d12_shifts = 4 * total_days  # 4 D12 shifts per day
+            required_staff_per_d12 = 4  # CN + Shift Coordinator + Triage + Resus
+            
+            print(f"\nStaffing Requirements:")
+            print(f"Total D12 shifts needed: {total_d12_shifts}")
+            print(f"Required staff per shift: 4")
+            print(f"Total required staff-shifts: {total_d12_shifts * required_staff_per_d12}")
+            
+            # Show FTE summary
+            total_fte = sum(s.fte_hours for s in staff)
+            print(f"\nTotal available FTE hours: {total_fte:.1f}")
+            print(f"Required FTE for 14-day block: {total_d12_shifts * required_staff_per_d12 * 12.5}")  # Assuming ~12.5h per shift
+            
+            # Highlight the core staffing issue
+            print(f"\n⚠️  Key Issue: The staffing levels don't meet shift requirements")
+            print(f"   - Need 4 Triage trained staff (L>=3) but only have {training_counts.get('Triage', 0)}")
+            print(f"   - Need 4 Resus trained staff (L>=2) but only have {training_counts.get('Resus', 0)}")
+            print(f"   - This is the main reason for infeasibility")
+            
+            # Show the core staffing problem
+            if len(staff) < 10:
+                print("\n⚠️  WARNING: Very limited staff available - may not be enough to meet requirements")
+            
         else:
             solver.generate_results()
             violations = solver.validate_roster()

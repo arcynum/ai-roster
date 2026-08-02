@@ -51,7 +51,7 @@ def test_with_constraints(disable_rest=False, disable_transition=False, disable_
         # Graduate Constraint (HARD)
         graduate_allowed_shifts = {"D8", "P8", "L3", "DISCO", "N8"}
         for s in staff_indices:
-            if staff[s].training_level == "Graduate":
+            if "Graduate" in staff[s].training_levels:
                 for d in day_indices:
                     for h_name in shift_names:
                         if h_name not in graduate_allowed_shifts:
