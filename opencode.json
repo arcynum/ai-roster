@@ -12,6 +12,12 @@
       "models": {
         "Gemma-4-26B-A4B-Q4_K_XL": {
           "name": "Gemma-4-26B-A4B-Q4",
+          "cost": {
+            "input": 0.00000427,
+            "output": 0.00002135,
+            "cache_read": 0.00000043,
+            "cache_write": 0.00000534
+          },
           "limit": {
             "context": 131072,
             "output": 32768
@@ -19,6 +25,12 @@
         },
         "Qwen3-Coder-30B-A3B-Q4_K_XL": {
           "name": "Qwen3-Coder-30B-A3B-Q4",
+          "cost": {
+            "input": 0.00000427,
+            "output": 0.00002135,
+            "cache_read": 0.00000043,
+            "cache_write": 0.00000534
+          },
           "limit": {
             "context": 98304,
             "output": 24576

@@ -2,7 +2,6 @@
 Everything in this file is a preference and should be followed if possible. The solver will treat these as optimization objectives.
 
 ## Staffing & FTE Optimization
-- [S#f8c3b0c2] Staff need to be rostered on for at least their FTE hours (adjusted proportionally for holidays/leave) per 14-day fortnight block. This is enforced on a per-block basis and cannot be averaged across the entire roster period.
 - [S#a9d4c1d3] Staff can be scheduled in for more than their FTE hours, but never less.
 - [S#e9b4a1b3] If you need to exceed a staff members FTE hours to fill the roster due to a FTE shortfall, ensure these extra shifts are evenly distributed between all staff. All additional FTE needs to be fairly distributed to keep staff safe and healthy.
 

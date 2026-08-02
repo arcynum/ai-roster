@@ -12,3 +12,4 @@ Everything in this file is a rule and MUST be followed. The final roster must ob
 - [H#a5d0c7d9] Never roster any staff members on the days that they have red requested.
 - [H#b6e1d8e0] Never roster any staff members on the days that they are on leave.
 - [H#f0c5b2c4] Never exceed 76 hours allocated to a single staff member per discrete 14-day fortnight block.
+- [H#d9a8b7c6] Staff must be rostered on for at least their FTE hours (adjusted proportionally for holidays/leave) per 14-day fortnight block. This is enforced on a per-block basis and cannot be averaged across the entire roster period.
