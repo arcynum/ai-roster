@@ -3,7 +3,8 @@
   "lsp": true,
   "permission": {
     "*": "ask",
-    "read": "allow"
+    "read": "allow",
+    "ls": "allow"
   },
   "provider": {
     "chat": {

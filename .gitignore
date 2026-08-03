@@ -1,7 +1,5 @@
 .DS_Store
-result.staff.md
-result.roster.md
-result.violations.md
+result.*
 *.html
 __pycache__/
 .venv/
