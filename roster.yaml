@@ -3,219 +3,219 @@ dates:
   start: 2026-08-03
   end: 2026-08-30
 
-shift_requirements:
+roster_positions:
   Monday:
     - shift: D8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: D12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: D12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: D12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: D12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: DISCO
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: N12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: N12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: N12
-      required_skills: ["*"]
+      required_skill_level: null
 
   Tuesday:
     - shift: D8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: D12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: D12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: D12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: D12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: DISCO
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: N12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: N12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: N12
-      required_skills: ["*"]
+      required_skill_level: null
 
   Wednesday:
     - shift: D8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: D12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: D12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: D12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: D12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: DISCO
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: N12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: N12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: N12
-      required_skills: ["*"]
+      required_skill_level: null
 
   Thursday:
     - shift: D8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: D12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: D12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: D12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: D12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: DISCO
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: N12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: N12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: N12
-      required_skills: ["*"]
+      required_skill_level: null
 
   Friday:
     - shift: D8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: D12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: D12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: D12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: D12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: DISCO
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: N12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: N12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: N12
-      required_skills: ["*"]
+      required_skill_level: null
 
   Saturday:
     - shift: D8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: D12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: D12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: D12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: D12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: DISCO
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: N12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: N12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: N12
-      required_skills: ["*"]
+      required_skill_level: null
 
   Sunday:
     - shift: D8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: D12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: D12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: D12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: D12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: P12
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: L3
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: DISCO
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N8
-      required_skills: ["*"]
+      required_skill_level: null
     - shift: N12
-      required_skills: ["Shift Coordinator"]
+      required_skill_level: Shift Coordinator
     - shift: N12
-      required_skills: ["Triage"]
+      required_skill_level: Triage
     - shift: N12
-      required_skills: ["Resus"]
+      required_skill_level: Resus
     - shift: N12
-      required_skills: ["*"]
+      required_skill_level: null

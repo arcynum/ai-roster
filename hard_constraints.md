@@ -10,7 +10,10 @@ Everything in this file is a rule and MUST be followed. The final roster must ob
 - [H#2f74e6ab] Multiple entries with the same shift type within `roster.yaml` shall represent separate roster positions that must each be independently filled.
 - [H#84a1d5c9] Staff skill levels shall be hierarchical, where a staff member with a higher skill level shall also satisfy requirements for all lower skill levels.
 - [H#6db3f120] The skill level hierarchy shall be ordered as follows: Acute, Resus, Triage, Shift Coordinator.
-- [H#f3c72a8d] When multiple valid roster solutions exist, the rostering engine should prefer solutions that minimise assigning staff to roster positions below their highest achieved skill level.
+- [H#f3c72a8d] When multiple valid roster solutions exist, the rostering engine should prefer solutions that minimise assigning staff to roster positions below their highest available skill level.
+- [H#b72e41fa] The `required_skill_level` for a roster position shall represent the minimum skill level required. A staff member with an equal or higher skill level shall satisfy the requirement.
+- [H#6db3f120] The skill level hierarchy shall progress from lowest to highest in the following order: Acute, Resus, Triage, Shift Coordinator.
+- [H#e91c63ab] A staff member shall not be assigned to more than one roster position within the same shift group or overlapping time period.
 - [H#30479c74] Staff classified as Graduate shall only be assigned to the following shift types: D8, P8, L3, DISCO and N8.
 
 ## Staff Welfare and Safety
