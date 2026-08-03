@@ -16,6 +16,7 @@ A CP-SAT–based rostering system for the pediatric emergency ward at TPCH. Give
 | `hard_constraints.md` | Non-negotiable rules, each with a unique `[H#...]` ID |
 | `soft_constraints.md` | Preferences optimized by the solver, each with a unique `[S#...]` ID |
 | `weights.yaml` | Relative importance of each soft constraint, keyed by ID |
+| `output/` | Generated at runtime: one `roster_<run_id>.html` + `roster_<run_id>.log` pair per run — see Output below |
 
 ## `roster.yaml` schema
 
@@ -72,7 +73,7 @@ roster_positions:
 
 | Field | Type | Notes |
 |---|---|---|
-| `name` | string | Full name. **Must be unique** across the file — it's the identifier used to group `result.staff.md` output and to attach red requests/holidays to a person. |
+| `name` | string | Full name. **Must be unique** across the file — it's the identifier used to group the by-staff view in the HTML output and to attach red requests/holidays to a person. |
 | `classification` | string enum | One of `RN`, `CN`, `Graduate`. Independent of skill level — see `AGENTS.md` §2 for why Graduate is a classification, not a skill tier. |
 | `skill_tags` | list of strings | The skill levels this person holds, from the hierarchy `Acute < Resus < Triage < Shift Coordinator`. **Always a contiguous prefix from the bottom** — e.g. `[Acute, Resus]` is valid, `[Resus]` alone or `[Acute, Triage]` (skipping Resus) is not. List order isn't meaningful; a staff member's effective rank is looked up per-tag against the hierarchy. |
 | `contracted_hours_per_fortnight` | number | Paid hours contracted per 14-day block — a **floor**, not a ceiling (see "Coverage Shortfalls & Overtime" in `AGENTS.md` §7). Uses the `paid_hours` basis from `definitions.yaml`, not `span_hours`. |
@@ -93,7 +94,7 @@ Note: DISCO (17:30–02:00) crosses midnight like the night shifts do, but is cl
 ## Constraint types
 
 **Hard constraints** (`hard_constraints.md`) — must always hold, e.g.:
-- FTE (contracted hours) as a floor per fortnight block, plus a bounded amount of overtime
+- FTE (contracted hours) as a floor per fortnight block, plus up to 24 additional paid hours of overtime (deliberately generous, to widen the feasible region)
 - Absolute max hours per fortnight block (76h)
 - Minimum 11h rest between shifts
 - At least 1 day off when transitioning between night and day shifts
@@ -108,6 +109,18 @@ Note: DISCO (17:30–02:00) crosses midnight like the night shifts do, but is cl
 
 Full authoritative text and IDs live in the two constraint files — this is a summary, not a substitute.
 
+## Output
+
+Every run writes exactly two files into `output/` (created automatically if it doesn't exist), both sharing the same timestamp so they're always pairable:
+
+- **`output/roster_<run_id>.html`** — the single output artifact. Self-contained (no external CSS/JS), so it opens correctly on its own anywhere. Contains, in order:
+  1. Run summary — generated time, roster period, solver status, objective value, solve time.
+  2. Messages — unfilled shifts, any constraint issues, soft-constraint penalties incurred. Says explicitly when there's nothing to report.
+  3. Roster — the full schedule by date (in shift order, `D8, D12, P8, P12, L3, DISCO, N8, N12`) and by staff member (hours/weekend %/night % per fortnight block, plus their full shift list).
+- **`output/roster_<run_id>.log`** — the full log for that run: data loading, validation, solving, and output writing, not just the solver's own messages.
+
+Runs are never overwritten — each one adds a new timestamped pair to `output/`. There's no separate markdown output; the HTML file is the only result artifact. See `AGENTS.md` §6 for the complete spec.
+
 ## Running it
 
 ```bash
@@ -121,9 +134,9 @@ Python 3.x, dependencies: Google OR-Tools (CP-SAT) and PyYAML, installed in the 
 
 The project is structured with the following Python modules:
 
-- `main.py` - Main driver script that orchestrates the entire solution
+- `main.py` - Main driver script that orchestrates the entire solution; sets up logging for the run
 - `models.py` - Data models for staff, shifts, and roster positions with validation
 - `constraints.py` - Base classes for hard and soft constraint implementations
 - `solver.py` - OR-Tools CP-SAT integration with model setup
-- `output.py` - Output formatting modules for result.staff.md and result.roster.md
-- `utils.py` - Utility functions for data loading, validation, and calculations
+- `output.py` - Builds the single `output/roster_<run_id>.html` file (run summary, messages, roster)
+- `utils.py` - Utility functions for data loading, validation, calculations, and logging setup

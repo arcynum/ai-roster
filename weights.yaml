@@ -1,5 +1,12 @@
-S#d2a7f4a6: 50
-S#a1d6c3d5: 50
-S#e9b4a1b3: 20
-S#30c6f5ad: 500
-S#7b4e19fc: 5
+# Soft constraint weights — relative ordering signals for the objective
+# function, not literal cost units. A weight of 100 means "prioritise
+# avoiding this over one weighted 50," not "twice as bad" in any absolute
+# sense. Don't build logic elsewhere that assumes proportionality between
+# weights. See soft_constraints.md for what each ID refers to, and
+# AGENTS.md's file map for the full explanation.
+
+"S#d2a7f4a6": 50   # night shift fairness
+"S#a1d6c3d5": 50   # weekend hours fairness
+"S#e9b4a1b3": 20   # overtime distributed fairly
+"S#30c6f5ad": 500  # discourage 3+ consecutive days of the same shift
+"S#7b4e19fc": 5    # low-priority tiebreaker: minimise assigning above-minimum skill level

@@ -50,6 +50,7 @@ These are two **independent** attributes on a staff member, not one hierarchy:
 - **`soft_constraints.md`** — preference rules, each tagged with a unique `[S#xxxxxxxx]` ID, optimized via the objective function. If one isn't satisfied, the solver/output should be able to account for why.
 - **`staff.yaml`** — every staff member: `name`, `classification`, `skill_tags` (held skill levels), `contracted_hours_per_fortnight` (a **floor**, not a ceiling — see §7), `red_requests`, `holidays`. See `README.md`'s `staff.yaml` field reference for the full schema, and §4 below for validation rules specific to this file.
 - **`weights.yaml`** — objective-function weights keyed by soft constraint ID. These are **relative ordering signals, not literal cost units** — a weight of 100 means "prioritise avoiding this over one weighted 50," not "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
+- **`output/`** — created at runtime, not checked into the repo. Holds every run's paired `roster_<run_id>.html` and `roster_<run_id>.log` — see §6 for the full spec.
 
 **Fortnightly blocks**: rosters must span an exact multiple of 14 days. All constraints (max hours, etc.) apply *within* each discrete 14-day block, never averaged across the whole roster period. If `roster.yaml`'s date range isn't a whole multiple of 14 days, the script must error out with a clear message and refuse to build — never silently round, truncate, or prorate.
 
@@ -59,7 +60,7 @@ These are two **independent** attributes on a staff member, not one hierarchy:
 
 ### `staff.yaml`-specific rules
 
-- **`name` must be unique across the file.** It's the identifier used to group output in `result.staff.md` and to cross-reference `red_requests`/`holidays` — a duplicate name is a data error, fail loudly rather than merging or picking one.
+- **`name` must be unique across the file.** It's the identifier used to cross-reference `red_requests`/`holidays` — a duplicate name is a data error, fail loudly rather than merging or picking one.
 - **`classification` must be exactly one of `RN`, `CN`, `Graduate`.** Any other value is a data error.
 - **`skill_tags` must be a contiguous prefix of the hierarchy** `Acute < Resus < Triage < Shift Coordinator` — i.e. a staff member can hold `[Acute]`, `[Acute, Resus]`, `[Acute, Resus, Triage]`, or all four, but never a level without every level below it (e.g. `[Resus]` alone, or `[Acute, Triage]` skipping `Resus`, is invalid). This matches every existing entry in `staff.yaml` and is required for the threshold-based skill check in §2/§8 to mean anything. **List order within `skill_tags` is not semantically meaningful** — determine a staff member's actual rank by looking up each tag against the hierarchy, don't rely on list position or count.
 - **`contracted_hours_per_fortnight`** is a `paid_hours`-basis figure (see §5) and must be a positive number.
@@ -73,32 +74,49 @@ Shifts (from `definitions.yaml`): `D8, D12, P8, P12, L3, DISCO, N8, N12`.
 - **Day shifts**: `D8, D12, P8, P12, L3, DISCO`
 - **Night shifts**: `N8, N12`
 
-**DISCO exception — read carefully:** DISCO runs 17:30→02:00 and crosses midnight, the same way N8/N12 do. Despite that, **DISCO is classified as a day shift** for all fairness/reporting purposes (weekend-hours %, night-shift-hours % in `result.staff.md`, soft-constraint fairness calcs, etc.). This is a deliberate exception, not an oversight — don't "fix" it by moving DISCO into the night bucket.
+**DISCO exception — read carefully:** DISCO runs 17:30→02:00 and crosses midnight, the same way N8/N12 do. Despite that, **DISCO is classified as a day shift** for all fairness/reporting purposes. This is a deliberate exception, not an oversight — don't "fix" it by moving DISCO into the night bucket.
 
 ### Overnight Shift Attribution
 
-Any shift that crosses midnight (DISCO, N8, N12) counts entirely toward the date and 14-day block **it starts on** — never the date it ends on, and never split across both. This applies consistently to hours totals, weekend-hours %, and night-shift-hours % in `result.staff.md`. (Per the exception above, DISCO's hours still land in the day-shift bucket even though the shift itself crosses midnight — attribution-by-start-date and day/night classification are two separate rules.)
+Any shift that crosses midnight (DISCO, N8, N12) counts entirely toward the date and 14-day block **it starts on** — never the date it ends on, and never split across both. (Per the exception above, DISCO's hours still land in the day-shift bucket even though the shift itself crosses midnight — attribution-by-start-date and day/night classification are two separate rules.)
 
 ### Span Hours vs. Paid Hours
 
 Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour shifts) includes a **30-minute unpaid break**. `definitions.yaml` gives you both figures explicitly — never derive one from the other via a hardcoded "minus 30 minutes," always read the field:
 
 - **`span_hours`** — wall-clock start-to-end duration, unpaid break included. Use for anything about physical presence/timing: the 11-hour rest-period gap ([H#c1f6e3f5]), the no-double-booking/overlap check ([H#e91c63ab]).
-- **`paid_hours`** — `span_hours` minus the break. Use for anything measured against contracted hours: the contracted-hours floor ([H#d9a8b7c6]), the 76h absolute cap ([H#f0c5b2c4]), the 12.5h overtime cap ([H#e8f7d6c5]), and every hour total / weekend % / night % figure in `result.staff.md`.
+- **`paid_hours`** — `span_hours` minus the break. Use for anything measured against contracted hours: the contracted-hours floor ([H#d9a8b7c6]), the 76h absolute cap ([H#f0c5b2c4]), the 24h overtime cap ([H#e8f7d6c5]), and every hour total / weekend % / night % figure.
 
 **These are not interchangeable.** Using `span_hours` anywhere the constraint files say "hours" (contracted, cap, overtime) overcounts every shift by 30 minutes — across a 14-day block with ~10 shifts that's up to 5 hours of drift per staff member, easily enough to push someone over or under a hard cap incorrectly. If you find code computing hours-worked totals from `span_hours` (or from raw start/end time deltas) for anything contracted-hours-related, that's a bug — fix it to use `paid_hours`.
 
-## 6. Output
+## 6. Output & Logging
 
-- `result.*.md` files can be overwritten/replaced on disk.
-- All `result.*.md` outputs should include auxiliary info like classification and skill level.
-- **`result.staff.md`** (grouped by staff member) must include:
-  - Summary of classification, skill level(s), and contracted hours per fortnight for the whole period.
-  - A block-by-block breakdown (14-day increments): total hours worked, weekend hours + % of block total, night-shift hours + % of block total.
-  - A full list of all shifts assigned during the entire period.
-- **`result.roster.md`** (grouped by date) must show everyone on shift each day, their specific shift, classification, and skill level.
-  - Print shifts in this fixed order: `D8, D12, P8, P12, L3, DISCO, N8, N12`.
-  - Within a single shift's list of staff: order by classification first (CN before RN, or per the hierarchy in `staff.yaml`), then by skill level (highest first) within the same classification.
+**There are no `result.*.md` files.** Markdown output was removed entirely. Every run produces exactly two files, both in an `output/` subfolder at the project root (create it if it doesn't exist — never write output files to the project root):
+
+- **`output/roster_<run_id>.html`** — the only output artifact. Single self-contained HTML file (inline `<style>`, no external asset dependencies — it must open and render correctly on its own, e.g. as an email attachment or on a machine with no internet access).
+- **`output/roster_<run_id>.log`** — the full run log for that same run (see "Logging" below).
+
+`<run_id>` is a timestamp (e.g. `20260803_143012`, local time is fine) generated once per run and shared by both files, so a run's HTML output and its log are always trivially pairable by filename. **Runs are never overwritten** — every invocation adds a new pair of files to `output/`; don't delete or replace prior runs automatically. (If `output/` needs pruning, that's a manual/operator decision, not something the script does.)
+
+### HTML content requirements
+
+The HTML file has three sections, in this order:
+
+1. **Run summary** — generated timestamp, roster period (`dates.start`–`dates.end` from `roster.yaml`), CP-SAT solver status (e.g. `OPTIMAL`/`FEASIBLE`/`INFEASIBLE`), objective value, and solve time.
+2. **Messages** — everything that used to live in `result.violations.md`, plus general solver messages: any `UNFILLED` shifts (with which skill level/classification was needed but unavailable), any hard constraint that couldn't be satisfied (should never happen in a correct solve, but report it if it does — don't fail silently), which soft constraints incurred a penalty and roughly how much, and overtime allocation notes. If there's nothing to report, say so explicitly (e.g. "No violations or unfilled shifts") rather than leaving the section blank/ambiguous.
+3. **Roster** — everything that used to live in `result.staff.md` and `result.roster.md`, both included:
+   - **By date** (a table per day, or one table with date as a grouping column): everyone on shift, in shift order `D8, D12, P8, P12, L3, DISCO, N8, N12`, staff within a shift ordered by classification then skill level (highest first).
+   - **By staff member**: classification, skill level(s), contracted hours for the period, a block-by-block (14-day) breakdown of hours worked / weekend hours + % / night-shift hours + %, and the full list of shifts assigned across the period.
+
+### Logging
+
+Use Python's standard `logging` module — no new dependency. Each run:
+
+- Creates a logger configured at the start of the run (in `main.py`, or a small `setup_logging()` helper in `utils.py` if that reads cleaner — don't invent a dedicated logging module for this, it's a few lines).
+- Writes to **both** `output/roster_<run_id>.log` (full detail: `DEBUG` and up) and the console (`INFO` and up, so a human running it interactively isn't flooded).
+- Covers the **whole run**, not just the solver: data loading and validation (which files were read, any validation failures caught per §4), constraint/model construction, the solve itself (CP-SAT's own log output should be captured here too, not just the final status), and output writing (confirmation the HTML file was written, its path).
+- Each log line includes a timestamp, level, and module/logger name, e.g. `2026-08-03 14:30:12 INFO models: loaded 42 staff from staff.yaml`.
+- Validation failures and hard-constraint violations should log at `ERROR` or `WARNING` respectively — don't bury a real problem at `INFO`.
 
 ## 7. Operational Definitions
 
@@ -113,9 +131,9 @@ Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour
 
 **Which hours cap actually binds:** two separate caps exist and the *lower* one always governs for a given staff member —
 - Absolute ceiling: never exceed 76 hours per staff member per 14-day block ([H#f0c5b2c4]).
-- Relative ceiling: never more than 12.5 hours of overtime above that person's own contracted hours in the block ([H#e8f7d6c5]).
+- Relative ceiling: never more than 24 **paid** hours of overtime above that person's own contracted hours in the block ([H#e8f7d6c5] — deliberately raised from 12.5 to 24 to widen the feasible region; this is a business decision to help ensure a viable roster can be found, not a fatigue/safety limit).
 
-For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (52.5h) binds well before the absolute one. Apply `min(76, contracted + 24)` as the effective cap per person, per block.
+For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (64h) binds well before the absolute one. Apply `min(76, contracted + 24)` as the effective cap per person, per block.
 
 ## 8. Technical Implementation Guide
 
@@ -185,12 +203,12 @@ Rules:
 The project is structured as follows:
 
 ### Core Python Modules
-- **`main.py`** - Main driver script that orchestrates the entire solution
+- **`main.py`** - Main driver script that orchestrates the entire solution; sets up logging for the run (see §6)
 - **`models.py`** - Data models for staff, shifts, and roster positions with validation
 - **`constraints.py`** - Base classes for hard and soft constraint implementations
 - **`solver.py`** - OR-Tools CP-SAT integration with model setup
-- **`output.py`** - Output formatting modules for result.staff.md and result.roster.md
-- **`utils.py`** - Utility functions for data loading, validation, and calculations
+- **`output.py`** - Builds the single `output/roster_<run_id>.html` file (run summary, messages/violations, roster tables) — see §6 for full content requirements
+- **`utils.py`** - Utility functions for data loading, validation, calculations, and logging setup
 
 ### File Structure
 ```
@@ -207,7 +225,11 @@ ai-roster/
 ├── hard_constraints.md
 ├── soft_constraints.md
 ├── weights.yaml
-└── README.md
+├── README.md
+└── output/                      # created at runtime, not checked in
+    ├── roster_20260803_143012.html
+    ├── roster_20260803_143012.log
+    └── ...                      # one pair per run, never overwritten
 ```
 
 ---
