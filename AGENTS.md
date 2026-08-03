@@ -57,7 +57,7 @@ These are two **independent** attributes on a staff member, not one hierarchy:
 - **`build_roster.py`** — the script that builds the roster (exists, currently broken — see status note).
 - **`cp_solver.py`** — the CP-SAT model itself (exists, currently broken — see status note).
 
-**Fortnightly blocks**: rosters must span an exact multiple of 14 days. All constraints (FTE, max hours, etc.) apply *within* each discrete 14-day block, never averaged across the whole roster period. If `roster.yaml`'s date range isn't a whole multiple of 14 days, the script must error out with a clear message and refuse to build — never silently round, truncate, or prorate.
+**Fortnightly blocks**: rosters must span an exact multiple of 14 days. All constraints (max hours, etc.) apply *within* each discrete 14-day block, never averaged across the whole roster period. If `roster.yaml`'s date range isn't a whole multiple of 14 days, the script must error out with a clear message and refuse to build — never silently round, truncate, or prorate.
 
 ## 4. Data File Validation
 
@@ -90,7 +90,7 @@ Any shift that crosses midnight (DISCO, N8, N12) counts entirely toward the date
 Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour shifts) includes a **30-minute unpaid break**. `definitions.yaml` gives you both figures explicitly — never derive one from the other via a hardcoded "minus 30 minutes," always read the field:
 
 - **`span_hours`** — wall-clock start-to-end duration, unpaid break included. Use for anything about physical presence/timing: the 11-hour rest-period gap ([H#c1f6e3f5]), the no-double-booking/overlap check ([H#e91c63ab]).
-- **`paid_hours`** — `span_hours` minus the break. Use for anything measured against contracted/FTE hours: the contracted-hours floor ([H#d9a8b7c6]), the 76h absolute cap ([H#f0c5b2c4]), the 12.5h overtime cap ([H#e8f7d6c5]), and every hour total / weekend % / night % figure in `result.staff.md`.
+- **`paid_hours`** — `span_hours` minus the break. Use for anything measured against contracted hours: the contracted-hours floor ([H#d9a8b7c6]), the 76h absolute cap ([H#f0c5b2c4]), the 12.5h overtime cap ([H#e8f7d6c5]), and every hour total / weekend % / night % figure in `result.staff.md`.
 
 **These are not interchangeable.** Using `span_hours` anywhere the constraint files say "hours" (contracted, cap, overtime) overcounts every shift by 30 minutes — across a 14-day block with ~10 shifts that's up to 5 hours of drift per staff member, easily enough to push someone over or under a hard cap incorrectly. If you find code computing hours-worked totals from `span_hours` (or from raw start/end time deltas) for anything contracted-hours-related, that's a bug — fix it to use `paid_hours`.
 
@@ -99,7 +99,7 @@ Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour
 - `result.*.md` files can be overwritten/replaced on disk.
 - All `result.*.md` outputs should include auxiliary info like classification and skill level.
 - **`result.staff.md`** (grouped by staff member) must include:
-  - Summary of classification, skill level(s), and FTE hours per fortnight for the whole period.
+  - Summary of classification, skill level(s), and contracted hours per fortnight for the whole period.
   - A block-by-block breakdown (14-day increments): total hours worked, weekend hours + % of block total, night-shift hours + % of block total.
   - A full list of all shifts assigned during the entire period.
 - **`result.roster.md`** (grouped by date) must show everyone on shift each day, their specific shift, classification, and skill level.
@@ -132,7 +132,7 @@ For a staff member contracted at 76h, the relative ceiling has zero room before 
 ### Core Solver Logic (CP-SAT)
 `cp_solver.py` uses Google OR-Tools CP-SAT. When implementing or modifying constraints:
 
-1. **Integer arithmetic (scaling)**: CP-SAT only works with integers. All floating-point values (FTE hours like `37.5`, shift `paid_hours` like `12.0`/`8.0`) must be scaled by `self.SCALE` (= `100`). Example: an FTE of `37.5` becomes `3750`. Note `paid_hours` values are whole/half numbers post-refactor (12.0, 8.0) — don't confuse them with `span_hours` (12.5, 8.5), a different field for a different purpose (see §5).
+1. **Integer arithmetic (scaling)**: CP-SAT only works with integers. All floating-point values (contracted hours like `37.5`, shift `paid_hours` like `12.0`/`8.0`) must be scaled by `self.SCALE` (= `100`). Example: contracted hours of `37.5` becomes `3750`. Note `paid_hours` values are whole/half numbers post-refactor (12.0, 8.0) — don't confuse them with `span_hours` (12.5, 8.5), a different field for a different purpose (see §5).
 2. **Skill level hierarchy thresholding**: `Acute < Resus < Triage < Shift Coordinator`. Check requirements with thresholding (e.g. `SKILL_MAP[level] >= required_rank`), not exact equality — this lets higher-qualified staff fill lower roles. (Graduate is a classification, not part of this hierarchy — see §2.)
 3. **Constraint lifecycle** for adding a new constraint or preference:
    - Step 1 — Variables: define decision variables (`model.NewBoolVar`, etc.)
