@@ -4,9 +4,12 @@
   "permission": {
     "*": "ask",
     "read": "allow",
-    "ls": "allow",
+    "ls *": "allow",
     "glob": "allow",
-    "grep:": "allow",
+    "grep *": "allow",
+    "find": "allow",
+    "head": "allow",
+    "tail": "allow",
   },
   "provider": {
     "chat": {

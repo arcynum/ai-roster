@@ -180,6 +180,36 @@ Rules:
 2. **Spacing & style**: spaces around operators (`a = b + c`); PEP 8 naming (snake_case functions/variables, PascalCase classes); consistent vertical whitespace between method definitions.
 3. **Verification**: after editing a `.py` file, verify no `IndentationError`/`SyntaxError` was introduced by running or linting the relevant script.
 
+## 12. Python Implementation Structure
+
+The project is structured as follows:
+
+### Core Python Modules
+- **`main.py`** - Main driver script that orchestrates the entire solution
+- **`models.py`** - Data models for staff, shifts, and roster positions with validation
+- **`constraints.py`** - Base classes for hard and soft constraint implementations
+- **`solver.py`** - OR-Tools CP-SAT integration with model setup
+- **`output.py`** - Output formatting modules for result.staff.md and result.roster.md
+- **`utils.py`** - Utility functions for data loading, validation, and calculations
+
+### File Structure
+```
+ai-roster/
+├── main.py
+├── models.py
+├── constraints.py
+├── solver.py
+├── output.py
+├── utils.py
+├── definitions.yaml
+├── roster.yaml
+├── staff.yaml
+├── hard_constraints.md
+├── soft_constraints.md
+├── weights.yaml
+└── README.md
+```
+
 ---
 
 ## Changelog

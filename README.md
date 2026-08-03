@@ -111,8 +111,19 @@ Full authoritative text and IDs live in the two constraint files — this is a s
 ## Running it
 
 ```bash
-./.venv/bin/python example.py
+./.venv/bin/python main.py
 ./.venv/bin/python -m pytest tests/
 ```
 
 Python 3.x, dependencies: Google OR-Tools (CP-SAT) and PyYAML, installed in the provided `./.venv/`.
+
+## Project Structure
+
+The project is structured with the following Python modules:
+
+- `main.py` - Main driver script that orchestrates the entire solution
+- `models.py` - Data models for staff, shifts, and roster positions with validation
+- `constraints.py` - Base classes for hard and soft constraint implementations
+- `solver.py` - OR-Tools CP-SAT integration with model setup
+- `output.py` - Output formatting modules for result.staff.md and result.roster.md
+- `utils.py` - Utility functions for data loading, validation, and calculations
