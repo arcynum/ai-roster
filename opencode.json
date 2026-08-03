@@ -4,7 +4,8 @@
   "permission": {
     "*": "ask",
     "read": "allow",
-    "ls": "allow"
+    "ls": "allow",
+    "glob": "allow",
   },
   "provider": {
     "chat": {
