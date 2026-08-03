@@ -22,11 +22,14 @@ def load_yaml_file(filename: str) -> Dict[str, Any]:
 
 def validate_dates(roster_data: Dict[str, Any]) -> None:
     """Validate that the roster dates are valid and span a whole number of fortnights."""
-    start_date_str = roster_data['dates']['start']
-    end_date_str = roster_data['dates']['end']
+    start_date = roster_data['dates']['start']
+    end_date = roster_data['dates']['end']
     
-    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
-    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+    # Handle case where dates might already be datetime.date objects
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+    if isinstance(end_date, str):
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
     
     # Calculate the number of days between dates
     total_days = (end_date - start_date).days + 1

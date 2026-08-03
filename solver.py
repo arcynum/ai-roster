@@ -5,7 +5,8 @@ Handles CP-SAT model setup, variable creation, and constraint application.
 
 from ortools.sat.python import cp_model
 from typing import List, Dict, Any
-from models import Staff, Shift, RosterPosition
+from models import Staff, Shift, RosterPosition, Classification
+from constraints import GraduateShiftConstraint
 
 
 class RosterSolver:
@@ -31,6 +32,10 @@ class RosterSolver:
         
     def _add_constraints(self) -> None:
         """Add all hard constraints to the model."""
+        # Add the Graduate Shift constraint (H#30479c74)
+        graduate_constraint = GraduateShiftConstraint()
+        graduate_constraint.apply(self.model, staff_list=self.staff_list, shifts=self.shifts)
+        
         # Implementation will be added based on the hard constraints
         pass
         

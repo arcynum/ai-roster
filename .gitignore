@@ -1,6 +1,5 @@
 .DS_Store
-result.*
-*.html
-__pycache__/
-.venv/
-.pytest_cache/
+__pycache__
+.venv
+.pytest_cache
+output
