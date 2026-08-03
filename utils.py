@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+"""
+ai-roster - utility functions for data loading, validation, and logging.
+
+Provides:
+- YAML/MD data loaders with validation against AGENTS.md §4 rules
+- Logging setup (file + console) per AGENTS.md §6
+- Helper calculations (hour arithmetic, date utilities, etc.)
+"""
+
+import logging
+import os
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+SKILL_HIERARCHY = ["Acute", "Resus", "Triage", "Shift Coordinator"]
+VALID_CLASSIFICATIONS = {"RN", "CN", "Graduate"}
+VALID_SHIFT_TYPES = {"D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"}
+DAY_SHIFTS = {"D8", "D12", "P8", "P12", "L3", "DISCO"}
+NIGHT_SHIFTS = {"N8", "N12"}
+GRADUATE_ALLOWED_SHIFTS = {"D8", "P8", "L3", "DISCO", "N8"}
+SHIFT_ORDER = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
+SCALE = 100  # integer scaling factor for CP-SAT float arithmetic
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+OUTPUT_DIR = PROJECT_ROOT / "output"
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+
+def setup_logging(run_id: str) -> logging.Logger:
+    """Configure logging for a single run.
+
+    Writes DEBUG+ to output/roster_<run_id>.log and INFO+ to console.
+    """
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    logger = logging.getLogger("ai-roster")
+    logger.setLevel(logging.DEBUG)
+
+    # File handler — full detail
+    fh = logging.FileHandler(OUTPUT_DIR / f"roster_{run_id}.log")
+    fh.setLevel(logging.DEBUG)
+
+    # Console handler — summary only
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.INFO)
+
+    fmt = logging.Formatter(
+        "%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    fh.setFormatter(fmt)
+    ch.setFormatter(fmt)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    return logger
+
+
+# ---------------------------------------------------------------------------
+# Data loading
+# ---------------------------------------------------------------------------
+
+
+def load_yaml(path: Path) -> Any:
+    """Load and return parsed YAML from *path*, raising on parse errors."""
+    with open(path, "r") as f:
+        return yaml.safe_load(f)
+
+
+def load_definitions(path: Path | None = None) -> dict[str, dict]:
+    """Load shift definitions from definitions.yaml."""
+    path = path or PROJECT_ROOT / "definitions.yaml"
+    logger = logging.getLogger("ai-roster")
+    data = load_yaml(path)
+    logger.info("Loaded shift definitions from %s (%d shifts)", path.name, len(data))
+    return data
+
+
+def load_staff(path: Path | None = None) -> list[dict]:
+    """Load staff list from staff.yaml."""
+    path = path or PROJECT_ROOT / "staff.yaml"
+    logger = logging.getLogger("ai-roster")
+    data = load_yaml(path)
+    logger.info("Loaded %d staff members from %s", len(data), path.name)
+    return data
+
+
+def load_roster(path: Path | None = None) -> dict:
+    """Load roster configuration from roster.yaml."""
+    path = path or PROJECT_ROOT / "roster.yaml"
+    logger = logging.getLogger("ai-roster")
+    data = load_yaml(path)
+    logger.info("Loaded roster period %s → %s from %s",
+                data["dates"]["start"], data["dates"]["end"], path.name)
+    return data
+
+
+def load_hard_constraints(path: Path | None = None) -> list[dict]:
+    """Parse hard_constraints.md into a list of constraint records.
+
+    Each record has: id (str), text (str), category (str).
+    """
+    path = path or PROJECT_ROOT / "hard_constraints.md"
+    return _parse_constraint_file(path, "hard")
+
+
+def load_soft_constraints(path: Path | None = None) -> list[dict]:
+    """Parse soft_constraints.md into a list of constraint records."""
+    path = path or PROJECT_ROOT / "soft_constraints.md"
+    return _parse_constraint_file(path, "soft")
+
+
+def load_weights(path: Path | None = None) -> dict[str, int]:
+    """Load soft-constraint weights from weights.yaml."""
+    path = path or PROJECT_ROOT / "weights.yaml"
+    data = load_yaml(path)
+    logger = logging.getLogger("ai-roster")
+    logger.info("Loaded %d weights from %s", len(data), path.name)
+    return data
+
+
+def _parse_constraint_file(path: Path, kind: str) -> list[dict]:
+    """Generic parser for hard_constraints.md / soft_constraints.md.
+
+    Extracts [H#...] / [S#...] tags and their associated text.
+    """
+    import re
+    tag_re = re.compile(r"\[(?P<tag>[HS]#[a-f0-9]{8})\]")
+    constraints: list[dict] = []
+    current: dict[str, str] | None = None
+
+    with open(path, "r") as f:
+        for line in f:
+            stripped = line.strip()
+            # Skip section headers (## ...)
+            if stripped.startswith("##"):
+                continue
+            m = tag_re.search(line)
+            if m:
+                if current is not None:
+                    constraints.append(current)
+                current = {"id": m.group("tag"), "text": "", "kind": kind}
+            elif current is not None and stripped and not stripped.startswith("-"):
+                # continuation of text
+                current["text"] += stripped + " "
+            elif stripped.startswith("- "):
+                # bullet point under current constraint
+                assert current is not None  # type narrowing
+                current["text"] += stripped[2:] + " "
+
+    if current is not None:
+        constraints.append(current)
+
+    logger = logging.getLogger("ai-roster")
+    logger.info("Parsed %d %s constraints from %s", len(constraints), kind, path.name)
+    return constraints
+
+
+# ---------------------------------------------------------------------------
+# Validation helpers
+# ---------------------------------------------------------------------------
+
+
+def validate_staff_records(records: list[dict]) -> list[dict]:
+    """Validate every staff record per AGENTS.md §4.
+
+    Returns validated list (same objects) or raises ValueError with details.
+    """
+    seen_names: set[str] = set()
+
+    for i, rec in enumerate(records):
+        # name uniqueness
+        name = rec.get("name")
+        if not name or name in seen_names:
+            raise ValueError(
+                f"staff.yaml row {i + 1}: name '{name}' is {'missing' if not name else 'duplicate'}"
+            )
+        seen_names.add(name)
+
+        # classification
+        classification = rec.get("classification")
+        if classification not in VALID_CLASSIFICATIONS:
+            raise ValueError(
+                f"staff.yaml row {i + 1} ({name}): "
+                f"classification must be one of {VALID_CLASSIFICATIONS}, got '{classification}'"
+            )
+
+        # skill_tags — must be a contiguous prefix of SKILL_HIERARCHY
+        skill_tags = rec.get("skill_tags", [])
+        if not isinstance(skill_tags, list):
+            raise ValueError(
+                f"staff.yaml row {i + 1} ({name}): skill_tags must be a list"
+            )
+        for tag in skill_tags:
+            if tag not in SKILL_HIERARCHY:
+                raise ValueError(
+                    f"staff.yaml row {i + 1} ({name}): unknown skill level '{tag}'"
+                )
+        # Check contiguous prefix
+        for j, tag in enumerate(skill_tags):
+            if tag != SKILL_HIERARCHY[j]:
+                raise ValueError(
+                    f"staff.yaml row {i + 1} ({name}): skill_tags must be a contiguous "
+                    f"prefix of {SKILL_HIERARCHY}; found {skill_tags}"
+                )
+
+        # contracted_hours_per_fortnight
+        hours = rec.get("contracted_hours_per_fortnight")
+        if not isinstance(hours, (int, float)) or hours <= 0:
+            raise ValueError(
+                f"staff.yaml row {i + 1} ({name}): "
+                f"contracted_hours_per_fortnight must be a positive number, got {hours}"
+            )
+
+        # red_requests — list of date strings
+        red_requests = rec.get("red_requests", [])
+        if not isinstance(red_requests, list):
+            raise ValueError(
+                f"staff.yaml row {i + 1} ({name}): red_requests must be a list"
+            )
+        for d in red_requests:
+            try:
+                date.fromisoformat(d)
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"staff.yaml row {i + 1} ({name}): invalid red_request date '{d}'"
+                )
+
+        # holidays — list of {start, end} objects
+        holidays = rec.get("holidays", [])
+        if not isinstance(holidays, list):
+            raise ValueError(
+                f"staff.yaml row {i + 1} ({name}): holidays must be a list"
+            )
+        for h in holidays:
+            if not isinstance(h, dict) or "start" not in h or "end" not in h:
+                raise ValueError(
+                    f"staff.yaml row {i + 1} ({name}): holiday entry must have start and end"
+                )
+            try:
+                start = date.fromisoformat(h["start"])
+                end = date.fromisoformat(h["end"])
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"staff.yaml row {i + 1} ({name}): invalid holiday date"
+                )
+            if start > end:
+                raise ValueError(
+                    f"staff.yaml row {i + 1} ({name}): holiday start ({h['start']}) "
+                    f"must not be after end ({h['end']})"
+                )
+
+    return records
+
+
+def validate_roster_period(roster_data: dict) -> tuple[date, date]:
+    """Validate the roster period is a whole multiple of 14 days.
+
+    Returns (start_date, end_date).
+    """
+    start = date.fromisoformat(roster_data["dates"]["start"])
+    end = date.fromisoformat(roster_data["dates"]["end"])
+
+    delta = (end - start).days + 1  # inclusive
+    if delta <= 0:
+        raise ValueError(f"Roster end ({end}) must be on or after start ({start})")
+    if delta % 14 != 0:
+        raise ValueError(
+            f"Roster period must span a whole multiple of 14 days; "
+            f"got {delta} days ({start} to {end})"
+        )
+
+    return start, end
+
+
+def validate_roster_positions(roster_data: dict, definitions: dict,
+                              start_date: date, end_date: date) -> list[dict]:
+    """Validate every roster position entry.
+
+    Returns a flat list of position dicts with resolved date, shift, and
+    required_skill_level.  Each dict carries a ``date_to_day`` mapping
+    (shared across all entries) so the caller can look up the day-of-week
+    for any date.
+    """
+    positions: list[dict] = []
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+                 "Saturday", "Sunday"]
+
+    roster_positions = roster_data.get("roster_positions", {})
+
+    # Build a map of date -> day-of-week
+    current = start_date
+    date_to_day: dict[date, str] = {}
+    while current <= end_date:
+        date_to_day[current] = day_names[current.weekday()]
+        current += timedelta(days=1)
+
+    for day_name in day_names:
+        day_entries = roster_positions.get(day_name, [])
+        if not isinstance(day_entries, list):
+            raise ValueError(f"roster.yaml: '{day_name}' must be a list of positions")
+
+        for pos in day_entries:
+            shift = pos.get("shift")
+            required_skill = pos.get("required_skill_level")
+
+            if shift not in VALID_SHIFT_TYPES:
+                raise ValueError(
+                    f"roster.yaml ({day_name}): unknown shift type '{shift}'"
+                )
+
+            if required_skill is not None and required_skill not in SKILL_HIERARCHY:
+                raise ValueError(
+                    f"roster.yaml ({day_name}): unknown skill level "
+                    f"'{required_skill}'"
+                )
+
+            positions.append({
+                "date_to_day": date_to_day,
+                "shift": shift,
+                "required_skill_level": required_skill,
+            })
+
+    return positions
+
+
+# ---------------------------------------------------------------------------
+# Date / hour helpers
+# ---------------------------------------------------------------------------
+
+
+def generate_dates(start_date: date, end_date: date) -> list[date]:
+    """Return all dates from start_date to end_date inclusive."""
+    return [start_date + timedelta(days=i)
+            for i in range((end_date - start_date).days + 1)]
+
+
+def get_fortnight_blocks(dates: list[date]) -> list[list[date]]:
+    """Split a sorted date list into 14-day blocks."""
+    blocks = []
+    for i in range(0, len(dates), 14):
+        blocks.append(dates[i:i + 14])
+    return blocks
+
+
+def is_weekend(d: date) -> bool:
+    """Return True if *d* is Saturday or Sunday."""
+    return d.weekday() >= 5
+
+
+def shift_paid_hours(shift_name: str, definitions: dict) -> float:
+    """Return the paid_hours for a shift type from definitions."""
+    return definitions[shift_name]["paid_hours"]
+
+
+def shift_span_hours(shift_name: str, definitions: dict) -> float:
+    """Return the span_hours for a shift type from definitions."""
+    return definitions[shift_name]["span_hours"]
+
+
+def shift_crosses_midnight(shift_name: str, definitions: dict) -> bool:
+    """Return whether a shift crosses midnight."""
+    return definitions[shift_name]["crosses_midnight"]
+
+
+def shift_start_time(shift_name: str, definitions: dict) -> datetime:
+    """Return the start time of a shift as a datetime (date part ignored)."""
+    t = datetime.strptime(definitions[shift_name]["start"], "%H:%M:%S")
+    return t
+
+
+def shift_end_time(shift_name: str, definitions: dict) -> datetime:
+    """Return the end time of a shift as a datetime (date part ignored)."""
+    t = datetime.strptime(definitions[shift_name]["end"], "%H:%M:%S")
+    return t
+
+
+def hours_to_scaled(hours: float) -> int:
+    """Convert a float hour value to the scaled integer used by CP-SAT."""
+    return int(round(hours * SCALE))
+
+
+def scaled_to_hours(scaled: int) -> float:
+    """Convert a scaled integer back to float hours."""
+    return scaled / SCALE
