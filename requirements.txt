@@ -5,4 +5,5 @@ pluggy==1.6.0
 Pygments==2.20.0
 pyright==1.1.411
 pytest==9.1.1
+PyYAML==6.0.3
 typing_extensions==4.16.0
