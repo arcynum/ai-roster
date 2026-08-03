@@ -15,7 +15,7 @@ A CP-SAT–based rostering system for the pediatric emergency ward at TPCH. Give
 | `definitions.yaml` | Shift start/end times, span vs paid duration, unpaid break, and midnight-crossing flag |
 | `hard_constraints.md` | Non-negotiable rules, each with a unique `[H#...]` ID |
 | `soft_constraints.md` | Preferences optimized by the solver, each with a unique `[S#...]` ID |
-| `weights.json` | Relative importance of each soft constraint, keyed by ID |
+| `weights.yaml` | Relative importance of each soft constraint, keyed by ID |
 | `training.md` | Describes the skill level tiers |
 | `build_roster.py` | Entry-point script that builds the roster |
 | `cp_solver.py` | The CP-SAT model |
@@ -105,7 +105,7 @@ Note: DISCO (17:30–02:00) crosses midnight like the night shifts do, but is cl
 - Skill level requirements per shift position
 - Graduate-classified staff restricted to D8, P8, L3, DISCO, N8
 
-**Soft constraints** (`soft_constraints.md`) — optimized via the objective function, weighted by `weights.json`:
+**Soft constraints** (`soft_constraints.md`) — optimized via the objective function, weighted by `weights.yaml`:
 - Overtime distributed fairly when contracted hours can't cover demand
 - Night shifts and weekend shifts distributed fairly across staff
 - Working the same shift 3+ consecutive days is discouraged
