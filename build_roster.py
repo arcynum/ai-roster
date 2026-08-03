@@ -338,7 +338,21 @@ def generate_staff_shifts_html(solver, staff, dates, assignments=None):
 
 if __name__ == "__main__":
     try:
-        with open("definitions.md", "r") as f: defs = parse_definitions(f.read())
+        with open("definitions.yaml", "r") as f: 
+            import yaml
+            defs_data = yaml.safe_load(f.read())
+            # Convert to ShiftDefinition objects
+            defs = {}
+            for shift_name, shift_data in defs_data.items():
+                defs[shift_name] = ShiftDefinition(
+                    name=shift_name,
+                    start_time=shift_data['start'],
+                    end_time=shift_data['end'],
+                    duration=shift_data['paid_hours'],
+                    crosses_midnight=shift_data['crosses_midnight'],
+                    start_dt=datetime.datetime.strptime(shift_data['start'], "%H:%M:%S").time(),
+                    end_dt=datetime.datetime.strptime(shift_data['end'], "%H:%M:%S").time()
+                )
         # Use roster.yaml as the source of truth
         with open("roster.yaml", "r") as f: 
             start_date, end_date, reqs = parse_roster_yaml(f.read())
@@ -376,14 +390,8 @@ if __name__ == "__main__":
             training_counts = {}
             level_counts = {}
             for s in staff:
-                # Handle both old and new formats for compatibility
-                if hasattr(s, 'training_levels'):
-                    # New format: training_levels is an array
-                    for level in s.training_levels:
-                        training_counts[level] = training_counts.get(level, 0) + 1
-                else:
-                    # Old format: training_level is a string
-                    level = s.training_level
+                # Use the actual field names from StaffMember
+                for level in s.skill_tags:
                     training_counts[level] = training_counts.get(level, 0) + 1
                 level_counts[s.level] = level_counts.get(s.level, 0) + 1
             
@@ -423,7 +431,7 @@ if __name__ == "__main__":
             print(f"Total required staff-shifts: {total_d12_shifts * required_staff_per_d12}")
             
             # Show FTE summary
-            total_fte = sum(s.fte_hours for s in staff)
+            total_fte = sum(s.contracted_hours_per_fortnight for s in staff)
             solver.total_fte = total_fte
             solver.required_fte = total_d12_shifts * required_staff_per_d12 * 12.5  # Assuming ~12.5h per shift
             

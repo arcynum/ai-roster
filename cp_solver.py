@@ -1,5 +1,6 @@
 import datetime
 import json
+import yaml
 from typing import List, Dict, Optional, Set, Tuple
 from ortools.sat.python import cp_model
 from models import (
@@ -25,20 +26,19 @@ class CPSolver:
         self.preferences = preferences or []
         
         # Load weights from external config
-        self.weights = {
-            "S#f8c3b0c2": 1000,
-            "weekend_distribution": 100,
-            "preference_base": 1,
-            "S#d2a7f4a6": 50,
-            "S#a1d6c3d5": 50,
-            "S#e9b4a1b3": 20,
-            "S#f5e6d7c8": 10
-        }
+        self.weights = {}
         try:
-            with open("weights.json", "r") as f:
-                self.weights.update(json.load(f))
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
+            with open("weights.yaml", "r") as f:
+                self.weights = yaml.safe_load(f)
+        except (FileNotFoundError, yaml.YAMLError):
+            # Use default weights if file doesn't exist
+            self.weights = {
+                "S#d2a7f4a6": 50,
+                "S#a1d6c3d5": 50,
+                "S#e9b4a1b3": 20,
+                "S#30c6f5ad": 500,
+                "S#7b4e19fc": 5
+            }
         self.dates = [start_date + datetime.timedelta(days=i) for i in range(days_count)]
         self.assignments = []
         
@@ -122,13 +122,14 @@ class CPSolver:
                 model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
                 
                 # Ensure at least one Shift Coordinator (training level 4 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Shift Coordinator" for level in self.staff[s].skill_tags)) >= 1)
+                # Use threshold checking: any staff member with "Shift Coordinator" or higher level
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if "Shift Coordinator" in self.staff[s].skill_tags) >= 1)
                 
                 # Ensure at least one Triage trained worker (training level 3 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Triage" for level in self.staff[s].skill_tags)) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if "Triage" in self.staff[s].skill_tags) >= 1)
                 
                 # Ensure at least one Resus trained worker (training level 2 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Resus" for level in self.staff[s].skill_tags)) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if "Resus" in self.staff[s].skill_tags) >= 1)
 
             # N12 requirements [H#62281944] - Need 1 CN, 1 Shift Coordinator, 1 Triage, and 1 Resus
             n12_reqs = [r for r in self.roster_reqs.get(day_name, []) if r.shift_name == "N12"]
@@ -137,13 +138,13 @@ class CPSolver:
                 model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
                 
                 # Ensure at least one Shift Coordinator (training level 4 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Shift Coordinator" for level in self.staff[s].skill_tags)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if "Shift Coordinator" in self.staff[s].skill_tags) >= 1)
                 
                 # Ensure at least one Triage trained worker (training level 3 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Triage" for level in self.staff[s].skill_tags)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if "Triage" in self.staff[s].skill_tags) >= 1)
                 
                 # Ensure at least one Resus trained worker (training level 2 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Resus" for level in self.staff[s].skill_tags)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if "Resus" in self.staff[s].skill_tags) >= 1)
 
         # [H#c1f6e3f5] Rest Period Constraint (min 11 hours)
         for s in staff_indices:
