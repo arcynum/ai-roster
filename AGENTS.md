@@ -127,7 +127,7 @@ For a staff member contracted at 76h, the relative ceiling has zero room before 
 
 ### Environment & Execution
 - Python 3.x. A virtual environment is provided at `./.venv/`.
-- Always run via the venv interpreter: `./.venv/bin/python <script_name>.py`.
+- Always run python via the venv interpreter: `./.venv/bin/python <script_name>.py`.
 
 ### Core Solver Logic (CP-SAT)
 `cp_solver.py` uses Google OR-Tools CP-SAT. When implementing or modifying constraints:

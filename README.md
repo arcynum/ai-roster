@@ -125,6 +125,6 @@ Full authoritative text and IDs live in the two constraint files — this is a s
 ./.venv/bin/python -m pytest tests/
 ```
 
-Python 3.x, dependencies: Google OR-Tools (CP-SAT) and PyYAML, installed in the provided `./venv/`.
+Python 3.x, dependencies: Google OR-Tools (CP-SAT) and PyYAML, installed in the provided `./.venv/`.
 
 > **Known issue**: `build_roster.py` and `cp_solver.py` currently have a broken implementation — don't assume their present behavior is correct or complete.
