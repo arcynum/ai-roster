@@ -1,13 +1,162 @@
-# Agents Guide: AI-Roster
-This document provides the necessary context, structure, and standards for AI agents to contribute to the `ai-roster` project.
+# AGENTS.md — AI-Roster
 
-## Ponytail, lazy senior dev mode
+This is the entry point for any agent (opencode or otherwise) working on this project. Read this file first, in full, before touching code. It is the single source of truth for how the pieces fit together — if another doc, comment, or file conflicts with what's written here, **this file wins**; flag the conflict rather than silently picking one.
+
+---
+
+## 🚧 0. Project Status — Work In Progress. Read before doing anything else.
+
+**This project is not finished. Existing code is not presumed correct.**
+
+- `build_roster.py` and `cp_solver.py` exist but their implementation is currently **known to be broken**. `result.staff.md`, `result.roster.md`, and `result.violations.md` may reflect that broken behavior.
+- **The ground truth is the constraint/data files** — `hard_constraints.md`, `soft_constraints.md`, `roster.yaml`, `staff.yaml`, `definitions.yaml`, `weights.json`, and this document. **Code is not ground truth** until it's been verified against those files line-by-line. If code contradicts them, the code is wrong — not the other way around.
+- **The existing test suite is not automatically trustworthy either.** Tests were plausibly written against the broken implementation. If a test asserts behavior that contradicts a hard/soft constraint ID, the test is the thing to fix, not the code you'd otherwise write to satisfy it.
+- **You have explicit standing permission to change, rewrite, or delete existing code** in `build_roster.py`, `cp_solver.py`, and `tests/` when it conflicts with the constraint files — you do not need to ask first, and you do not need to preserve current output behavior for compatibility. There is no live consumer depending on the current (broken) behavior.
+- This overrides the "reuse what's already here" step in the Ponytail ladder below (§10, step 2) specifically for `build_roster.py`/`cp_solver.py`/`tests/`: reuse is still the right instinct everywhere else in the codebase, but for these three, verify against the constraint files first — don't treat "it's already implemented this way" as a reason to keep it.
+- When you find and fix a real discrepancy between code and the constraint files, say so plainly in your summary (what was wrong, which constraint ID it violated) rather than quietly patching around it.
+
+---
+
+## 1. Project Overview
+
+This project builds a fortnightly roster for the pediatric emergency ward at TPCH, using Google OR-Tools **CP-SAT** to satisfy a set of hard constraints while optimizing a weighted set of soft constraints.
+
+## 2. Canonical Terminology
+
+The project's history has left three different names for the same underlying concept scattered across files. Going forward, use these terms consistently in **prose, docs, and new code**:
+
+| Canonical term | What it means | Where it actually appears in data |
+|---|---|---|
+| **Skill level** | A staff member's training/qualification tier | `hard_constraints.md` prose; `roster.yaml`'s `required_skill_level` field (singular, `null` = no requirement) |
+| **Held skill levels** | The set of skill levels a staff member has attained | `staff.yaml`'s `skill_tags` field (a list) |
+| **Classification** | A staff member's organisational role — separate concept from skill level | `staff.yaml`'s `classification` field: `RN`, `CN`, or `Graduate` |
+
+Do not introduce a fourth synonym ("training level", "skill tag" in prose, etc.) — if you see one in an old doc, treat it as meaning "skill level" and consider updating the doc.
+
+### Classification vs. Skill Level (previously conflated — now resolved)
+
+These are two **independent** attributes on a staff member, not one hierarchy:
+
+- **Classification** — one of `RN`, `CN`, `Graduate`. This is an organisational/employment category, not a proficiency ranking.
+- **Skill level hierarchy** — `Acute < Resus < Triage < Shift Coordinator` (4 levels; see `hard_constraints.md` [H#84a1d5c9]/[H#c18b42de]). A staff member with a higher skill level satisfies requirements for all lower ones (threshold semantics, not exact-match).
+
+**Graduate is a classification, not a skill level.** Staff classified as `Graduate` typically hold `skill_tags: [Acute]` in `staff.yaml` — they have a real skill level like anyone else, it's their classification that restricts them. Per [H#30479c74], Graduate-classified staff may only be assigned to D8, P8, L3, DISCO, and N8, regardless of skill level held.
+
+## 3. Core Architecture — File Map
+
+- **`opencode.json`** — the model/provider configuration for the coding agent.
+- **`definitions.yaml`** — shift definitions: start time, end time, `span_hours` (wall-clock duration including unpaid break), `paid_hours` (actual worked/paid duration), `unpaid_break_minutes`, and `crosses_midnight` (explicit boolean — never infer this by comparing start/end times). **Which duration field to use matters and they are not interchangeable** — see §5.
+- **`roster.yaml`** — the roster period (`dates.start`/`dates.end`) and the list of roster positions required per day of the week, under the `roster_positions:` key. Each entry has `shift` and `required_skill_level` (a skill level string, or `null` meaning no restriction). **This file is the literal source of truth for shift counts and skill requirements per day — don't hardcode counts elsewhere in docs or code; read this file.** Entries repeat identically every week of the roster period.
+- **`hard_constraints.md`** — non-negotiable rules, each tagged with a unique `[H#xxxxxxxx]` ID. Must all hold in the final roster.
+- **`soft_constraints.md`** — preference rules, each tagged with a unique `[S#xxxxxxxx]` ID, optimized via the objective function. If one isn't satisfied, the solver/output should be able to account for why.
+- **`staff.yaml`** — every staff member: `name`, `classification`, `skill_tags` (held skill levels), `contracted_hours_per_fortnight` (a **floor**, not a ceiling — see §7), `red_requests`, `holidays`. See `README.md`'s `staff.yaml` field reference for the full schema, and §4 below for validation rules specific to this file.
+- **`weights.json`** — objective-function weights keyed by soft constraint ID. These are **relative ordering signals, not literal cost units** — a weight of 100 means "prioritise avoiding this over one weighted 50," not "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
+- **`result.staff.md`** — final roster grouped by staff member (output).
+- **`result.roster.md`** — final roster grouped by date (output).
+- **`result.violations.md`** — any rule violations found in the generated roster (output).
+- **`build_roster.py`** — the script that builds the roster (exists, currently broken — see status note).
+- **`cp_solver.py`** — the CP-SAT model itself (exists, currently broken — see status note).
+
+**Fortnightly blocks**: rosters must span an exact multiple of 14 days. All constraints (FTE, max hours, etc.) apply *within* each discrete 14-day block, never averaged across the whole roster period. If `roster.yaml`'s date range isn't a whole multiple of 14 days, the script must error out with a clear message and refuse to build — never silently round, truncate, or prorate.
+
+## 4. Data File Validation
+
+`staff.yaml`, `roster.yaml`, `definitions.yaml`, `hard_constraints.md`, `soft_constraints.md` are hand-edited by humans — treat parsing them as input validation, not just data loading. If a row is malformed, missing a required field, references an undefined skill level/shift/staff member, or a date is out of range: fail loudly with a message naming the file, the row, and the problem. Never silently skip or guess a default.
+
+### `staff.yaml`-specific rules
+
+- **`name` must be unique across the file.** It's the identifier used to group output in `result.staff.md` and to cross-reference `red_requests`/`holidays` — a duplicate name is a data error, fail loudly rather than merging or picking one.
+- **`classification` must be exactly one of `RN`, `CN`, `Graduate`.** Any other value is a data error.
+- **`skill_tags` must be a contiguous prefix of the hierarchy** `Acute < Resus < Triage < Shift Coordinator` — i.e. a staff member can hold `[Acute]`, `[Acute, Resus]`, `[Acute, Resus, Triage]`, or all four, but never a level without every level below it (e.g. `[Resus]` alone, or `[Acute, Triage]` skipping `Resus`, is invalid). This matches every existing entry in `staff.yaml` and is required for the threshold-based skill check in §2/§8 to mean anything. **List order within `skill_tags` is not semantically meaningful** — determine a staff member's actual rank by looking up each tag against the hierarchy, don't rely on list position or count.
+- **`contracted_hours_per_fortnight`** is a `paid_hours`-basis figure (see §5) and must be a positive number.
+- **`red_requests`** is a list of `YYYY-MM-DD` date strings (may be empty). Does not reduce the contracted-hours floor (see §7 / `H#d9a8b7c6`).
+- **`holidays`** is a list of `{start, end}` date-range objects, both `YYYY-MM-DD` strings (may be empty). A single-day holiday is represented as `start == end` — there is no separate scalar shorthand for a one-day holiday. `start` must not be after `end`. Holidays proportionally reduce the contracted-hours floor for the affected block.
+
+## 5. Shift Definitions & the Day/Night Split
+
+Shifts (from `definitions.yaml`): `D8, D12, P8, P12, L3, DISCO, N8, N12`.
+
+- **Day shifts**: `D8, D12, P8, P12, L3, DISCO`
+- **Night shifts**: `N8, N12`
+
+**DISCO exception — read carefully:** DISCO runs 17:30→02:00 and crosses midnight, the same way N8/N12 do. Despite that, **DISCO is classified as a day shift** for all fairness/reporting purposes (weekend-hours %, night-shift-hours % in `result.staff.md`, soft-constraint fairness calcs, etc.). This is a deliberate exception, not an oversight — don't "fix" it by moving DISCO into the night bucket.
+
+### Overnight Shift Attribution
+
+Any shift that crosses midnight (DISCO, N8, N12) counts entirely toward the date and 14-day block **it starts on** — never the date it ends on, and never split across both. This applies consistently to hours totals, weekend-hours %, and night-shift-hours % in `result.staff.md`. (Per the exception above, DISCO's hours still land in the day-shift bucket even though the shift itself crosses midnight — attribution-by-start-date and day/night classification are two separate rules.)
+
+### Span Hours vs. Paid Hours
+
+Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour shifts) includes a **30-minute unpaid break**. `definitions.yaml` gives you both figures explicitly — never derive one from the other via a hardcoded "minus 30 minutes," always read the field:
+
+- **`span_hours`** — wall-clock start-to-end duration, unpaid break included. Use for anything about physical presence/timing: the 11-hour rest-period gap ([H#c1f6e3f5]), the no-double-booking/overlap check ([H#e91c63ab]).
+- **`paid_hours`** — `span_hours` minus the break. Use for anything measured against contracted/FTE hours: the contracted-hours floor ([H#d9a8b7c6]), the 76h absolute cap ([H#f0c5b2c4]), the 12.5h overtime cap ([H#e8f7d6c5]), and every hour total / weekend % / night % figure in `result.staff.md`.
+
+**These are not interchangeable.** Using `span_hours` anywhere the constraint files say "hours" (contracted, cap, overtime) overcounts every shift by 30 minutes — across a 14-day block with ~10 shifts that's up to 5 hours of drift per staff member, easily enough to push someone over or under a hard cap incorrectly. If you find code computing hours-worked totals from `span_hours` (or from raw start/end time deltas) for anything contracted-hours-related, that's a bug — fix it to use `paid_hours`.
+
+## 6. Output
+
+- `result.*.md` files can be overwritten/replaced on disk.
+- All `result.*.md` outputs should include auxiliary info like classification and skill level.
+- **`result.staff.md`** (grouped by staff member) must include:
+  - Summary of classification, skill level(s), and FTE hours per fortnight for the whole period.
+  - A block-by-block breakdown (14-day increments): total hours worked, weekend hours + % of block total, night-shift hours + % of block total.
+  - A full list of all shifts assigned during the entire period.
+- **`result.roster.md`** (grouped by date) must show everyone on shift each day, their specific shift, classification, and skill level.
+  - Print shifts in this fixed order: `D8, D12, P8, P12, L3, DISCO, N8, N12`.
+  - Within a single shift's list of staff: order by classification first (CN before RN, or per the hierarchy in `staff.yaml`), then by skill level (highest first) within the same classification.
+
+## 7. Operational Definitions
+
+### Coverage Shortfalls & Overtime
+
+`contracted_hours_per_fortnight` is a **minimum**, not a cap. If total contracted hours across all staff can't cover every shift in a 14-day block:
+
+1. First cover the shortfall with overtime (hours above a staff member's floor), distributed **as evenly as possible** across all eligible staff — don't stack it onto the same few people.
+2. All other hard constraints still apply on top of this (max hours, red requests, holidays, skill level requirements). Overtime never overrides a hard constraint.
+3. If a shift still can't be covered after fair overtime distribution and respecting all hard constraints (e.g. no staff member with the required skill level is available, or covering it would breach someone's max-hours cap), record it as `UNFILLED` in the output and note which classification/skill level was required but unavailable.
+4. If hard constraints make it impossible to produce **any** valid roster (e.g. a required Shift Coordinator role has zero qualified staff in the entire roster), stop and tell the user why — never produce a broken or partial file silently.
+
+**Which hours cap actually binds:** two separate caps exist and the *lower* one always governs for a given staff member —
+- Absolute ceiling: never exceed 76 hours per staff member per 14-day block ([H#f0c5b2c4]).
+- Relative ceiling: never more than 12.5 hours of overtime above that person's own contracted hours in the block ([H#e8f7d6c5]).
+
+For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (52.5h) binds well before the absolute one. Apply `min(76, contracted + 12.5)` as the effective cap per person, per block.
+
+## 8. Technical Implementation Guide
+
+### Environment & Execution
+- Python 3.x. A virtual environment is provided at `./.venv/`.
+- Always run via the venv interpreter: `./.venv/bin/python <script_name>.py`.
+
+### Core Solver Logic (CP-SAT)
+`cp_solver.py` uses Google OR-Tools CP-SAT. When implementing or modifying constraints:
+
+1. **Integer arithmetic (scaling)**: CP-SAT only works with integers. All floating-point values (FTE hours like `37.5`, shift `paid_hours` like `12.0`/`8.0`) must be scaled by `self.SCALE` (= `100`). Example: an FTE of `37.5` becomes `3750`. Note `paid_hours` values are whole/half numbers post-refactor (12.0, 8.0) — don't confuse them with `span_hours` (12.5, 8.5), a different field for a different purpose (see §5).
+2. **Skill level hierarchy thresholding**: `Acute < Resus < Triage < Shift Coordinator`. Check requirements with thresholding (e.g. `SKILL_MAP[level] >= required_rank`), not exact equality — this lets higher-qualified staff fill lower roles. (Graduate is a classification, not part of this hierarchy — see §2.)
+3. **Constraint lifecycle** for adding a new constraint or preference:
+   - Step 1 — Variables: define decision variables (`model.NewBoolVar`, etc.)
+   - Step 2 — Constraints: apply logic via `model.Add(...)` / `model.AddForbiddenAssignments(...)`
+   - Step 3 — Penalties (soft only): create an integer "violation amount" variable, add to the objective multiplied by its `weights.json` weight.
+   - Step 4 — Objective: make sure all new penalty variables are included in `model.Minimize(...)`.
+4. **Linkage via IDs**: every hard/soft constraint in code must be tagged with its corresponding ID from the markdown files (e.g. `# [H#a7f2c9d1]`). **IDs must be unique** — if you're adding a new constraint, generate a fresh ID rather than reusing or copy-pasting an existing tag (a duplicate ID was found and fixed during this cleanup; don't reintroduce that pattern).
+
+## 9. Testing
+
+- Unit tests for `cp_solver.py` and other core logic live in `tests/`, using `pytest`. Run with `./.venv/bin/python -m pytest tests/`.
+- Run the tests whenever code changes, and update tests to reflect the change.
+- Tests should cover both a positive and a negative case per function.
+- After the roster is produced, scan it and compare against `hard_constraints.md`/`soft_constraints.md` to confirm compliance.
+- The lazy-mode "one runnable check" convention (§10 below) is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
+
+## 10. Agent Working Mode — "Ponytail" (lazy senior dev)
+
 You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
 
 Before writing any code, stop at the first rung that holds:
 
 1. Does this need to be built at all? (YAGNI)
-2. Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't re-write it.
+2. Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't rewrite it. *(Exception: `build_roster.py`, `cp_solver.py`, `tests/` — see §0. Verify against the constraint files before treating existing code there as the reusable pattern.)*
 3. Does the standard library already do this? Use it.
 4. Does a native platform feature cover it? Use it.
 5. Does an already-installed dependency solve it? Use it.
@@ -16,134 +165,38 @@ Before writing any code, stop at the first rung that holds:
 
 The ladder runs after you understand the problem, not instead of it: read the task and the code it touches, trace the real flow end to end, then climb.
 
-Bug fix = root cause, not symptom: a report names a symptom. Grep every caller of the function you touch and fix the shared function once — one guard there is a smaller diff than one per caller, and patching only the path the ticket names leaves a sibling caller still broken.
+**Bug fix = root cause, not symptom.** A report names a symptom. Grep every caller of the function you touch and fix the shared function once — one guard there is a smaller diff than one per caller, and patching only the path the ticket names leaves a sibling caller still broken.
 
 Rules:
-
 - No abstractions that weren't explicitly requested.
 - No new dependency if it can be avoided.
 - No boilerplate nobody asked for.
 - Deletion over addition. Boring over clever. Fewest files possible.
 - Shortest working diff wins, but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
 - Question complex requests: "Do you actually need X, or does Y cover it?"
-- Pick the edge-case-correct option when two stdlib approaches are the same size, lazy means less code, not the flimsier algorithm.
+- Pick the edge-case-correct option when two stdlib approaches are the same size — lazy means less code, not the flimsier algorithm.
 - Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a `ponytail:` comment naming the ceiling and upgrade path.
 
-Not lazy about: understanding the problem (read it fully and trace the real flow before picking a rung, a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs (the platform is never the spec ideal, a clock drifts, a sensor reads off), anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind, the smallest thing that fails if the logic breaks (an assert-based demo/self-check or one small test file; no frameworks, no fixtures). Trivial one-liners need no test.
+**Not lazy about**: understanding the problem (read it fully and trace the real flow before picking a rung — a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind (an assert-based demo/self-check or one small test file — no frameworks, no fixtures). Trivial one-liners need no test.
 
-## Project Overview
-This projects purpose is to build a monthly roster for the pediatric emergency ward at TPCH.
-The project contains a list of staff, list of shifts that need to be filled, and shift definitions.
+## 11. Python Coding Standards
 
-## Core Architecture
-- **`opencode.json`**: The definition of the model to use.
-- **`definitions.md`**: The definitions for all shifts, including start time, end time, duration and whether it crosses midnight.
-- **`roster.yaml`**: Contains the start and end dates of the roster. The list of shifts that need to be filled each week. These shifts repeat exactly every week.
-- **`hard_constraints.md`**: The list of rules that each roster needs to follow. These are not negotiable.
-- **`soft_constraints.md`**: The list of preferences that each roster should try to follow. If this is going not be followed for whatever reason, you must provide a reason why.
-- **`staff.yaml`**: The list of all staff and their training levels and FTE hours.
-- **`training.md`**: The list of the different training levels for staff.
-- **`result.staff.md`**: The final roster grouped by staff member is printed here.
-- **`result.roster.md`**: The final roster grouped by roster date is printed here.
-- **`result.violations.md`**: Any rule violations found in the generated roster are listed here.
-- **`build_roster.py`**: The python script that actually builds the roster.
-- **Fortnightly Blocks**: Rosters must be multiples of 14 days. All constraints (FTE, Max Hours, etc.) are applied within discrete 14-day blocks rather than being averaged across the entire roster period. **If the start/end dates in `roster.yaml` do not span a whole multiple of 14 days, the script must error out with a clear message and refuse to build the roster** — do not silently round, truncate, or prorate. Fix the dates in `roster.yaml` and re-run.
+1. **Indentation**: exactly 4 spaces, never tabs. Before adding logic, read the surrounding lines to confirm the current indentation context. Keep `if`/`for`/`while`/`def`/`class` blocks aligned with their parent scope.
+2. **Spacing & style**: spaces around operators (`a = b + c`); PEP 8 naming (snake_case functions/variables, PascalCase classes); consistent vertical whitespace between method definitions.
+3. **Verification**: after editing a `.py` file, verify no `IndentationError`/`SyntaxError` was introduced by running or linting the relevant script.
 
-## Data File Validation
-`staff.yaml`, `roster.yaml`, `definitions.md`, `hard_constraints.md`, `soft_constraints.md`, and `training.md` are hand-edited by humans and are a trust boundary — treat parsing them as input validation, not just data loading. If a row is malformed, missing a required field, references an undefined training level/shift/staff member, or a date is out of range, fail loudly with a message naming the file, the row, and the problem, rather than silently skipping it or guessing a default.
+---
 
-For detailed information about the format of `staff.yaml`, see [STAFF_FORMAT.md](STAFF_FORMAT.md).
+## Changelog (this cleanup pass)
 
-## Staff Definitions
-- Each staff member has the following options.
-    - **Classification**: This is the staff members organisation level. RN = Registered Nurse. CN = Clinical Nurse.
-    - **Training Level**: The level of training that the staff member has received. Graduate < Acute < Resus < Triage < Shift Coordinator
-    - **FTE Hours per Fortnight**: How many hours the staff member is contracted per fortnight. This is a **floor, not a ceiling** — see "Coverage Shortfalls & Overtime" below for what happens when total contracted FTE isn't enough to cover all shifts.
-    - **Red Requests**: Staff members are allowed to choose a couple of days a month that they will not be rostered on. These are those days. Not every staff member will make a red request each month. **Red requests are a hard constraint** — never schedule a staff member on a day they've made a red request for.
-    - **Holidays**: The dates and date ranges people are on holidays. Do not schedule people on during these days.
-
-### Overnight Shift Attribution
-A shift that crosses midnight (e.g. an N12 starting at 22:00) counts entirely toward the date and 14-day block **it starts on** — not the date it ends on, and not split across both. This applies consistently to hours totals, weekend-hours percentages, and night-shift-hours percentages in `result.staff.md`.
-
-## Output
-- You can overwrite/replace the existing `results.*.md` files on disk.
-- The `result.*.md` outputs should contain all of the auxillery information like level and training level.
-- The final roster should be printed in multiple different formats.
-    - `result.staff.md` should be grouped by the staff member. It MUST include:
-        - Summary of Level, Training Level, and FTE Hours per Fortnight for the whole period.
-        - A block-by-block breakdown (14-day increments) containing:
-            - Total hours worked in that block.
-            - Weekend hours and their percentage relative to the total hours worked in that block (to allow human audit of fairness).
-            - Night shift hours and their percentage relative to the total hours worked in that block (to allow human audit of fairness).
-        - A full list of all shifts assigned during the entire period.
-    - `result.roster.md` should be grouped by the roster days (by date) and show all of the people that are on shift for that day, including the specific shift.
-- The `result.roster.md` needs to include the the staff members level and training level.
-- Always print the shifts in the `result.roster.md` file in the following order: D8, D12, P8, P12, L3, DISCO, N8, N12
-- Within a single shift's list of staff, order by **classification first (CN before RN, or per the hierarchy in `staff.yaml`), then by training level (highest first) within the same classification**.
-- `weights.json` values are relative ordering signals for the objective function, not literal cost units — a weight of 100 should be treated as "prioritise avoiding this violation over one weighted 50," not as "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
-
-## Technical Implementation Guide
-
-### Environment & Execution
-- **Python Version**: Python 3.x
-- **Virtual Environment**: A virtual environment is provided in the `./venv/` directory. 
-- **Running Commands**: Always use the python interpreter from the virtual environment to ensure dependencies are found. Use `./venv/bin/python <script_name>.py`.
-
-### Core Solver Logic (CP-SAT)
-The `cp_solver.py` uses Google OR-Tools CP-SAT. When implementing or modifying constraints, follow these technical requirements:
-
-1.  **Integer Arithmetic (Scaling)**: 
-    - CP-SAT only works with integers. 
-    - All floating-point values (e.g., FTE hours like `37.5`, shift durations like `8.5`) must be scaled to integers using `self.SCALE` (which is `100`).
-    - *Example*: An FTE of `37.5` becomes `3750`.
-
-2.  **Training Level Hierarchy**: 
-    - Training levels are implemented as an ordered hierarchy: `Graduate < Acute < Resus < Triage < Shift Coordinator`.
-    - In the solver, requirements for a specific level should be checked using thresholding (e.g., `TRAINING_MAP[level] >= required_rank`) rather than exact equality to allow higher-qualified staff to fill lower roles.
-
-3.  **Constraint Lifecycle**: 
-    To add a new constraint or preference, follow this pattern:
-    - **Step 1: Variables**: Define the necessary decision variables (e.g., `model.NewBoolVar`).
-    - **Step 2: Constraints**: Apply the logic using `model.Add(...)` or `model.AddForbiddenAssignments(...)`.
-    - **Step 3: Penalties (Soft Only)**: For soft constraints, create an integer variable to represent the "violation amount" and add it to the objective function multiplied by its weight from `weights.json`.
-    - **Step 4: Objective**: Ensure all new penalty variables are included in the `model.Minimize(...)` call.
-
-4.  **Linkage via IDs**: 
-    - Every hard/soft constraint in the code is tagged with its corresponding ID from the markdown files (e.g., `# [H#a7f2c9d1]`). Use these IDs when searching for or modifying logic.
-
-## Testing
-- **Framework & location**: Unit tests for `cp_solver.py` and other core logic live in `tests/` and use `pytest`. Run them with `./venv/bin/python -m pytest tests/`.
-- Whenever any code is changed, run the tests.
-- Whenever any code is changed, ensure the tests are updated to reflect the changes.
-- All unit tests should test for a positive and negative result to ensure the functions are working correctly.
-- After the roster has been produced, scan through it and compare it to the rules and preferences to ensure it complies.
-- The lazy-mode "one runnable check" convention (see Ponytail rules above) is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
-
-## Operational Definitions
-
-### Coverage Shortfalls & Overtime
-FTE Hours per Fortnight is a **minimum**, not a cap. If total contracted FTE across all staff is insufficient to cover every shift in a 14-day block:
-1. First try to cover the shortfall with overtime — hours scheduled above a staff member's FTE floor — distributed as **evenly as possible across all eligible staff** (don't stack overtime onto the same few people).
-2. All other hard constraints still apply on top of this — e.g. maximum hours per fortnight, red requests, holidays, training-level requirements. Overtime never overrides a hard constraint.
-3. Only if a shift still cannot be covered after fair overtime distribution and respecting all hard constraints — e.g. no staff member with the required training level is available, or covering it would breach someone's max-hours cap — record it as `UNFILLED` in the roster output, and note which classification/training level was required but unavailable.
-4. If hard constraints make it impossible to produce **any** valid roster at all (not just some unfilled shifts — e.g. a required Shift Coordinator role has zero qualified staff in the entire roster), stop and tell the user why, rather than producing a broken or partial file.
-
-Day shifts are: D8, D12, P8, P12, L3, DISCO
-Night shifts are: N8, N12
-
-## Python Coding Standards
-Strict adherence to these rules is mandatory for all code modifications to prevent structural errors and maintain codebase integrity.
-
-1. **Indentation**:
-   - ALWAYS use exactly 4 spaces per indentation level.
-   - NEVER use tabs.
-   - BEFORE adding any logic, read the surrounding lines to verify the current indentation context of the scope you are entering.
-   - Ensure that `if`, `for`, `while`, `def`, and `class` blocks are aligned correctly with their parent scopes.
-
-2. **Spacing & Style**:
-   - Use spaces around operators (e.g., `a = b + c`).
-   - Follow PEP 8 conventions for naming (snake_case for functions/variables, PascalCase for classes).
-   - Maintain consistent vertical whitespace between method definitions.
-
-3. **Verification**:
-   - After editing, if the file is a `.py` file, verify that no `IndentationError` or `SyntaxError` was introduced by attempting to run relevant scripts or linting tools.
+- Fixed duplicate constraint ID `H#6db3f120` in `hard_constraints.md` (was assigned to two separate lines).
+- Reworded `H#f4c9b6c8` from "should be rostered" to mandatory language — it's a hard constraint, not a preference.
+- Merged `S#f5e6d7c8` into `S#30c6f5ad` in `soft_constraints.md` (the two overlapped/contradicted each other on consecutive-shift preference); removed the now-retired weight from `weights.json`.
+- Resolved the Classification-vs-Skill-Level conflation (Graduate was listed as both a skill level and a classification across different files) — Graduate is a classification only.
+- Resolved DISCO's day/night ambiguity explicitly: day shift, despite crossing midnight.
+- Removed hardcoded shift-count claims from docs (they had drifted from the real `roster.yaml`, e.g. L3 is actually 2/day every day, not just weekends) — docs now point to `roster.yaml` as the literal source of truth instead of restating counts that can go stale.
+- Reclassified `H#f3c72a8d` (skill-overqualification tiebreaker) from `hard_constraints.md` to `soft_constraints.md` as `S#7b4e19fc`, weight `5` — it was worded as a preference ("should prefer... when multiple valid solutions exist") with no weight, contradicting the hard-constraints file's own "MUST be followed" framing.
+- Clarified `H#d9a8b7c6`: only holidays reduce the contracted-hours floor proportionally; red requests (single days) do not.
+- Strengthened the WIP status note into a dedicated, unmissable §0, explicitly authorizing agents to change/rewrite existing code and tests in `build_roster.py`/`cp_solver.py`/`tests/` without asking first, and explicitly overriding the "reuse what's here" step of the Ponytail ladder for those files.
+- Replaced `definitions.md` with `definitions.yaml`, splitting the previously-ambiguous "duration" into explicit `span_hours` (wall-clock, includes a 30-minute unpaid break) and `paid_hours` (actual worked/paid duration), plus an explicit `crosses_midnight` boolean. Updated every hours-based hard constraint (`H#c1f6e3f5`, `H#f0c5b2c4`, `H#d9a8b7c6`, `H#e8f7d6c5`) to state which field it uses — previously none of them specified this, meaning any existing code computing hours from raw span/start-end deltas has likely been overcounting every shift by 30 minutes against contracted-hours and cap constraints.
+- `STAFF_FORMAT.md` was deleted. Its content has been folded in: the full `staff.yaml` field reference now lives in `README.md`, and the validation rules it should have specified (name uniqueness, the `classification` enum, and — newly identified from the actual data — the contiguous-prefix rule for `skill_tags`) now live in `AGENTS.md` §4.

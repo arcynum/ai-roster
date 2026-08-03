@@ -1,0 +1,85 @@
+# Shift definitions — replaces definitions.md
+#
+# span_hours: wall-clock duration from start to end (includes the unpaid break).
+#             Use this for physical-presence calculations: rest-period gaps
+#             (H#c1f6e3f5), overlap/double-booking checks (H#e91c63ab), and
+#             anywhere you need "when is this person physically at work."
+#
+# paid_hours: span_hours minus the unpaid break. Use this for every hours-based
+#             constraint tied to contracted/FTE accounting: the 76h absolute cap
+#             (H#f0c5b2c4), the 12.5h overtime cap (H#e8f7d6c5), the contracted-hours
+#             floor (H#d9a8b7c6), and the hour totals/weekend %/night % breakdowns
+#             in result.staff.md. Do NOT use span_hours for any of these — it would
+#             overcount every shift by the unpaid break length.
+#
+# crosses_midnight: explicit flag so code never has to infer this by comparing
+#             start/end times. True for any shift whose end time is numerically
+#             earlier than its start time.
+#
+# unpaid_break_minutes: length of the unpaid break embedded within span_hours.
+#             Not tied to a specific clock time within the shift — only the
+#             total duration and paid/unpaid split matter for accounting.
+
+D8:
+  start: "07:00:00"
+  end: "15:30:00"
+  crosses_midnight: false
+  span_hours: 8.5
+  paid_hours: 8.0
+  unpaid_break_minutes: 30
+
+D12:
+  start: "07:00:00"
+  end: "19:30:00"
+  crosses_midnight: false
+  span_hours: 12.5
+  paid_hours: 12.0
+  unpaid_break_minutes: 30
+
+P8:
+  start: "09:30:00"
+  end: "18:00:00"
+  crosses_midnight: false
+  span_hours: 8.5
+  paid_hours: 8.0
+  unpaid_break_minutes: 30
+
+P12:
+  start: "09:30:00"
+  end: "22:00:00"
+  crosses_midnight: false
+  span_hours: 12.5
+  paid_hours: 12.0
+  unpaid_break_minutes: 30
+
+L3:
+  start: "14:30:00"
+  end: "23:00:00"
+  crosses_midnight: false
+  span_hours: 8.5
+  paid_hours: 8.0
+  unpaid_break_minutes: 30
+
+DISCO:
+  start: "17:30:00"
+  end: "02:00:00"
+  crosses_midnight: true
+  span_hours: 8.5
+  paid_hours: 8.0
+  unpaid_break_minutes: 30
+
+N8:
+  start: "22:45:00"
+  end: "07:15:00"
+  crosses_midnight: true
+  span_hours: 8.5
+  paid_hours: 8.0
+  unpaid_break_minutes: 30
+
+N12:
+  start: "19:00:00"
+  end: "07:30:00"
+  crosses_midnight: true
+  span_hours: 12.5
+  paid_hours: 12.0
+  unpaid_break_minutes: 30

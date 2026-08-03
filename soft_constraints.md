@@ -9,5 +9,7 @@ Everything in this file is a preference and should be followed if possible. The 
 - [S#a1d6c3d5] Saturday and Sunday hours have extra penalty loading pay. Saturday and Sunday hours should be shared amongst different staff to keep it fair.
 
 ## Scheduling Preferences
-- [S#f5e6d7c8] For each shift, the same person should be scheduled on the same shift the next day.
-- [S#30c6f5ad] Staff should ideally work the same shift type for two consecutive days (to avoid gaps), but working three or more consecutive days of the same shift is discouraged.
+- [S#30c6f5ad] Working the same shift type for 3 or more consecutive days is discouraged. There is no preference between 1 and 2 consecutive days of the same shift — only the 3+ case should be penalised.
+
+## Skill Level Matching
+- [S#7b4e19fc] When multiple valid roster solutions exist, prefer solutions that minimise assigning staff to roster positions below their highest held skill level (e.g. avoid rostering a Triage-qualified nurse into a wildcard slot if an Acute-only nurse could fill it instead, all else equal). This is a low-priority tiebreaker — it must never override the fairness or overtime-distribution constraints above.
