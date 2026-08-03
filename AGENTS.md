@@ -9,7 +9,7 @@ This is the entry point for any agent (opencode or otherwise) working on this pr
 **This project is not finished. Existing code is not presumed correct.**
 
 - `build_roster.py` and `cp_solver.py` exist but their implementation is currently **known to be broken**. `result.staff.md`, `result.roster.md`, and `result.violations.md` may reflect that broken behavior.
-- **The ground truth is the constraint/data files** — `hard_constraints.md`, `soft_constraints.md`, `roster.yaml`, `staff.yaml`, `definitions.yaml`, `weights.json`, and this document. **Code is not ground truth** until it's been verified against those files line-by-line. If code contradicts them, the code is wrong — not the other way around.
+- **The ground truth is the constraint/data files** — `hard_constraints.md`, `soft_constraints.md`, `roster.yaml`, `staff.yaml`, `definitions.yaml`, `weights.yaml`, and this document. **Code is not ground truth** until it's been verified against those files line-by-line. If code contradicts them, the code is wrong — not the other way around.
 - **The existing test suite is not automatically trustworthy either.** Tests were plausibly written against the broken implementation. If a test asserts behavior that contradicts a hard/soft constraint ID, the test is the thing to fix, not the code you'd otherwise write to satisfy it.
 - **You have explicit standing permission to change, rewrite, or delete existing code** in `build_roster.py`, `cp_solver.py`, and `tests/` when it conflicts with the constraint files — you do not need to ask first, and you do not need to preserve current output behavior for compatibility. There is no live consumer depending on the current (broken) behavior.
 - This overrides the "reuse what's already here" step in the Ponytail ladder below (§10, step 2) specifically for `build_roster.py`/`cp_solver.py`/`tests/`: reuse is still the right instinct everywhere else in the codebase, but for these three, verify against the constraint files first — don't treat "it's already implemented this way" as a reason to keep it.
@@ -50,7 +50,7 @@ These are two **independent** attributes on a staff member, not one hierarchy:
 - **`hard_constraints.md`** — non-negotiable rules, each tagged with a unique `[H#xxxxxxxx]` ID. Must all hold in the final roster.
 - **`soft_constraints.md`** — preference rules, each tagged with a unique `[S#xxxxxxxx]` ID, optimized via the objective function. If one isn't satisfied, the solver/output should be able to account for why.
 - **`staff.yaml`** — every staff member: `name`, `classification`, `skill_tags` (held skill levels), `contracted_hours_per_fortnight` (a **floor**, not a ceiling — see §7), `red_requests`, `holidays`. See `README.md`'s `staff.yaml` field reference for the full schema, and §4 below for validation rules specific to this file.
-- **`weights.json`** — objective-function weights keyed by soft constraint ID. These are **relative ordering signals, not literal cost units** — a weight of 100 means "prioritise avoiding this over one weighted 50," not "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
+- **`weights.yaml`** — objective-function weights keyed by soft constraint ID. These are **relative ordering signals, not literal cost units** — a weight of 100 means "prioritise avoiding this over one weighted 50," not "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
 - **`result.staff.md`** — final roster grouped by staff member (output).
 - **`result.roster.md`** — final roster grouped by date (output).
 - **`result.violations.md`** — any rule violations found in the generated roster (output).
@@ -121,7 +121,7 @@ Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour
 - Absolute ceiling: never exceed 76 hours per staff member per 14-day block ([H#f0c5b2c4]).
 - Relative ceiling: never more than 12.5 hours of overtime above that person's own contracted hours in the block ([H#e8f7d6c5]).
 
-For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (52.5h) binds well before the absolute one. Apply `min(76, contracted + 12.5)` as the effective cap per person, per block.
+For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (52.5h) binds well before the absolute one. Apply `min(76, contracted + 24)` as the effective cap per person, per block.
 
 ## 8. Technical Implementation Guide
 
@@ -137,7 +137,7 @@ For a staff member contracted at 76h, the relative ceiling has zero room before 
 3. **Constraint lifecycle** for adding a new constraint or preference:
    - Step 1 — Variables: define decision variables (`model.NewBoolVar`, etc.)
    - Step 2 — Constraints: apply logic via `model.Add(...)` / `model.AddForbiddenAssignments(...)`
-   - Step 3 — Penalties (soft only): create an integer "violation amount" variable, add to the objective multiplied by its `weights.json` weight.
+   - Step 3 — Penalties (soft only): create an integer "violation amount" variable, add to the objective multiplied by its `weights.yaml` weight.
    - Step 4 — Objective: make sure all new penalty variables are included in `model.Minimize(...)`.
 4. **Linkage via IDs**: every hard/soft constraint in code must be tagged with its corresponding ID from the markdown files (e.g. `# [H#a7f2c9d1]`). **IDs must be unique** — if you're adding a new constraint, generate a fresh ID rather than reusing or copy-pasting an existing tag (a duplicate ID was found and fixed during this cleanup; don't reintroduce that pattern).
 
@@ -187,16 +187,4 @@ Rules:
 
 ---
 
-## Changelog (this cleanup pass)
-
-- Fixed duplicate constraint ID `H#6db3f120` in `hard_constraints.md` (was assigned to two separate lines).
-- Reworded `H#f4c9b6c8` from "should be rostered" to mandatory language — it's a hard constraint, not a preference.
-- Merged `S#f5e6d7c8` into `S#30c6f5ad` in `soft_constraints.md` (the two overlapped/contradicted each other on consecutive-shift preference); removed the now-retired weight from `weights.json`.
-- Resolved the Classification-vs-Skill-Level conflation (Graduate was listed as both a skill level and a classification across different files) — Graduate is a classification only.
-- Resolved DISCO's day/night ambiguity explicitly: day shift, despite crossing midnight.
-- Removed hardcoded shift-count claims from docs (they had drifted from the real `roster.yaml`, e.g. L3 is actually 2/day every day, not just weekends) — docs now point to `roster.yaml` as the literal source of truth instead of restating counts that can go stale.
-- Reclassified `H#f3c72a8d` (skill-overqualification tiebreaker) from `hard_constraints.md` to `soft_constraints.md` as `S#7b4e19fc`, weight `5` — it was worded as a preference ("should prefer... when multiple valid solutions exist") with no weight, contradicting the hard-constraints file's own "MUST be followed" framing.
-- Clarified `H#d9a8b7c6`: only holidays reduce the contracted-hours floor proportionally; red requests (single days) do not.
-- Strengthened the WIP status note into a dedicated, unmissable §0, explicitly authorizing agents to change/rewrite existing code and tests in `build_roster.py`/`cp_solver.py`/`tests/` without asking first, and explicitly overriding the "reuse what's here" step of the Ponytail ladder for those files.
-- Replaced `definitions.md` with `definitions.yaml`, splitting the previously-ambiguous "duration" into explicit `span_hours` (wall-clock, includes a 30-minute unpaid break) and `paid_hours` (actual worked/paid duration), plus an explicit `crosses_midnight` boolean. Updated every hours-based hard constraint (`H#c1f6e3f5`, `H#f0c5b2c4`, `H#d9a8b7c6`, `H#e8f7d6c5`) to state which field it uses — previously none of them specified this, meaning any existing code computing hours from raw span/start-end deltas has likely been overcounting every shift by 30 minutes against contracted-hours and cap constraints.
-- `STAFF_FORMAT.md` was deleted. Its content has been folded in: the full `staff.yaml` field reference now lives in `README.md`, and the validation rules it should have specified (name uniqueness, the `classification` enum, and — newly identified from the actual data — the contiguous-prefix rule for `skill_tags`) now live in `AGENTS.md` §4.
+## Changelog
