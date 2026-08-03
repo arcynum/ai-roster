@@ -39,8 +39,8 @@ class Preference:
 class StaffMember:
     name: str
     level: str
-    training_levels: List[str]
-    fte_hours: float
+    skill_tags: List[str]
+    contracted_hours_per_fortnight: float
     red_requests: Set[datetime.date] = field(default_factory=set)
     holidays: List[Tuple[datetime.date, datetime.date]] = field(default_factory=list)
     rules: List[Rule] = field(default_factory=list)

@@ -52,7 +52,7 @@ class CPSolver:
             is_on_holiday = any(h_s <= date <= h_e for h_s, h_e in staff_member.holidays)
             if not is_on_holiday:
                 working_days += 1
-        return staff_member.fte_hours * (working_days / 14.0)
+        return staff_member.contracted_hours_per_fortnight * (working_days / 14.0)
 
     def solve(self):
         model = cp_model.CpModel()
@@ -122,13 +122,13 @@ class CPSolver:
                 model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
                 
                 # Ensure at least one Shift Coordinator (training level 4 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Shift Coordinator" for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Shift Coordinator" for level in self.staff[s].skill_tags)) >= 1)
                 
                 # Ensure at least one Triage trained worker (training level 3 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Triage" for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Triage" for level in self.staff[s].skill_tags)) >= 1)
                 
                 # Ensure at least one Resus trained worker (training level 2 or higher)
-                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Resus" for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "D12"] for s in staff_indices if any(level == "Resus" for level in self.staff[s].skill_tags)) >= 1)
 
             # N12 requirements [H#62281944] - Need 1 CN, 1 Shift Coordinator, 1 Triage, and 1 Resus
             n12_reqs = [r for r in self.roster_reqs.get(day_name, []) if r.shift_name == "N12"]
@@ -137,13 +137,13 @@ class CPSolver:
                 model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if self.staff[s].level == "CN") >= 1)
                 
                 # Ensure at least one Shift Coordinator (training level 4 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Shift Coordinator" for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Shift Coordinator" for level in self.staff[s].skill_tags)) >= 1)
                 
                 # Ensure at least one Triage trained worker (training level 3 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Triage" for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Triage" for level in self.staff[s].skill_tags)) >= 1)
                 
                 # Ensure at least one Resus trained worker (training level 2 or higher)
-                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Resus" for level in self.staff[s].training_levels)) >= 1)
+                model.Add(sum(x[s, d_idx, "N12"] for s in staff_indices if any(level == "Resus" for level in self.staff[s].skill_tags)) >= 1)
 
         # [H#c1f6e3f5] Rest Period Constraint (min 11 hours)
         for s in staff_indices:
@@ -344,7 +344,7 @@ class CPSolver:
 
         # 3. Weekend Deviation (S#a1d6c3d5): Proportional distribution of weekend hours per block.
         weekend_violations = []
-        total_fte_sum = sum(s.fte_hours for s in self.staff)
+        total_fte_sum = sum(s.contracted_hours_per_fortnight for s in self.staff)
 
         for block_idx in range(self.days_count // 14):
             block_start = block_idx * 14
@@ -374,7 +374,7 @@ class CPSolver:
                                                  for d in range(block_start, block_end) 
                                                  for req in self.roster_reqs.get(self.dates[d].strftime("%A"), []) )
             
-            total_fte_hours_in_block_scaled = int(sum(s.fte_hours for s in self.staff) * self.SCALE)
+            total_fte_hours_in_block_scaled = int(sum(s.contracted_hours_per_fortnight for s in self.staff) * self.SCALE)
             
             if total_req_hours_in_block_scaled > total_fte_hours_in_block_scaled:
                 total_excess_scaled = total_req_hours_in_block_scaled - total_fte_hours_in_block_scaled
@@ -383,7 +383,7 @@ class CPSolver:
                 for s_idx in staff_indices:
                     current_hours_s_scaled = sum(x[s_idx, d, h_name] * int(self.definitions[h_name].duration * self.SCALE) 
                                                  for d in range(block_start, block_end) for h_name in shift_names)
-                    target_fte_s_scaled = int(self.staff[s_idx].fte_hours * self.SCALE)
+                    target_fte_s_scaled = int(self.staff[s_idx].contracted_hours_per_fortnight * self.SCALE)
                     excess_s = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'excess_{s_idx}_{block_idx}')
                     model.AddMaxEquality(excess_s, [0, current_hours_s_scaled - target_fte_s_scaled])
                     diff_excess = model.NewIntVar(0, int(24 * 31 * self.SCALE), f'diff_excess_{s_idx}_{block_idx}')
@@ -493,9 +493,9 @@ class CPSolver:
             d12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "D12" and a[1] is not None]
             if d12_shifts:
                 cn_count = sum(1 for _, s in d12_shifts if s.level == "CN")
-                coord_count = sum(1 for _, s in d12_shifts if any(level == "Shift Coordinator" for level in s.training_levels))
-                triage_count = sum(1 for _, s in d12_shifts if any(level == "Triage" for level in s.training_levels))
-                resus_count = sum(1 for _, s in d12_shifts if any(level == "Resus" for level in s.training_levels))
+                coord_count = sum(1 for _, s in d12_shifts if any(level == "Shift Coordinator" for level in s.skill_tags))
+                triage_count = sum(1 for _, s in d12_shifts if any(level == "Triage" for level in s.skill_tags))
+                resus_count = sum(1 for _, s in d12_shifts if any(level == "Resus" for level in s.skill_tags))
 
                 if cn_count < 1:
                     violations.append(f"{date}: [H#12c6090b]D12 shift missing CN staff member")
@@ -509,9 +509,9 @@ class CPSolver:
             n12_shifts = [a for a in daily_assignments.get(date, []) if a[0] == "N12" and a[1] is not None]
             if n12_shifts:
                 cn_count = sum(1 for _, s in n12_shifts if s.level == "CN")
-                coord_count = sum(1 for _, s in n12_shifts if any(level == "Shift Coordinator" for level in s.training_levels))
-                triage_count = sum(1 for _, s in n12_shifts if any(level == "Triage" for level in s.training_levels))
-                resus_count = sum(1 for _, s in n12_shifts if any(level == "Resus" for level in s.training_levels))
+                coord_count = sum(1 for _, s in n12_shifts if any(level == "Shift Coordinator" for level in s.skill_tags))
+                triage_count = sum(1 for _, s in n12_shifts if any(level == "Triage" for level in s.skill_tags))
+                resus_count = sum(1 for _, s in n12_shifts if any(level == "Resus" for level in s.skill_tags))
 
                 if cn_count < 1:
                     violations.append(f"{date}: [H#62281944]N12 shift missing CN staff member")
@@ -599,8 +599,8 @@ class CPSolver:
             f.write("# Staff Roster\n\n")
             fortnights = len(self.dates) / 14.0
             for s in self.staff:
-                required_period = s.fte_hours * fortnights
-                f.write(f"## {s.name}\n- Level: {s.level}\n- Training Level: {s.training_level}\n- FTE Hours per Fortnight: {s.fte_hours}\n- Required Hours (Period): {required_period:.2f}\n- Total Allocated Hours (Period): {s.assigned_hours:.2f}\n\n")
+                required_period = s.contracted_hours_per_fortnight * fortnights
+                f.write(f"## {s.name}\n- Level: {s.level}\n- Skill Tags: {', '.join(s.skill_tags)}\n- Contracted Hours per Fortnight: {s.contracted_hours_per_fortnight}\n- Required Hours (Period): {required_period:.2f}\n- Total Allocated Hours (Period): {s.assigned_hours:.2f}\n\n")
 
                 for block_idx in range(self.days_count // 14):
                     block_start = block_idx * 14
@@ -645,7 +645,7 @@ class CPSolver:
                     day_ass.sort(key=lambda x: shift_order.get(x[1], 99))
                     for date, sn, sm in day_ass:
                         if sm:
-                            f.write(f"- {sn}: {sm.name} ({sm.level}, {sm.training_level})\n")
+                            f.write(f"- {sn}: {sm.name} ({sm.level}, {', '.join(sm.skill_tags)})\n")
                         else:
                             f.write(f"- {sn}: UNFILLED\n")
                 f.write("\n")

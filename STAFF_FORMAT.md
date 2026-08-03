@@ -19,12 +19,12 @@ The `staff.yaml` file defines staff information in a structured format:
 ```yaml
 - name: "Amanda Bartley"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: 
     - "2026-08-01"
     - "2026-08-04"
@@ -54,8 +54,8 @@ Each staff member is defined with the following fields:
 
 - `name`: The full name of the staff member
 - `classification`: The staff classification (CN = Clinical Nurse, RN = Registered Nurse, Graduate)
-- `training_levels`: A list of training levels the staff member has achieved, formatted exactly like `red_requests` with each level on a separate line prefixed with a hyphen
-- `fte_hours`: The full-time equivalent hours per fortnight (this is a minimum, not a ceiling)
+- `skill_tags`: A list of skill tags the staff member has achieved, formatted exactly like `red_requests` with each tag on a separate line prefixed with a hyphen
+- `contracted_hours_per_fortnight`: The contracted hours per fortnight (this is a minimum, not a ceiling)
 - `red_requests`: A list of dates when the staff member cannot be scheduled (hard constraint)
 - `holidays`: A list of date ranges when the staff member is unavailable (can be single dates or date ranges)
 

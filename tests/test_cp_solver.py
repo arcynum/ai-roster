@@ -53,13 +53,17 @@ def test_parse_definitions():
     assert not defs["D12"].crosses_midnight
     assert defs["N12"].crosses_midnight
 
-def test_parse_roster():
-    content = """- **Roster Start Date**: 2026-08-01
-- **Roster End Date**: 2026-08-14
-## 2026-08-01 (Saturday)
-- 1 D12
-- 1 N12"""
-    start, end, roster = parse_roster(content)
+    def test_parse_roster():
+        content = """dates:
+  start: 2026-08-01
+  end: 2026-08-14
+roster_positions:
+  Saturday:
+    - shift: D12
+      required_skill_level: null
+    - shift: N12
+      required_skill_level: null"""
+        start, end, roster = parse_roster_yaml(content)
     assert start == datetime.date(2026, 8, 1)
     assert end == datetime.date(2026, 8, 14)
     assert "Saturday" in roster
@@ -69,9 +73,9 @@ def test_parse_staff():
     content = """
 - name: "Test Staff"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Resus
-  fte_hours: 48.0
+  contracted_hours_per_fortnight: 48.0
   red_requests: 
     - "2026-08-01"
   holidays:
@@ -82,13 +86,13 @@ def test_parse_staff():
     s = staff[0]
     assert s.name == "Test Staff"
     assert s.level == "RN"
-    assert "Resus" in s.training_levels
-    assert s.fte_hours == 48.0
+    assert "Resus" in s.skill_tags
+    assert s.contracted_hours_per_fortnight == 48.0
     assert len(s.red_requests) == 1
     assert len(s.holidays) == 1
     assert s.holidays[0] == (datetime.date(2026, 8, 5), datetime.date(2026, 8, 6))
-    assert s.rules[0].id == "R1"
-    assert s.prefs[0].id == "P1"
+    assert len(s.rules) == 0
+    assert len(s.preferences) == 0
 
 def test_coverage(solver_setup):
     start_date, days_count, definitions, roster_reqs, staff = solver_setup

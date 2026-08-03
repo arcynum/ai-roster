@@ -58,11 +58,11 @@ def parse_roster_yaml(content: str) -> Tuple[datetime.date, datetime.date, Dict[
     end_date = data['dates']['end']
     
     roster = {}
-    for day_name, shifts in data['shift_requirements'].items():
+    for day_name, shifts in data['roster_positions'].items():
         roster[day_name] = []
         for shift_data in shifts:
             shift_name = shift_data['shift']
-            required_skills = shift_data['required_skills']
+            required_skills = [shift_data['required_skill_level']] if shift_data['required_skill_level'] else []
             # For now, we'll assume the count is 1 for each shift requirement
             # In the future, this could be expanded to support multiple counts
             roster[day_name].append(ShiftRequirement(shift_name, 1, required_skills))
@@ -98,8 +98,8 @@ def parse_staff(content: str) -> List[StaffMember]:
     for staff_member_data in staff_data:
         name = staff_member_data.get('name', '')
         level = staff_member_data.get('classification', '')
-        training_levels = staff_member_data.get('training_levels', [])
-        fte = staff_member_data.get('fte_hours', 0)
+        skill_tags = staff_member_data.get('skill_tags', [])
+        contracted_hours = staff_member_data.get('contracted_hours_per_fortnight', 0)
         red_requests = staff_member_data.get('red_requests', [])
         holidays = staff_member_data.get('holidays', [])
         
@@ -129,7 +129,7 @@ def parse_staff(content: str) -> List[StaffMember]:
         rules = []
         prefs = []
         
-        staff.append(StaffMember(name, level, training_levels, fte, red, holiday_list, rules, prefs))
+        staff.append(StaffMember(name, level, skill_tags, contracted_hours, red, holiday_list, rules, prefs))
     return staff
 
 def generate_staff_shifts_html(solver, staff, dates, assignments=None):
@@ -306,7 +306,7 @@ def generate_staff_shifts_html(solver, staff, dates, assignments=None):
             # Staff info
             html_content += f"    <td class='staff-header'>{staff_member.name}</td>\n"
             html_content += f"    <td>{staff_member.level}</td>\n"
-            html_content += f"    <td class='training-levels'>{', '.join(staff_member.training_levels)}</td>\n"
+            html_content += f"    <td class='training-levels'>{', '.join(staff_member.skill_tags)}</td>\n"
             
             # Add shift assignments for each date
             for date in dates:

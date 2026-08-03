@@ -12,8 +12,8 @@ Each shift instance in the roster requires exactly one skill tag. This is a crit
 
 ### Skill Tag Types
 
-1. **Wildcard ("*")** - Any staff member can fill this shift
-2. **Specific Training Levels** - Only staff with specific training can fill:
+1. **null** - Any staff member can fill this shift
+2. **Specific Skill Tags** - Only staff with specific skill tags can fill:
    - "Shift Coordinator"
    - "Triage" 
    - "Resus"

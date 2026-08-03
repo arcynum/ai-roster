@@ -60,9 +60,7 @@ For detailed information about the format of `staff.yaml`, see [STAFF_FORMAT.md]
     - **Training Level**: The level of training that the staff member has received. Graduate < Acute < Resus < Triage < Shift Coordinator
     - **FTE Hours per Fortnight**: How many hours the staff member is contracted per fortnight. This is a **floor, not a ceiling** — see "Coverage Shortfalls & Overtime" below for what happens when total contracted FTE isn't enough to cover all shifts.
     - **Red Requests**: Staff members are allowed to choose a couple of days a month that they will not be rostered on. These are those days. Not every staff member will make a red request each month. **Red requests are a hard constraint** — never schedule a staff member on a day they've made a red request for.
-    - **Holidays/Sickness**: The dates and date ranges people are on holidays. Do not schedule people on during these days.
-    - **Rules**: These are the individual staff members rules. They must be followed.
-    - **Preferences**: These are the preferences of the staff members - they are optional, but following it if possible.
+    - **Holidays**: The dates and date ranges people are on holidays. Do not schedule people on during these days.
 
 ### Overnight Shift Attribution
 A shift that crosses midnight (e.g. an N12 starting at 22:00) counts entirely toward the date and 14-day block **it starts on** — not the date it ends on, and not split across both. This applies consistently to hours totals, weekend-hours percentages, and night-shift-hours percentages in `result.staff.md`.
