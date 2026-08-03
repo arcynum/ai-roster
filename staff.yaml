@@ -9,7 +9,7 @@
     - Triage
     - Shift Coordinator
   fte_hours: 56
-  red_requests: 
+  red_requests:
     - "2026-08-01"
     - "2026-08-04"
   holidays:
@@ -26,7 +26,7 @@
     - Triage
     - Shift Coordinator
   fte_hours: 48
-  red_requests: 
+  red_requests:
     - "2026-08-01"
     - "2026-08-04"
   holidays: []

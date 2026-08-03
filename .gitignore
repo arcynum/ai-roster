@@ -2,7 +2,7 @@
 result.staff.md
 result.roster.md
 result.violations.md
-result.staff_shifts.html
+*.html
 __pycache__/
 .venv/
 venv/
