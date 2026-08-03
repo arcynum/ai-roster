@@ -126,8 +126,8 @@ For a staff member contracted at 76h, the relative ceiling has zero room before 
 ## 8. Technical Implementation Guide
 
 ### Environment & Execution
-- Python 3.x. A virtual environment is provided at `./.venv/`.
-- Always run python via the venv interpreter: `./.venv/bin/python <script_name>.py`.
+- Python 3.x. A virtual environment is provided at `.venv/`.
+- Always run python via the venv interpreter: `.venv/bin/python <script_name>.py`.
 
 ### Core Solver Logic (CP-SAT)
 `cp_solver.py` uses Google OR-Tools CP-SAT. When implementing or modifying constraints:
@@ -143,7 +143,7 @@ For a staff member contracted at 76h, the relative ceiling has zero room before 
 
 ## 9. Testing
 
-- Unit tests for `cp_solver.py` and other core logic live in `tests/`, using `pytest`. Run with `./.venv/bin/python -m pytest tests/`.
+- Unit tests for `cp_solver.py` and other core logic live in `tests/`, using `pytest`. Run with `.venv/bin/python -m pytest tests/`.
 - Run the tests whenever code changes, and update tests to reflect the change.
 - Tests should cover both a positive and a negative case per function.
 - After the roster is produced, scan it and compare against `hard_constraints.md`/`soft_constraints.md` to confirm compliance.
