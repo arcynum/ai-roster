@@ -3,12 +3,12 @@
 
 - name: "Amanda Bartley"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests:
     - "2026-08-01"
     - "2026-08-04"
@@ -20,12 +20,12 @@
 
 - name: "Jennifer Brodie"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 48
+  contracted_hours_per_fortnight: 48
   red_requests:
     - "2026-08-01"
     - "2026-08-04"
@@ -33,67 +33,67 @@
 
 - name: "Michelle Caine"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 72
+  contracted_hours_per_fortnight: 72
   red_requests: []
   holidays: []
 
 - name: "Christine Cardos"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 72
+  contracted_hours_per_fortnight: 72
   red_requests: []
   holidays: []
 
 - name: "Tracey Cole"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 72
+  contracted_hours_per_fortnight: 72
   red_requests: []
   holidays: []
 
 - name: "Kellie Fursdon"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Katie Gay"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Shiny Joy"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 76
+  contracted_hours_per_fortnight: 76
   red_requests: []
   holidays:
     - start: "2026-08-01"
@@ -101,45 +101,45 @@
 
 - name: "Sandy Manderson"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Tanya Mountford"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 8
+  contracted_hours_per_fortnight: 8
   red_requests: []
   holidays: []
 
 - name: "Premshankar Ramachandran"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 72
+  contracted_hours_per_fortnight: 72
   red_requests: []
   holidays: []
 
 - name: "Laura Rogers"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays:
     - start: "2026-08-07"
@@ -147,291 +147,291 @@
 
 - name: "Jodie Bullock"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Suzanne Coughlan"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 40
+  contracted_hours_per_fortnight: 40
   red_requests: []
   holidays: []
 
 - name: "Ange Cowper"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 48
+  contracted_hours_per_fortnight: 48
   red_requests: []
   holidays: []
 
 - name: "Alexia Fallis"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 72
+  contracted_hours_per_fortnight: 72
   red_requests: []
   holidays: []
 
 - name: "Rebekah Gillespie"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 32
+  contracted_hours_per_fortnight: 32
   red_requests: []
   holidays: []
 
 - name: "Danielle Hardley"
   classification: "CN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 24
+  contracted_hours_per_fortnight: 24
   red_requests: []
   holidays: []
 
 - name: "Lauren Hodge"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 48
+  contracted_hours_per_fortnight: 48
   red_requests: []
   holidays: []
 
 - name: "Resmi Joseph"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 72
+  contracted_hours_per_fortnight: 72
   red_requests: []
   holidays: []
 
 - name: "Alexandra Lyons"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 32
+  contracted_hours_per_fortnight: 32
   red_requests: []
   holidays: []
 
 - name: "Nisha Mathew"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Irina Ovsyankina"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Bec Rafter"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Rebecca Trew"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
     - Shift Coordinator
-  fte_hours: 32
+  contracted_hours_per_fortnight: 32
   red_requests: []
   holidays: []
 
 - name: "Allie O'Brien"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Shana Stokes"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Maddy Thompson"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Alyce Tozer"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
     - Triage
-  fte_hours: 40
+  contracted_hours_per_fortnight: 40
   red_requests: []
   holidays: []
 
 - name: "Jodie Armstrong"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Jehan Musasinghe"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Jessica O'Neill-Yee"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
-  fte_hours: 48
+  contracted_hours_per_fortnight: 48
   red_requests: []
   holidays: []
 
 - name: "Cynthia Tran"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
     - Resus
-  fte_hours: 48
+  contracted_hours_per_fortnight: 48
   red_requests: []
   holidays: []
 
 - name: "Alex Babu"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Brianna Born"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Luca Brahn"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Olivia Knowles"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 72
+  contracted_hours_per_fortnight: 72
   red_requests: []
   holidays: []
 
 - name: "Olivia Ots"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 64
+  contracted_hours_per_fortnight: 64
   red_requests: []
   holidays: []
 
 - name: "Charlee Rayner"
   classification: "RN"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Nicola Odessa"
   classification: "Graduate"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Rianna Rimpos"
   classification: "Graduate"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []
 
 - name: "Rose Turner"
   classification: "Graduate"
-  training_levels:
+  skill_tags:
     - Acute
-  fte_hours: 56
+  contracted_hours_per_fortnight: 56
   red_requests: []
   holidays: []

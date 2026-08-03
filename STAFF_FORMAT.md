@@ -4,7 +4,7 @@ This document explains the format and structure of staff data used by the AI-Ros
 
 ## Overview
 
-The staff data defines all personnel who can be assigned to shifts, including their training levels, FTE hours, and availability constraints.
+The staff data defines all personnel who can be assigned to shifts, including their training levels, contracted hours, and availability constraints.
 
 ## File Format
 
@@ -33,19 +33,6 @@ The `staff.yaml` file defines staff information in a structured format:
       end: "2026-08-31"
     - start: "2026-10-01"
       end: "2026-10-30"
-
-- name: "Jennifer Brodie"
-  classification: "CN"
-  training_levels:
-    - Acute
-    - Resus
-    - Triage
-    - Shift Coordinator
-  fte_hours: 48
-  red_requests: 
-    - "2026-08-01"
-    - "2026-08-04"
-  holidays: []
 ```
 
 ### Structure Details
@@ -54,15 +41,14 @@ Each staff member is defined with the following fields:
 
 - `name`: The full name of the staff member
 - `classification`: The staff classification (CN = Clinical Nurse, RN = Registered Nurse, Graduate)
-- `skill_tags`: A list of skill tags the staff member has achieved, formatted exactly like `red_requests` with each tag on a separate line prefixed with a hyphen
+- `skill_tags`: A list of skill tags the staff member has achieved.
 - `contracted_hours_per_fortnight`: The contracted hours per fortnight (this is a minimum, not a ceiling)
 - `red_requests`: A list of dates when the staff member cannot be scheduled (hard constraint)
 - `holidays`: A list of date ranges when the staff member is unavailable (can be single dates or date ranges)
 
-### Training Levels
+### Skill Tags
 
-The `training_levels` field contains a list of training levels, ordered from lowest to highest:
-- Graduate
+The `skill_tags` field contains a list of training levels, ordered from lowest to highest:
 - Acute
 - Resus
 - Triage
@@ -79,6 +65,6 @@ This hierarchy allows higher-trained staff to fill roles requiring lower trainin
 ### Hard Constraints
 
 - **Red Requests**: Staff members cannot be scheduled on dates listed in their red requests
-- **Holidays/Sickness**: Staff members cannot be scheduled during their holiday periods
+- **Holidays**: Staff members cannot be scheduled during their holiday periods
 
 These are hard constraints that the roster solver will enforce.
