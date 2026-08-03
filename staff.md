@@ -2,19 +2,15 @@
 - **Classification**: CN
 - **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 56
-- **Red Requests**: 
-- **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
+- **Red Requests**:
+- **Holidays/Sickness**: 2026-08-01 to 2026-08-31, 2026-10-01 to 2026-10-30
 
 # Jennifer Brodie
 - **Classification**: CN
 - **Training Levels**: ["Acute", "Resus", "Triage", "Shift Coordinator"]
 - **FTE Hours per Fortnight**: 48
-- **Red Requests**: 
+- **Red Requests**: 2026-08-01, 2026-08-04
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Michelle Caine
 - **Classification**: CN
@@ -22,8 +18,6 @@
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Christine Cardos
 - **Classification**: CN
@@ -31,8 +25,6 @@
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Tracey Cole
 - **Classification**: CN
@@ -40,8 +32,6 @@
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Kellie Fursdon
 - **Classification**: CN
@@ -49,8 +39,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Katie Gay
 - **Classification**: CN
@@ -58,8 +46,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Shiny Joy
 - **Classification**: CN
@@ -67,8 +53,6 @@
 - **FTE Hours per Fortnight**: 76
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-01 to 2026-08-31
-- **Rules**: 
-- **Preferences**: 
 
 # Sandy Manderson
 - **Classification**: CN
@@ -76,8 +60,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Tanya Mountford
 - **Classification**: CN
@@ -85,8 +67,6 @@
 - **FTE Hours per Fortnight**: 8
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Premshankar Ramachandran
 - **Classification**: CN
@@ -94,8 +74,6 @@
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**:
-- **Rules**: 
-- **Preferences**: 
 
 # Laura Rogers
 - **Classification**: CN
@@ -103,8 +81,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 2026-08-07 to 2026-08-31
-- **Rules**: 
-- **Preferences**: 
 
 # Jodie Bullock
 - **Classification**: CN
@@ -112,8 +88,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Suzanne Coughlan
 - **Classification**: RN
@@ -121,8 +95,6 @@
 - **FTE Hours per Fortnight**: 40
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Ange Cowper
 - **Classification**: RN
@@ -130,8 +102,6 @@
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Alexia Fallis
 - **Classification**: RN
@@ -139,8 +109,6 @@
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**:
-- **Rules**: 
-- **Preferences**: 
 
 # Rebekah Gillespie
 - **Classification**: RN
@@ -148,8 +116,6 @@
 - **FTE Hours per Fortnight**: 32
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Danielle Hardley
 - **Classification**: CN
@@ -157,8 +123,6 @@
 - **FTE Hours per Fortnight**: 24
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Lauren Hodge
 - **Classification**: RN
@@ -166,8 +130,6 @@
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Resmi Joseph
 - **Classification**: RN
@@ -175,8 +137,6 @@
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Alexandra Lyons
 - **Classification**: RN
@@ -193,8 +153,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Irina Ovsyankina
 - **Classification**: RN
@@ -202,8 +160,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Bec Rafter
 - **Classification**: RN
@@ -211,8 +167,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Rebecca Trew
 - **Classification**: RN
@@ -220,8 +174,6 @@
 - **FTE Hours per Fortnight**: 32
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Allie O'Brien
 - **Classification**: RN
@@ -229,8 +181,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Shana Stokes
 - **Classification**: RN
@@ -238,8 +188,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Maddy Thompson
 - **Classification**: RN
@@ -247,8 +195,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Alyce Tozer
 - **Classification**: RN
@@ -256,8 +202,6 @@
 - **FTE Hours per Fortnight**: 40
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Jodie Armstrong
 - **Classification**: RN
@@ -265,8 +209,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Jehan Musasinghe
 - **Classification**: RN
@@ -274,8 +216,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Jessica O'Neill-Yee
 - **Classification**: RN
@@ -283,8 +223,6 @@
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Cynthia Tran
 - **Classification**: RN
@@ -292,8 +230,6 @@
 - **FTE Hours per Fortnight**: 48
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Alex Babu
 - **Classification**: RN
@@ -301,8 +237,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Brianna Born
 - **Classification**: RN
@@ -310,8 +244,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Luca Brahn
 - **Classification**: RN
@@ -319,8 +251,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Olivia Knowles
 - **Classification**: RN
@@ -328,8 +258,6 @@
 - **FTE Hours per Fortnight**: 72
 - **Red Requests**: 
 - **Holidays/Sickness**:
-- **Rules**: 
-- **Preferences**: 
 
 # Olivia Ots
 - **Classification**: RN
@@ -337,8 +265,6 @@
 - **FTE Hours per Fortnight**: 64
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Charlee Rayner
 - **Classification**: RN
@@ -346,8 +272,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Nicola Odessa
 - **Classification**: Graduate
@@ -355,8 +279,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Rianna Rimpos
 - **Classification**: Graduate
@@ -364,8 +286,6 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
 
 # Rose Turner
 - **Classification**: Graduate
@@ -373,5 +293,3 @@
 - **FTE Hours per Fortnight**: 56
 - **Red Requests**: 
 - **Holidays/Sickness**: 
-- **Rules**: 
-- **Preferences**: 
