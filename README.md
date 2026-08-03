@@ -10,10 +10,12 @@ This project builds a monthly roster for the pediatric emergency ward at TPCH. T
 
 1. **`roster.yaml`** - New source of truth for roster requirements (replaces `roster.md`)
 2. **`definitions.md`** - Shift definitions including start time, end time, duration, and midnight crossing
-3. **`staff.md`** - Staff information including training levels, FTE hours, red requests, and holidays
+3. **`staff.yaml`** - Staff information including training levels, FTE hours, red requests, and holidays (replaces `staff.md`)
 4. **`hard_constraints.md`** - Non-negotiable rules that must be followed
 5. **`soft_constraints.md`** - Preferences that should be followed when possible
 6. **`training.md`** - Training levels available for staff
+
+For detailed information about the format of `staff.yaml`, see [STAFF_FORMAT.md](STAFF_FORMAT.md).
 
 ### Output Files
 
@@ -66,7 +68,7 @@ Each shift instance in the roster requires exactly one skill tag. This is critic
 
 ### Build Process
 
-1. Parse all data files (`roster.yaml`, `definitions.md`, `staff.md`, etc.)
+1. Parse all data files (`roster.yaml`, `definitions.md`, `staff.yaml`, etc.)
 2. Create constraint satisfaction model using Google OR-Tools CP-SAT
 3. Apply all hard constraints
 4. Apply soft constraints with penalties in objective function

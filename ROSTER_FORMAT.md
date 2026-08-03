@@ -100,4 +100,4 @@ shift_requirements:
 
 ## Integration with Staff Training
 
-The skill tags defined in this file will be mapped to staff training levels in `staff.md`. The constraint solver uses these requirements to ensure that staff with the required training levels are assigned to their respective shifts.
+The skill tags defined in this file will be mapped to staff training levels in `staff.yaml`. The constraint solver uses these requirements to ensure that staff with the required training levels are assigned to their respective shifts.

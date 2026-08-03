@@ -2,9 +2,16 @@
 Everything in this file is a rule and MUST be followed. The final roster must obey all of these rules.
 
 ## Shift Requirements
-- [H#12c6090b] Each D12 shift (4 staff total) must include at least 1 CN classified staff member and a mix of training levels such that at least 1 Shift Coordinator, 1 Triage, and 1 Resus trained person are present as distinct individuals.
-- [H#62281944] Each N12 shift (4 staff total) must include at least 1 CN classified staff member and a mix of training levels such that at least 1 Shift Coordinator, 1 Triage, and 1 Resus trained person are present as distinct individuals.
-- [H#30479c74] Graduate classified staff members can only work the following shifts: D8, P8, L3, DISCO, N8
+- [H#4d9f81c2] The `roster.yaml` file shall define the roster positions that must be filled for each day within the configured roster period.
+- [H#7a3e5f91] Each entry within `roster.yaml` shall represent a single roster position that must be assigned to one eligible staff member.
+- [H#c18b42de] Each roster position shall specify zero or one required skill level.
+- [H#5e6ad8f4] A staff member shall only be assigned to a roster position where their skill level satisfies the required skill level defined for that position.
+- [H#91bc3d7e] A roster position with no required skill level shall not impose a skill level restriction on the assigned staff member.
+- [H#2f74e6ab] Multiple entries with the same shift type within `roster.yaml` shall represent separate roster positions that must each be independently filled.
+- [H#84a1d5c9] Staff skill levels shall be hierarchical, where a staff member with a higher skill level shall also satisfy requirements for all lower skill levels.
+- [H#6db3f120] The skill level hierarchy shall be ordered as follows: Acute, Resus, Triage, Shift Coordinator.
+- [H#f3c72a8d] When multiple valid roster solutions exist, the rostering engine should prefer solutions that minimise assigning staff to roster positions below their highest achieved skill level.
+- [H#30479c74] Staff classified as Graduate shall only be assigned to the following shift types: D8, P8, L3, DISCO and N8.
 
 ## Staff Welfare and Safety
 - [H#c1f6e3f5] Staff must have a minimum of 11 hours between each shift.

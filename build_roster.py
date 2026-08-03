@@ -92,95 +92,44 @@ def parse_rules_and_prefs(rules_content: str, prefs_content: str) -> Tuple[List[
     return rules, prefs
 
 def parse_staff(content: str) -> List[StaffMember]:
+    staff_data = yaml.safe_load(content)
     staff = []
-    pattern = r'#\s+([^\n]+)\n(.*?)(?=\n#|\Z)'
-    matches = re.finditer(pattern, content, re.DOTALL)
     
-    for match in matches:
-        name = match.group(1).strip()
-        block = match.group(2).strip()
+    for staff_member_data in staff_data:
+        name = staff_member_data.get('name', '')
+        level = staff_member_data.get('classification', '')
+        training_levels = staff_member_data.get('training_levels', [])
+        fte = staff_member_data.get('fte_hours', 0)
+        red_requests = staff_member_data.get('red_requests', [])
+        holidays = staff_member_data.get('holidays', [])
         
-        level, training_levels, fte, red, holidays, rules, prefs = "", [], 0, set(), [], [], []
-        
-        # Classification
-        c_m = re.search(r'\*\*Classification\*\*:\s*(\w+)', block)
-        if c_m: level = c_m.group(1)
-        
-        # Training - can be either single level or array
-        t_m = re.search(r'\*\*Training Levels\*\*:\s*(\[.*\])', block)
-        if t_m:
-            # Handle array format
-            training_str = t_m.group(1)
+        # Convert red requests to set of dates
+        red = set()
+        for r in red_requests:
             try:
-                import ast
-                training_levels = ast.literal_eval(training_str)
-            except:
-                # Fallback to single level
-                training_levels = [training_str.strip().strip("[]\"'")]
-        else:
-            # Legacy format - single training level
-            t_m = re.search(r'\*\*Training Level\*\*:\s*([^\n]+)', block)
-            if t_m: 
-                training_levels = [t_m.group(1).strip()]
-        
-        # FTE
-        f_m = re.search(r'\*\*FTE Hours per Fortnight\*\*:\s*([\d.]+)', block)
-        if f_m: fte = float(f_m.group(1))
-        
-        # Red Requests
-        r_m = re.search(r'\*\*Red Requests\*\*:\s*([^\n]*)', block)
-        if r_m:
-            rs = r_m.group(1).strip()
-            for r in rs.split(','):
+                red.add(datetime.datetime.strptime(r, "%Y-%m-%d").date())
+            except: pass
+            
+        # Convert holidays to list of date tuples
+        holiday_list = []
+        for h in holidays:
+            if isinstance(h, dict) and 'start' in h and 'end' in h:
                 try:
-                    d_str = r.strip()
-                    if d_str: red.add(datetime.datetime.strptime(d_str, "%Y-%m-%d").date())
+                    start_date = datetime.datetime.strptime(h['start'], "%Y-%m-%d").date()
+                    end_date = datetime.datetime.strptime(h['end'], "%Y-%m-%d").date()
+                    holiday_list.append((start_date, end_date))
                 except: pass
-                
-        # Holidays
-        h_m = re.search(r'\*\*Holidays/Sickness\*\*:\s*([^\n]*)', block)
-        if h_m:
-            hs = h_m.group(1).strip()
-            if hs:
-                if " to " in hs:
-                    try:
-                        p = hs.split(" to ")
-                        holidays.append((datetime.datetime.strptime(p[0].strip(), "%Y-%m-%d").date(), datetime.datetime.strptime(p[1].strip(), "%Y-%m-%d").date()))
-                    except: pass
-                else:
-                    for r in hs.split(','):
-                        try:
-                            d_str = r.strip()
-                            if d_str: holidays.append((datetime.datetime.strptime(d_str, "%Y-%m-%d").date(), datetime.datetime.strptime(d_str, "%Y-%m-%d").date()))
-                        except: pass
-                        
-        # Rules and Preferences
-        lines = block.split('\n')
-        for i, line in enumerate(lines):
-            if "**Rules**:" in line:
-                parts = line.split("**Rules**:")
-                content_part = parts[1].strip()
-                if content_part:
-                    rule_id, desc = parse_rule_or_pref(content_part)
-                    rules.append(Rule(rule_id, desc))
-                elif i + 1 < len(lines):
-                    next_l = lines[i+1].strip()
-                    if next_l and not next_l.startswith("- **") and not next_l.startswith("**"):
-                        rule_id, desc = parse_rule_or_pref(next_l)
-                        rules.append(Rule(rule_id, desc))
-            if "**Preferences**:" in line:
-                parts = line.split("**Preferences**:")
-                content_part = parts[1].strip()
-                if content_part:
-                    pref_id, desc = parse_rule_or_pref(content_part)
-                    prefs.append(Preference(pref_id, desc))
-                elif i + 1 < len(lines):
-                    next_l = lines[i+1].strip()
-                    if next_l and not next_l.startswith("- **") and not next_l.startswith("**"):
-                        pref_id, desc = parse_rule_or_pref(next_l)
-                        prefs.append(Preference(pref_id, desc))
-                    
-        staff.append(StaffMember(name, level, training_levels, fte, red, holidays, rules, prefs))
+            else:
+                try:
+                    d = datetime.datetime.strptime(h, "%Y-%m-%d").date()
+                    holiday_list.append((d, d))
+                except: pass
+        
+        # Rules and Preferences are not used anymore (as per requirements)
+        rules = []
+        prefs = []
+        
+        staff.append(StaffMember(name, level, training_levels, fte, red, holiday_list, rules, prefs))
     return staff
 
 def generate_staff_shifts_html(solver, staff, dates, assignments=None):
@@ -393,7 +342,7 @@ if __name__ == "__main__":
         # Use roster.yaml as the source of truth
         with open("roster.yaml", "r") as f: 
             start_date, end_date, reqs = parse_roster_yaml(f.read())
-        with open("staff.md", "r") as f: staff = parse_staff(f.read())
+        with open("staff.yaml", "r") as f: staff = parse_staff(f.read())
         with open("hard_constraints.md", "r") as f: global_rules, _ = parse_rules_and_prefs(f.read(), "")
         with open("soft_constraints.md", "r") as f: _, global_prefs = parse_rules_and_prefs("", f.read())
         

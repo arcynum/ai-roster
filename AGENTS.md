@@ -41,7 +41,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - **`roster.yaml`**: Contains the start and end dates of the roster. The list of shifts that need to be filled each week. These shifts repeat exactly every week.
 - **`hard_constraints.md`**: The list of rules that each roster needs to follow. These are not negotiable.
 - **`soft_constraints.md`**: The list of preferences that each roster should try to follow. If this is going not be followed for whatever reason, you must provide a reason why.
-- **`staff.md`**: The list of all staff and their training levels and FTE hours.
+- **`staff.yaml`**: The list of all staff and their training levels and FTE hours.
 - **`training.md`**: The list of the different training levels for staff.
 - **`result.staff.md`**: The final roster grouped by staff member is printed here.
 - **`result.roster.md`**: The final roster grouped by roster date is printed here.
@@ -50,7 +50,9 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - **Fortnightly Blocks**: Rosters must be multiples of 14 days. All constraints (FTE, Max Hours, etc.) are applied within discrete 14-day blocks rather than being averaged across the entire roster period. **If the start/end dates in `roster.yaml` do not span a whole multiple of 14 days, the script must error out with a clear message and refuse to build the roster** — do not silently round, truncate, or prorate. Fix the dates in `roster.yaml` and re-run.
 
 ## Data File Validation
-`staff.md`, `roster.md`, `definitions.md`, `hard_constraints.md`, `soft_constraints.md`, and `training.md` are hand-edited by humans and are a trust boundary — treat parsing them as input validation, not just data loading. If a row is malformed, missing a required field, references an undefined training level/shift/staff member, or a date is out of range, fail loudly with a message naming the file, the row, and the problem, rather than silently skipping it or guessing a default.
+`staff.yaml`, `roster.yaml`, `definitions.md`, `hard_constraints.md`, `soft_constraints.md`, and `training.md` are hand-edited by humans and are a trust boundary — treat parsing them as input validation, not just data loading. If a row is malformed, missing a required field, references an undefined training level/shift/staff member, or a date is out of range, fail loudly with a message naming the file, the row, and the problem, rather than silently skipping it or guessing a default.
+
+For detailed information about the format of `staff.yaml`, see [STAFF_FORMAT.md](STAFF_FORMAT.md).
 
 ## Staff Definitions
 - Each staff member has the following options.
@@ -79,7 +81,7 @@ A shift that crosses midnight (e.g. an N12 starting at 22:00) counts entirely to
     - `result.roster.md` should be grouped by the roster days (by date) and show all of the people that are on shift for that day, including the specific shift.
 - The `result.roster.md` needs to include the the staff members level and training level.
 - Always print the shifts in the `result.roster.md` file in the following order: D8, D12, P8, P12, L3, DISCO, N8, N12
-- Within a single shift's list of staff, order by **classification first (CN before RN, or per the hierarchy in `staff.md`), then by training level (highest first) within the same classification**.
+- Within a single shift's list of staff, order by **classification first (CN before RN, or per the hierarchy in `staff.yaml`), then by training level (highest first) within the same classification**.
 - `weights.json` values are relative ordering signals for the objective function, not literal cost units — a weight of 100 should be treated as "prioritise avoiding this violation over one weighted 50," not as "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
 
 ## Technical Implementation Guide

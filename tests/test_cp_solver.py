@@ -8,7 +8,7 @@ from models import (
     Preference, 
     TRAINING_MAP
 )
-from build_roster import parse_definitions, parse_roster, parse_staff, parse_rules_and_prefs
+from build_roster import parse_definitions, parse_roster_yaml, parse_staff, parse_rules_and_prefs
 from cp_solver import CPSolver
 
 @pytest.fixture
@@ -66,14 +66,17 @@ def test_parse_roster():
     assert len(roster["Saturday"]) == 2
 
 def test_parse_staff():
-    content = """# Test Staff
-**Classification**: RN
-**Training Levels**: [\"Resus\"]
-**FTE Hours per Fortnight**: 48.0
-**Red Requests**: 2026-08-01
-**Holidays/Sickness**: 2026-08-05 to 2026-08-06
-- **Rules**: [R1] Never work Monday
-**Preferences**: [P1] Prefers morning"""
+    content = """
+- name: "Test Staff"
+  classification: "RN"
+  training_levels:
+    - Resus
+  fte_hours: 48.0
+  red_requests: 
+    - "2026-08-01"
+  holidays:
+    - start: "2026-08-05"
+      end: "2026-08-06" """
     staff = parse_staff(content)
     assert len(staff) == 1
     s = staff[0]
@@ -81,7 +84,7 @@ def test_parse_staff():
     assert s.level == "RN"
     assert "Resus" in s.training_levels
     assert s.fte_hours == 48.0
-    assert datetime.date(2026, 8, 1) in s.red
+    assert len(s.red_requests) == 1
     assert len(s.holidays) == 1
     assert s.holidays[0] == (datetime.date(2026, 8, 5), datetime.date(2026, 8, 6))
     assert s.rules[0].id == "R1"
