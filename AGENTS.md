@@ -8,11 +8,10 @@ This is the entry point for any agent (opencode or otherwise) working on this pr
 
 **This project is not finished. Existing code is not presumed correct.**
 
-- `build_roster.py` and `cp_solver.py` exist but their implementation is currently **known to be broken**. `result.staff.md`, `result.roster.md`, and `result.violations.md` may reflect that broken behavior.
 - **The ground truth is the constraint/data files** — `hard_constraints.md`, `soft_constraints.md`, `roster.yaml`, `staff.yaml`, `definitions.yaml`, `weights.yaml`, and this document. **Code is not ground truth** until it's been verified against those files line-by-line. If code contradicts them, the code is wrong — not the other way around.
 - **The existing test suite is not automatically trustworthy either.** Tests were plausibly written against the broken implementation. If a test asserts behavior that contradicts a hard/soft constraint ID, the test is the thing to fix, not the code you'd otherwise write to satisfy it.
-- **You have explicit standing permission to change, rewrite, or delete existing code** in `build_roster.py`, `cp_solver.py`, and `tests/` when it conflicts with the constraint files — you do not need to ask first, and you do not need to preserve current output behavior for compatibility. There is no live consumer depending on the current (broken) behavior.
-- This overrides the "reuse what's already here" step in the Ponytail ladder below (§10, step 2) specifically for `build_roster.py`/`cp_solver.py`/`tests/`: reuse is still the right instinct everywhere else in the codebase, but for these three, verify against the constraint files first — don't treat "it's already implemented this way" as a reason to keep it.
+- **You have explicit standing permission to change, rewrite, or delete existing code** in `.py`, and `tests/` when it conflicts with the constraint files — you do not need to ask first, and you do not need to preserve current output behavior for compatibility. There is no live consumer depending on the current (broken) behavior.
+- This overrides the "reuse what's already here" step in the Ponytail ladder below (§10, step 2) specifically for `.py`/`tests/`: reuse is still the right instinct everywhere else in the codebase, but for these three, verify against the constraint files first — don't treat "it's already implemented this way" as a reason to keep it.
 - When you find and fix a real discrepancy between code and the constraint files, say so plainly in your summary (what was wrong, which constraint ID it violated) rather than quietly patching around it.
 
 ---
@@ -51,11 +50,6 @@ These are two **independent** attributes on a staff member, not one hierarchy:
 - **`soft_constraints.md`** — preference rules, each tagged with a unique `[S#xxxxxxxx]` ID, optimized via the objective function. If one isn't satisfied, the solver/output should be able to account for why.
 - **`staff.yaml`** — every staff member: `name`, `classification`, `skill_tags` (held skill levels), `contracted_hours_per_fortnight` (a **floor**, not a ceiling — see §7), `red_requests`, `holidays`. See `README.md`'s `staff.yaml` field reference for the full schema, and §4 below for validation rules specific to this file.
 - **`weights.yaml`** — objective-function weights keyed by soft constraint ID. These are **relative ordering signals, not literal cost units** — a weight of 100 means "prioritise avoiding this over one weighted 50," not "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
-- **`result.staff.md`** — final roster grouped by staff member (output).
-- **`result.roster.md`** — final roster grouped by date (output).
-- **`result.violations.md`** — any rule violations found in the generated roster (output).
-- **`build_roster.py`** — the script that builds the roster (exists, currently broken — see status note).
-- **`cp_solver.py`** — the CP-SAT model itself (exists, currently broken — see status note).
 
 **Fortnightly blocks**: rosters must span an exact multiple of 14 days. All constraints (max hours, etc.) apply *within* each discrete 14-day block, never averaged across the whole roster period. If `roster.yaml`'s date range isn't a whole multiple of 14 days, the script must error out with a clear message and refuse to build — never silently round, truncate, or prorate.
 
@@ -131,7 +125,7 @@ For a staff member contracted at 76h, the relative ceiling has zero room before 
 - Always run python via the venv interpreter: `.venv/bin/python <script_name>.py`.
 
 ### Core Solver Logic (CP-SAT)
-`cp_solver.py` uses Google OR-Tools CP-SAT. When implementing or modifying constraints:
+Google OR-Tools CP-SAT. When implementing or modifying constraints:
 
 1. **Integer arithmetic (scaling)**: CP-SAT only works with integers. All floating-point values (contracted hours like `37.5`, shift `paid_hours` like `12.0`/`8.0`) must be scaled by `self.SCALE` (= `100`). Example: contracted hours of `37.5` becomes `3750`. Note `paid_hours` values are whole/half numbers post-refactor (12.0, 8.0) — don't confuse them with `span_hours` (12.5, 8.5), a different field for a different purpose (see §5).
 2. **Skill level hierarchy thresholding**: `Acute < Resus < Triage < Shift Coordinator`. Check requirements with thresholding (e.g. `SKILL_MAP[level] >= required_rank`), not exact equality — this lets higher-qualified staff fill lower roles. (Graduate is a classification, not part of this hierarchy — see §2.)
@@ -144,7 +138,7 @@ For a staff member contracted at 76h, the relative ceiling has zero room before 
 
 ## 9. Testing
 
-- Unit tests for `cp_solver.py` and other core logic live in `tests/`, using `pytest`. Run with `.venv/bin/python -m pytest tests/`.
+- Unit tests for `.py` and other core logic live in `tests/`, using `pytest`. Run with `.venv/bin/python -m pytest tests/`.
 - Run the tests whenever code changes, and update tests to reflect the change.
 - Tests should cover both a positive and a negative case per function.
 - After the roster is produced, scan it and compare against `hard_constraints.md`/`soft_constraints.md` to confirm compliance.
@@ -157,7 +151,7 @@ You are a lazy senior developer. Lazy means efficient, not careless. The best co
 Before writing any code, stop at the first rung that holds:
 
 1. Does this need to be built at all? (YAGNI)
-2. Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't rewrite it. *(Exception: `build_roster.py`, `cp_solver.py`, `tests/` — see §0. Verify against the constraint files before treating existing code there as the reusable pattern.)*
+2. Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't rewrite it.
 3. Does the standard library already do this? Use it.
 4. Does a native platform feature cover it? Use it.
 5. Does an already-installed dependency solve it? Use it.
