@@ -64,7 +64,7 @@ These are two **independent** attributes on a staff member, not one hierarchy:
 - **`classification` must be exactly one of `RN`, `CN`, `Graduate`.** Any other value is a data error.
 - **`skill_tags` must be a contiguous prefix of the hierarchy** `Acute < Resus < Triage < Shift Coordinator` — i.e. a staff member can hold `[Acute]`, `[Acute, Resus]`, `[Acute, Resus, Triage]`, or all four, but never a level without every level below it (e.g. `[Resus]` alone, or `[Acute, Triage]` skipping `Resus`, is invalid). This matches every existing entry in `staff.yaml` and is required for the threshold-based skill check in §2/§8 to mean anything. **List order within `skill_tags` is not semantically meaningful** — determine a staff member's actual rank by looking up each tag against the hierarchy, don't rely on list position or count.
 - **`contracted_hours_per_fortnight`** is a `paid_hours`-basis figure (see §5) and must be a positive number.
-- **`red_requests`** is a list of `YYYY-MM-DD` date strings (may be empty). Does not reduce the contracted-hours floor (see §7 / `H#d9a8b7c6`).
+- **`red_requests`** is a list of `YYYY-MM-DD` date strings (may be empty). Does not reduce the contracted-hours floor (see §7 / `H#d9a8b7c6` / `H#a3d8f6c1`).
 - **`holidays`** is a list of `{start, end}` date-range objects, both `YYYY-MM-DD` strings (may be empty). A single-day holiday is represented as `start == end` — there is no separate scalar shorthand for a one-day holiday. `start` must not be after `end`. Holidays proportionally reduce the contracted-hours floor for the affected block.
 
 ## 5. Shift Definitions & the Day/Night Split
@@ -131,9 +131,11 @@ Use Python's standard `logging` module — no new dependency. Each run:
 
 **Which hours cap actually binds:** two separate caps exist and the *lower* one always governs for a given staff member —
 - Absolute ceiling: never exceed 76 hours per staff member per 14-day block ([H#f0c5b2c4]).
-- Relative ceiling: never more than 24 **paid** hours of overtime above that person's own contracted hours in the block ([H#e8f7d6c5] — deliberately raised from 12.5 to 24 to widen the feasible region; this is a business decision to help ensure a viable roster can be found, not a fatigue/safety limit).
+- Relative ceiling: never more than 24 **paid** hours of overtime above that person's **raw `contracted_hours_per_fortnight`** in the block ([H#e8f7d6c5] — deliberately raised from 12.5 to 24 to widen the feasible region; this is a business decision to help ensure a viable roster can be found, not a fatigue/safety limit).
 
-For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (64h) binds well before the absolute one. Apply `min(76, contracted + 24)` as the effective cap per person, per block.
+Note the ceiling and the floor use **different bases on purpose**: the floor ([H#d9a8b7c6]) is measured against `adjusted_hours` (holiday-prorated, per [H#a3d8f6c1]), while this ceiling is measured against the **unadjusted** `contracted_hours_per_fortnight` — a staff member's overtime headroom doesn't shrink just because they had a holiday in the block.
+
+For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (64h) binds well before the absolute one. Apply `min(76, contracted_hours_per_fortnight + 24)` as the effective cap per person, per block.
 
 ## 8. Technical Implementation Guide
 
@@ -150,9 +152,23 @@ Google OR-Tools CP-SAT. When implementing or modifying constraints:
 3. **Constraint lifecycle** for adding a new constraint or preference:
    - Step 1 — Variables: define decision variables (`model.NewBoolVar`, etc.)
    - Step 2 — Constraints: apply logic via `model.Add(...)` / `model.AddForbiddenAssignments(...)`
-   - Step 3 — Penalties (soft only): create an integer "violation amount" variable, add to the objective multiplied by its `weights.yaml` weight.
+   - Step 3 — Penalties (soft only): create an integer "violation amount" variable, add to the objective multiplied by its `weights.yaml` weight. **Not every soft constraint is a flat `violation × weight`** — e.g. `S#30c6f5ad` defines its own internal tiers (0 / 0.1×W / 1×W / escalating) on top of the single `weights.yaml` value, which acts as the base unit `W` rather than a flat multiplier. Read the constraint's full text in `soft_constraints.md` before assuming a simple linear penalty is correct.
    - Step 4 — Objective: make sure all new penalty variables are included in `model.Minimize(...)`.
 4. **Linkage via IDs**: every hard/soft constraint in code must be tagged with its corresponding ID from the markdown files (e.g. `# [H#a7f2c9d1]`). **IDs must be unique** — if you're adding a new constraint, generate a fresh ID rather than reusing or copy-pasting an existing tag (a duplicate ID was found and fixed during this cleanup; don't reintroduce that pattern).
+
+### CP-SAT Modeling Notes
+
+Concrete patterns for the trickier constraints, so they don't each get reinvented (or gotten wrong) independently:
+
+- **Precompute shift-pair compatibility once, don't model time arithmetic per-assignment.** There are only 8 shift types, so the set of (shift on day *d*, shift on day *d*+1) pairs that violate rest ([H#c1f6e3f5]), overlap ([H#e91c63ab]), or the night/day transition rule ([H#f4c9b6c8]) is small, fixed, and identical for every staff member — it depends only on the two shift types, not on who's assigned. Build an 8×8 (plus an explicit "unassigned" state) boolean compatibility table once at startup from `definitions.yaml`'s absolute start/end times, then enforce it per staff/day-pair as a forbidden-assignment pattern. Don't recompute time-interval overlap logic inline for every staff/day combination — that's the same fixed table being derived over and over, and it's easy for one of those inline derivations to miss the midnight-crossing edge case that H#e91c63ab spells out.
+- **Skill-level threshold ([H#5e6ad8f4]/[H#84a1d5c9]/[H#b72e41fa]):** a straightforward reified implication — `model.Add(staff_rank[s] >= required_rank[p]).OnlyEnforceIf(x[s, p])`. No special modeling needed beyond §8 item 2's ranking approach.
+- **Holiday proration ([H#a3d8f6c1]):** compute `adjusted_hours` in plain Python before the model is built, as a per-staff, per-block integer constant. This is data preprocessing, not something CP-SAT needs to reason about — don't introduce it as a solver variable or a constraint the solver has to derive.
+- **`S#30c6f5ad`'s tiered run-length penalty:** since a block is only 14 days, run lengths are bounded and enumerable — this is tractable to model directly rather than needing a general-purpose "count consecutive equal values" abstraction. Suggested approach:
+  1. For each staff member and each day *d* in the block, define `same[d]` = 1 if their shift on day *d* equals their shift on day *d*+1 (both actual shifts, not "unassigned") — reified off the existing assignment variables.
+  2. Define `run_start[d]` = 1 if day *d* is worked and (day *d*−1 is unassigned or a different shift type) — this marks the first day of each run.
+  3. For each day *d* where `run_start[d]` could be true, and each candidate run length *L* from 1 to 14, define a boolean for "a run of exactly length *L* starts at *d*" via a conjunction of `same[d..d+L-2]` all true and `same[d+L-1]` false (or end of block) — this is a small, fixed number of boolean AND constraints per staff, not a per-pair-of-days combinatorial blowup.
+  4. Add the tier's penalty (0 / `0.1×W` / `1×W` / `(L-3)×W` per §-above) to the objective exactly once per run, gated on that run's length-*L* boolean — not once per day in the run, or multi-day runs get penalized multiple times.
+  - Sub-labels for traceability: tag each tier's penalty variable/log line with `S#30c6f5ad·L=1`, `S#30c6f5ad·L=2`, etc. rather than inventing separate top-level constraint IDs — this keeps `weights.yaml` holding one value (the base unit `W`) while still letting the "Messages" section of the HTML output say which tier actually fired for a given staff member.
 
 ## 9. Testing
 
@@ -233,5 +249,11 @@ ai-roster/
 ```
 
 ---
+
+## Open Questions
+
+Things surfaced during cleanup that are flagged rather than silently decided — resolve these before relying on the affected logic:
+
+- *(none currently open)*
 
 ## Changelog
