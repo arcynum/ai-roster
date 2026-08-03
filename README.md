@@ -2,7 +2,7 @@
 
 A CP-SAT–based rostering system for the pediatric emergency ward at TPCH. Given a staff list, a set of shift definitions, and hard/soft constraint rules, it generates a fortnightly roster using Google OR-Tools CP-SAT.
 
-> 🚧 **Work in progress.** `build_roster.py` and `cp_solver.py` have a known-broken implementation right now — don't assume the current code or its outputs are correct. The constraint/data files (`hard_constraints.md`, `soft_constraints.md`, `roster.yaml`, `staff.yaml`) are the ground truth, not the code.
+> 🚧 **Work in progress.** The constraint/data files (`hard_constraints.md`, `soft_constraints.md`, `roster.yaml`, `staff.yaml`) are the ground truth, not the code.
 
 > **For coding agents**: see [`AGENTS.md`](AGENTS.md) — it's the canonical reference for terminology, file relationships, constraint IDs, and implementation conventions. This README is the human-facing overview; if the two ever disagree, `AGENTS.md` wins and should be corrected.
 
@@ -16,10 +16,6 @@ A CP-SAT–based rostering system for the pediatric emergency ward at TPCH. Give
 | `hard_constraints.md` | Non-negotiable rules, each with a unique `[H#...]` ID |
 | `soft_constraints.md` | Preferences optimized by the solver, each with a unique `[S#...]` ID |
 | `weights.yaml` | Relative importance of each soft constraint, keyed by ID |
-| `training.md` | Describes the skill level tiers |
-| `build_roster.py` | Entry-point script that builds the roster |
-| `cp_solver.py` | The CP-SAT model |
-| `result.staff.md` / `result.roster.md` / `result.violations.md` | Generated output |
 
 ## `roster.yaml` schema
 
@@ -112,19 +108,11 @@ Note: DISCO (17:30–02:00) crosses midnight like the night shifts do, but is cl
 
 Full authoritative text and IDs live in the two constraint files — this is a summary, not a substitute.
 
-## Output
-
-- **`result.staff.md`** — roster grouped by staff member: classification/skill level/FTE summary, a 14-day-block breakdown (hours, weekend %, night %), and the full shift list for the period.
-- **`result.roster.md`** — roster grouped by date: everyone on shift that day, in shift order (`D8, D12, P8, P12, L3, DISCO, N8, N12`), then by classification then skill level within each shift.
-- **`result.violations.md`** — any rule violations found in the generated roster.
-
 ## Running it
 
 ```bash
-./.venv/bin/python build_roster.py
+./.venv/bin/python example.py
 ./.venv/bin/python -m pytest tests/
 ```
 
 Python 3.x, dependencies: Google OR-Tools (CP-SAT) and PyYAML, installed in the provided `./.venv/`.
-
-> **Known issue**: `build_roster.py` and `cp_solver.py` currently have a broken implementation — don't assume their present behavior is correct or complete.
