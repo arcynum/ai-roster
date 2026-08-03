@@ -8,10 +8,9 @@ The roster requirements define what shifts need to be filled each day and what s
 
 ## File Formats
 
-The system supports two formats for roster requirements:
+The system uses only one format for roster requirements:
 
 1. **New Format**: `roster.yaml` (recommended)
-2. **Legacy Format**: `roster.md` (backward compatible)
 
 ## Roster YAML Format
 
@@ -81,35 +80,24 @@ Each day contains a list of shift instances, where each instance has:
   - 1 N8 shift
   - 4 N12 shifts (with different skill requirements)
 
-## Roster Markdown Format (Legacy)
+## Roster YAML Format
 
-The older `roster.md` format was line-based:
+The `roster.yaml` format is the only supported format for roster requirements:
 
-```
-## Monday
-- D8 skill_tag["*"]
-- D12 skill_tag["Shift Coordinator"]
-- D12 skill_tag["Triage"]
-- D12 skill_tag["Resus"]
-- D12 skill_tag["*"]
-- P8 skill_tag["*"]
-- P12 skill_tag["*"]
-- L3 skill_tag["*"]
-- L3 skill_tag["*"]
-- DISCO skill_tag["*"]
-- N8 skill_tag["*"]
-- N12 skill_tag["Shift Coordinator"]
-- N12 skill_tag["Triage"]
-- N12 skill_tag["Resus"]
-- N12 skill_tag["*"]
+```yaml
+dates:
+  start: 2026-08-03
+  end: 2026-08-30
+
+shift_requirements:
+  Monday:
+    - shift: D8
+      required_skills: ["*"]
+    - shift: D12
+      required_skills: ["Shift Coordinator"]
+    # ... other shifts
 ```
 
 ## Integration with Staff Training
 
 The skill tags defined in this file will be mapped to staff training levels in `staff.md`. The constraint solver uses these requirements to ensure that staff with the required training levels are assigned to their respective shifts.
-
-## File Priority
-
-When processing roster requirements, the system will:
-1. First check for `roster.yaml` (new preferred format)
-2. Fall back to `roster.md` if the YAML file doesn't exist

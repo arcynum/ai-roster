@@ -14,7 +14,7 @@ from models import (
 )
 from cp_solver import CPSolver
 
-# This script supports both roster.yaml (new preferred format) and roster.md (legacy format)
+# This script uses roster.yaml as the source of truth for roster requirements
 # The YAML format provides a more structured and maintainable way to define roster requirements
 # Each shift instance requires exactly one skill tag
 
@@ -390,20 +390,16 @@ def generate_staff_shifts_html(solver, staff, dates, assignments=None):
 if __name__ == "__main__":
     try:
         with open("definitions.md", "r") as f: defs = parse_definitions(f.read())
-        # Check if roster.yaml exists, otherwise fall back to roster.md
-        try:
-            with open("roster.yaml", "r") as f: 
-                start_date, end_date, reqs = parse_roster_yaml(f.read())
-        except FileNotFoundError:
-            with open("roster.md", "r") as f: 
-                start_date, end_date, reqs = parse_roster(f.read())
+        # Use roster.yaml as the source of truth
+        with open("roster.yaml", "r") as f: 
+            start_date, end_date, reqs = parse_roster_yaml(f.read())
         with open("staff.md", "r") as f: staff = parse_staff(f.read())
         with open("hard_constraints.md", "r") as f: global_rules, _ = parse_rules_and_prefs(f.read(), "")
         with open("soft_constraints.md", "r") as f: _, global_prefs = parse_rules_and_prefs("", f.read())
         
         import sys
         if start_date is None:
-            print("Roster start date not found in roster.md")
+            print("Roster start date not found in roster.yaml")
             sys.exit(1)
             
         if end_date is None:

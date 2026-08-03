@@ -38,7 +38,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
 ## Core Architecture
 - **`opencode.json`**: The definition of the model to use.
 - **`definitions.md`**: The definitions for all shifts, including start time, end time, duration and whether it crosses midnight.
-- **`roster.md`**: Inludes the start and end dates of the roster. The list of shifts that need to be filled each week. These shifts repeat exactly every week.
+- **`roster.yaml`**: Contains the start and end dates of the roster. The list of shifts that need to be filled each week. These shifts repeat exactly every week.
 - **`hard_constraints.md`**: The list of rules that each roster needs to follow. These are not negotiable.
 - **`soft_constraints.md`**: The list of preferences that each roster should try to follow. If this is going not be followed for whatever reason, you must provide a reason why.
 - **`staff.md`**: The list of all staff and their training levels and FTE hours.
@@ -47,7 +47,7 @@ The project contains a list of staff, list of shifts that need to be filled, and
 - **`result.roster.md`**: The final roster grouped by roster date is printed here.
 - **`result.violations.md`**: Any rule violations found in the generated roster are listed here.
 - **`build_roster.py`**: The python script that actually builds the roster.
-- **Fortnightly Blocks**: Rosters must be multiples of 14 days. All constraints (FTE, Max Hours, etc.) are applied within discrete 14-day blocks rather than being averaged across the entire roster period. **If the start/end dates in `roster.md` do not span a whole multiple of 14 days, the script must error out with a clear message and refuse to build the roster** — do not silently round, truncate, or prorate. Fix the dates in `roster.md` and re-run.
+- **Fortnightly Blocks**: Rosters must be multiples of 14 days. All constraints (FTE, Max Hours, etc.) are applied within discrete 14-day blocks rather than being averaged across the entire roster period. **If the start/end dates in `roster.yaml` do not span a whole multiple of 14 days, the script must error out with a clear message and refuse to build the roster** — do not silently round, truncate, or prorate. Fix the dates in `roster.yaml` and re-run.
 
 ## Data File Validation
 `staff.md`, `roster.md`, `definitions.md`, `hard_constraints.md`, `soft_constraints.md`, and `training.md` are hand-edited by humans and are a trust boundary — treat parsing them as input validation, not just data loading. If a row is malformed, missing a required field, references an undefined training level/shift/staff member, or a date is out of range, fail loudly with a message naming the file, the row, and the problem, rather than silently skipping it or guessing a default.

@@ -17,8 +17,8 @@ def test_with_constraints(disable_rest=False, disable_transition=False, disable_
     
     try:
         with open("definitions.md", "r") as f: defs = parse_definitions(f.read())
-        with open("roster.md", "r") as f: 
-            start_date, end_date, reqs = parse_roster(f.read())
+        with open("roster.yaml", "r") as f: 
+            start_date, end_date, reqs = parse_roster_yaml(f.read())
         with open("staff.md", "r") as f: staff = parse_staff(f.read())
         with open("hard_constraints.md", "r") as f: global_rules, _ = parse_rules_and_prefs(f.read(), "")
         with open("soft_constraints.md", "r") as f: _, global_prefs = parse_rules_and_prefs("", f.read())

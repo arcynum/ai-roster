@@ -4,7 +4,7 @@ This document explains the structure and usage of the `roster.yaml` file, which 
 
 ## Overview
 
-The `roster.yaml` file replaces the previous `roster.md` format and provides a more structured, maintainable way to define shift requirements for each day of the week.
+The `roster.yaml` file is the current format for defining shift requirements for each day of the week.
 
 ## File Structure
 
@@ -79,11 +79,10 @@ Each day contains the following shift instances:
 
 ## Usage in Code
 
-The `build_roster.py` script automatically:
-1. Checks for `roster.yaml` first (new preferred format)
-2. Falls back to `roster.md` if the YAML file doesn't exist
-3. Parses the YAML structure into `ShiftRequirement` objects with `required_skills` field
-4. Uses these requirements in the constraint satisfaction solver
+The `build_roster.py` script:
+1. Reads `roster.yaml` as the source of truth
+2. Parses the YAML structure into `ShiftRequirement` objects with `required_skills` field
+3. Uses these requirements in the constraint satisfaction solver
 
 ## Maintenance Notes
 

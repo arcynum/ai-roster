@@ -66,7 +66,7 @@ The constraint solver validates that:
 
 ## Migration Notes
 
-When migrating from `roster.md` to `roster.yaml`:
+This file replaces the previous `roster.md` format:
 - All shift instances are preserved
 - Skill tag requirements are maintained exactly
 - The number of instances per shift type remains the same

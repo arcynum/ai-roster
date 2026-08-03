@@ -2,12 +2,11 @@
 
 ## Changes Made
 
-1. **Created new `roster.yaml` file** with the exact structure needed to replace `roster.md`
+1. **Created new `roster.yaml` file** with the exact structure needed
 2. **Updated `build_roster.py`** to:
    - Add PyYAML import
    - Implement `parse_roster_yaml()` function
-   - Modify main execution to prefer YAML over markdown
-   - Maintain backward compatibility with `roster.md`
+   - Modify main execution to use only YAML
 
 3. **Updated `models.py`** to:
    - Extend `ShiftRequirement` class to include `required_skills` field
@@ -25,14 +24,10 @@
 
 ### Documentation
 - Created `ROSTER_YAML_STRUCTURE.md` - detailed explanation of YAML format
-- Created `ROSTER_FORMAT.md` - explains both YAML and markdown formats
+- Created `ROSTER_FORMAT.md` - explains the YAML format
 - Created `SPECIFIC_SHIFT_REQUIREMENTS.md` - detailed shift instance information
-- Updated `README.md` with comprehensive system documentation
-
-### Backward Compatibility
-- System still supports `roster.md` as fallback
-- All existing functionality preserved
-- Migration path from markdown to YAML is smooth
+- Updated `README.md` with system documentation
+- `YAML_IMPLEMENTATION_SUMMARY.md` - complete implementation summary
 
 ## Usage
 
