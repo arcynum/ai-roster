@@ -126,6 +126,7 @@ For a staff member contracted at 76h, the relative ceiling has zero room before 
 ## 8. Technical Implementation Guide
 
 ### Environment & Execution
+- CRITICAL RULE: ALWAYS use .venv/bin/python and .venv/bin/pip - NEVER bare python or pip or the system version of python.
 - Python 3.x. A virtual environment is provided at `.venv/`.
 - Always run python via the venv interpreter: `.venv/bin/python <script_name>.py`.
 
