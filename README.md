@@ -94,18 +94,21 @@ Note: DISCO (17:30–02:00) crosses midnight like the night shifts do, but is cl
 ## Constraint types
 
 **Hard constraints** (`hard_constraints.md`) — must always hold, e.g.:
-- FTE (contracted hours) as a floor per fortnight block, plus up to 24 additional paid hours of overtime (deliberately generous, to widen the feasible region)
-- Absolute max hours per fortnight block (76h)
+- FTE (contracted hours) as a floor per fortnight block, plus up to 12 additional paid hours of overtime for named staff
+- Absolute max hours per fortnight block (76h) — never changes regardless of overtime
 - Minimum 11h rest between shifts
-- At least 1 day off when transitioning between night and day shifts
+- No night shift immediately followed by a day shift (or vice versa) without a full day off in between
 - Red requests and holidays honored
 - Skill level requirements per shift position
 - Graduate-classified staff restricted to D8, P8, L3, DISCO, N8
+- Casual staff can fill wildcard (`null`) positions only — never anything requiring Acute, Resus, Triage, or Shift Coordinator — with unlimited supply, and aren't subject to the per-individual constraints above (rest, hours caps, etc.) since a different casual is likely to fill each booking
 
 **Soft constraints** (`soft_constraints.md`) — optimized via the objective function, weighted by `weights.yaml`:
 - Overtime distributed fairly when contracted hours can't cover demand
 - Night shifts and weekend shifts distributed fairly across staff
-- Working the same shift 3+ consecutive days is discouraged
+- Working the same shift for 2 consecutive days is the encouraged ideal; 1 or 3 are mildly discouraged, 4+ increasingly strongly discouraged
+- At most 2 separate runs of day-category shifts and 2 of night-category shifts per fortnight block — frequent day/night swapping is discouraged as extremely fatiguing
+- Casual usage is minimised — always the last resort after named-staff options (including the 12h flex) are exhausted, so named staff get the most comfortable roster possible
 
 Full authoritative text and IDs live in the two constraint files — this is a summary, not a substitute.
 
@@ -115,12 +118,12 @@ Every run writes exactly two files into `output/` (created automatically if it d
 
 - **`output/roster_<run_id>.html`** — the single output artifact. Self-contained (inline CSS, no external dependencies), rendered from `templates/roster.html` via Jinja2. Contains, in order:
   1. **Run summary** — generated time, roster period, solver status, objective value, assignments count, unfilled positions count (displayed as responsive summary cards).
-  2. **Messages** — unfilled shifts, constraint violations, soft-constraint penalties. Explicitly states when there's nothing to report.
+  2. **Messages** — unfilled shifts, constraint violations, soft-constraint penalties, and a summary of casual usage (how many, which dates/shifts). Explicitly states when there's nothing to report.
   3. **Roster by date** — a staff×days matrix table with color-coded shift badges (D8=#E3F2FD, D12=#BBDEFB, P8=#F3E5F5, P12=#E1BEE7, L3=#FFF3E0, DISCO=#FFE0B2, N8=#E8F5E9, N12=#C8E6C9), weekend columns highlighted, sticky first column.
   4. **Roster by staff** — per staff member: classification, skills, contracted hours, total assigned hours, weekend/night breakdown, overtime traffic light (green ≤0% over, yellow 0–15% over, red >15% over), block-by-block tables with hours/overtime/weekend/night/shift count, and the full shift list with date tooltips.
 - **`output/roster_<run_id>.log`** — the full log for that run: data loading, validation, solving, and output writing.
 
-Runs are never overwritten — each one adds a new timestamped pair to `output/`. See `AGENTS.md` §6 for the complete spec.
+Runs are never overwritten — each one adds a new timestamped pair to `output/`. There's no separate markdown output; the HTML file is the only result artifact. See `AGENTS.md` §6 for the complete spec.
 
 ## Running it
 
