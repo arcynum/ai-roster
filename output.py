@@ -66,7 +66,8 @@ def _build_html(
     """Build the full HTML string."""
     summary = _render_summary(result, roster_start, roster_end)
     messages = _render_messages(result, staff_list, definitions)
-    roster_by_date = _render_roster_by_date(result, definitions)
+    staff_map = {s.name: s for s in staff_list}
+    roster_by_date = _render_roster_by_date(result, definitions, staff_map)
     roster_by_staff = _render_roster_by_staff(result, staff_list, definitions)
 
     return f"""<!DOCTYPE html>
@@ -170,7 +171,8 @@ def _render_messages(result: SolveResult, staff_list: list["Staff"],
 {''.join(parts)}"""
 
 
-def _render_roster_by_date(result: SolveResult, definitions: dict) -> str:
+def _render_roster_by_date(result: SolveResult, definitions: dict,
+                           staff_map: dict[str, "Staff"]) -> str:
     """Render the roster grouped by date."""
     # Group assignments by date
     by_date: dict[str, list[RosterSlot]] = {}
@@ -184,7 +186,7 @@ def _render_roster_by_date(result: SolveResult, definitions: dict) -> str:
     for d in sorted_dates:
         slots = sorted(by_date[d], key=lambda s: (
             SHIFT_ORDER.index(s.shift) if s.shift in SHIFT_ORDER else 99,
-            CLASS_ORDER.get(_classification_of(s.staff_name, result.assignments), 9),
+            CLASS_ORDER.get(_classification_of(s.staff_name, staff_map), 9),
         ))
         date_str = f"<th colspan='3' style='background:#e3f2fd'>{d}</th>"
         shift_row = "<tr>" + "".join(f"<th>{s.shift}</th>" for s in slots) + "</tr>"
@@ -236,6 +238,9 @@ def _render_roster_by_staff(result: SolveResult, staff_list: list["Staff"],
 {''.join(parts)}"""
 
 
-def _classification_of(staff_name: str, slots: list) -> str:
-    """Lookup classification for a staff member (stub — needs staff list)."""
-    return ""  # TODO: look up from staff_list
+def _classification_of(staff_name: str, staff_map: dict[str, "Staff"]) -> str:
+    """Lookup classification for a staff member."""
+    staff = staff_map.get(staff_name)
+    if staff is None:
+        return ""
+    return staff.classification.value

@@ -11,6 +11,7 @@ Provides:
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -74,12 +75,30 @@ class RosterModel:
         self.weights = weights
         self.blocks = blocks
 
+        # Derived lookups
+        self.staff_by_name: dict[str, Staff] = {s.name: s for s in staff_list}
+        self.staff_names: list[str] = [s.name for s in staff_list]
+        self.staff_index: dict[str, int] = {name: i for i, name in enumerate(self.staff_names)}
+        self.all_dates: list[str] = sorted(set(p["date"] for p in positions))
+        self.num_dates = len(self.all_dates)
+        self.date_index: dict[str, int] = {d: i for i, d in enumerate(self.all_dates)}
+
+        # Positions grouped by date
+        self.positions_by_date: dict[str, list[int]] = {}
+        for i, pos in enumerate(positions):
+            self.positions_by_date.setdefault(pos["date"], []).append(i)
+
+        # For each date, the list of position indices (for "at most one shift per day")
+        self.position_indices: list[int] = list(range(len(positions)))
+
         self.model = cp_model.CpModel()
         self.solver = cp_model.CpSolver()
 
         # Decision variables (populated by build_model)
-        self._assignment_vars: dict = {}  # (staff_name, date, shift) -> BoolVar
-        self._staff_hours_vars: dict = {}  # staff_name -> IntVar (scaled hours)
+        # assignments[staff_idx][pos_idx] -> BoolVar
+        self._assignment_vars: list[list[cp_model.IntVar]] = []
+        # staff_hours_vars[staff_idx][block_idx] -> IntVar (scaled hours)
+        self._staff_hours_vars: list[list[cp_model.IntVar]] = []
 
     def build_model(self) -> None:
         """Build the full CP-SAT model: variables, constraints, objective."""
@@ -93,11 +112,60 @@ class RosterModel:
     def _create_variables(self) -> None:
         """Create CP-SAT decision variables.
 
-        For each (staff, date, shift) combination, create a boolean variable
-        indicating whether that staff member is assigned to that position.
+        For each (staff, position) pair, create a boolean variable indicating
+        whether that staff member is assigned to that position.
+
+        For each (staff, block), create an integer variable for total paid hours.
         """
-        # TODO: create assignment BoolVars for all (staff, position) pairs
-        pass
+        num_staff = len(self.staff_names)
+        num_positions = len(self.positions)
+        num_blocks = len(self.blocks)
+
+        # --- Assignment BoolVars ---
+        # _assignment_vars[staff_idx][pos_idx] = BoolVar
+        for si in range(num_staff):
+            row: list[cp_model.IntVar] = []
+            for pi in range(num_positions):
+                var = self.model.NewBoolVar(f"x_{self.staff_names[si]}_{pi}")
+                row.append(var)
+            self._assignment_vars.append(row)
+
+        # --- Exactly one staff per position ---
+        for pi in range(num_positions):
+            staff_vars = [self._assignment_vars[si][pi] for si in range(num_staff)]
+            self.model.Add(sum(staff_vars) == 1)
+
+        # --- At most one shift per staff per date ---
+        for si in range(num_staff):
+            for date_str in self.all_dates:
+                pos_indices = self.positions_by_date.get(date_str, [])
+                if pos_indices:
+                    day_vars = [self._assignment_vars[si][pi] for pi in pos_indices]
+                    self.model.Add(sum(day_vars) <= 1)
+
+        # --- Staff hours per block (scaled integers) ---
+        for si in range(num_staff):
+            block_vars: list[cp_model.IntVar] = []
+            for bi in range(num_blocks):
+                block_dates = set(self.blocks[bi])
+                # Sum paid_hours (scaled) for all positions this staff could take in this block
+                hour_vars = []
+                for pi, pos in enumerate(self.positions):
+                    if pos["date"] in block_dates:
+                        shift_paid = self.definitions[pos["shift"]]["paid_hours"]
+                        scaled_paid = int(round(shift_paid * SCALE))
+                        hour_vars.append(scaled_paid * self._assignment_vars[si][pi])
+                if hour_vars:
+                    total = self.model.NewIntVar(0, 76 * SCALE, f"hours_{self.staff_names[si]}_b{bi}")
+                    self.model.Add(total == sum(hour_vars))
+                    block_vars.append(total)
+                else:
+                    zero = self.model.NewIntVar(0, 0, f"hours_{self.staff_names[si]}_b{bi}")
+                    block_vars.append(zero)
+            self._staff_hours_vars.append(block_vars)
+
+        logger.info("Created %d assignment BoolVars, %d staff-hour IntVars",
+                     num_staff * num_positions, num_staff * num_blocks)
 
     def _apply_hard_constraints(self) -> None:
         """Apply all hard constraints to the model."""
@@ -107,8 +175,13 @@ class RosterModel:
             constraint.apply(
                 model=self.model,
                 staff_list=self.staff_list,
+                staff_by_name=self.staff_by_name,
                 assignments=self._assignment_vars,
+                staff_names=self.staff_names,
                 definitions=self.definitions,
+                all_dates=self.all_dates,
+                blocks=self.blocks,
+                positions=self.positions,
             )
 
     def _apply_soft_constraints(self) -> None:
@@ -121,8 +194,13 @@ class RosterModel:
             constraint.apply(
                 model=self.model,
                 staff_list=self.staff_list,
+                staff_by_name=self.staff_by_name,
                 assignments=self._assignment_vars,
+                staff_names=self.staff_names,
                 definitions=self.definitions,
+                all_dates=self.all_dates,
+                blocks=self.blocks,
+                positions=self.positions,
                 weight=weight,
             )
 
@@ -143,12 +221,12 @@ class RosterModel:
             cp_model.MODEL_INVALID: "MODEL_INVALID",
         }
 
-        solution_start = self.solver.wall_time()
+        solve_start = time.perf_counter()
         status = self.solver.Solve(self.model)
-        solve_time = self.solver.wall_time() - solution_start
+        solve_time = time.perf_counter() - solve_start
 
         status_str = status_map.get(status, f"UNKNOWN({status})")
-        obj_val = self.solver.ObjectiveValue
+        obj_val = int(self.solver.ObjectiveValue())
 
         logger.info("Solver status: %s, objective: %d, time: %.2fs",
                     status_str, obj_val, solve_time)
@@ -167,6 +245,42 @@ class RosterModel:
         return result
 
     def _extract_assignments(self, result: SolveResult) -> None:
-        """Extract assignment values from the solver solution."""
-        # TODO: read BoolVar values and build RosterSlot list
-        pass
+        """Extract assignment values from the solver solution.
+
+        Reads BoolVar values to build RosterSlot list and track unfilled positions.
+        Also computes staff hours for the result.
+        """
+        num_positions = len(self.positions)
+        num_staff = len(self.staff_names)
+        unfilled_set: set[int] = set(range(num_positions))
+
+        for si in range(num_staff):
+            for pi in range(num_positions):
+                if self.solver.Value(self._assignment_vars[si][pi]) == 1:
+                    pos = self.positions[pi]
+                    result.assignments.append(RosterSlot(
+                        staff_name=self.staff_names[si],
+                        date=pos["date"],
+                        shift=pos["shift"],
+                        required_skill_level=pos.get("required_skill_level"),
+                    ))
+                    unfilled_set.discard(pi)
+
+        # Build unfilled list
+        for pi in unfilled_set:
+            pos = self.positions[pi]
+            result.unfilled.append({
+                "date": pos["date"],
+                "shift": pos["shift"],
+                "required_skill_level": pos.get("required_skill_level"),
+            })
+
+        # Compute staff hours from assignments
+        for slot in result.assignments:
+            paid = self.definitions[slot.shift]["paid_hours"]
+            result.staff_hours[slot.staff_name] = (
+                result.staff_hours.get(slot.staff_name, 0) + paid
+            )
+
+        logger.info("Extracted %d assignments, %d unfilled positions",
+                     len(result.assignments), len(result.unfilled))

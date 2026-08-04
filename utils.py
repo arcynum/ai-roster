@@ -270,8 +270,16 @@ def validate_roster_period(roster_data: dict) -> tuple[date, date]:
 
     Returns (start_date, end_date).
     """
-    start = date.fromisoformat(roster_data["dates"]["start"])
-    end = date.fromisoformat(roster_data["dates"]["end"])
+    raw_start = roster_data["dates"]["start"]
+    raw_end = roster_data["dates"]["end"]
+    if isinstance(raw_start, date):
+        start = raw_start
+    else:
+        start = date.fromisoformat(str(raw_start))
+    if isinstance(raw_end, date):
+        end = raw_end
+    else:
+        end = date.fromisoformat(str(raw_end))
 
     delta = (end - start).days + 1  # inclusive
     if delta <= 0:
@@ -289,10 +297,8 @@ def validate_roster_positions(roster_data: dict, definitions: dict,
                               start_date: date, end_date: date) -> list[dict]:
     """Validate every roster position entry.
 
-    Returns a flat list of position dicts with resolved date, shift, and
-    required_skill_level.  Each dict carries a ``date_to_day`` mapping
-    (shared across all entries) so the caller can look up the day-of-week
-    for any date.
+    Returns a flat list of position dicts, each with its resolved date,
+    day-of-week name, shift type, and required skill level.
     """
     positions: list[dict] = []
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
@@ -300,14 +306,9 @@ def validate_roster_positions(roster_data: dict, definitions: dict,
 
     roster_positions = roster_data.get("roster_positions", {})
 
-    # Build a map of date -> day-of-week
     current = start_date
-    date_to_day: dict[date, str] = {}
     while current <= end_date:
-        date_to_day[current] = day_names[current.weekday()]
-        current += timedelta(days=1)
-
-    for day_name in day_names:
+        day_name = day_names[current.weekday()]
         day_entries = roster_positions.get(day_name, [])
         if not isinstance(day_entries, list):
             raise ValueError(f"roster.yaml: '{day_name}' must be a list of positions")
@@ -328,10 +329,13 @@ def validate_roster_positions(roster_data: dict, definitions: dict,
                 )
 
             positions.append({
-                "date_to_day": date_to_day,
+                "date": current.isoformat(),
+                "day_name": day_name,
                 "shift": shift,
                 "required_skill_level": required_skill,
             })
+
+        current += timedelta(days=1)
 
     return positions
 

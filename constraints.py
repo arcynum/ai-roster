@@ -13,6 +13,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
+from utils import SCALE
+
 if TYPE_CHECKING:
     from ortools.sat.python import cp_model
     from models import Staff
@@ -39,8 +41,13 @@ class BaseConstraint(ABC):
         self,
         model: "cp_model.CpModel",
         staff_list: list["Staff"],
-        assignments: dict,
+        staff_by_name: dict[str, "Staff"],
+        assignments: list[list["cp_model.IntVar"]],
+        staff_names: list[str],
         definitions: dict,
+        all_dates: list[str],
+        blocks: list[list[str]],
+        positions: list[dict],
     ) -> None:
         """Add variables and constraints to the CP-SAT model."""
         raise NotImplementedError
@@ -64,8 +71,13 @@ class BaseSoftConstraint(BaseConstraint):
         self,
         model: "cp_model.CpModel",
         staff_list: list["Staff"],
-        assignments: dict,
+        staff_by_name: dict[str, "Staff"],
+        assignments: list[list["cp_model.IntVar"]],
+        staff_names: list[str],
         definitions: dict,
+        all_dates: list[str],
+        blocks: list[list[str]],
+        positions: list[dict],
         weight: int,
     ) -> None:
         """Add penalty variable to the objective function."""
@@ -73,17 +85,25 @@ class BaseSoftConstraint(BaseConstraint):
 
 
 # ---------------------------------------------------------------------------
-# Hard constraint implementations (stub)
+# Hard constraint implementations
 # ---------------------------------------------------------------------------
 
 
 class CoverageConstraint(BaseHardConstraint):
-    """[H#4d9f81c2] [H#7a3e5f91] Every roster position must be filled."""
+    """[H#4d9f81c2] [H#7a3e5f91] Every roster position must be filled.
+
+    Enforced in solver._create_variables() via "exactly one staff per position".
+    This constraint class exists as a registry entry and for reporting unfilled
+    positions in the output.
+    """
 
     constraint_id = "[H#4d9f81c2]"
 
-    def apply(self, model, staff_list, assignments, definitions):
-        # TODO: ensure every position has exactly one staff assigned
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
+        # Coverage is enforced in _create_variables() — this constraint
+        # exists so the constraint registry includes it and the solver can
+        # report unfilled positions in _extract_assignments().
         pass
 
 
@@ -93,7 +113,8 @@ class SkillLevelRequirement(BaseHardConstraint):
 
     constraint_id = "[H#5e6ad8f4]"
 
-    def apply(self, model, staff_list, assignments, definitions):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
         # TODO: enforce skill level threshold matching
         pass
 
@@ -103,19 +124,101 @@ class SkillLevelHierarchy(BaseHardConstraint):
 
     constraint_id = "[H#84a1d5c9]"
 
-    def apply(self, model, staff_list, assignments, definitions):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
         # TODO: encode hierarchy (higher satisfies lower)
         pass
 
 
 class NoDoubleBooking(BaseHardConstraint):
-    """[H#e91c63ab] One roster position per staff per shift."""
+    """[H#e91c63ab] A staff member's assigned shifts must not overlap.
+
+    Uses a precomputed 8x8 compatibility table of (shift_on_day_d,
+    shift_on_day_d+1) pairs that are incompatible due to wall-clock overlap.
+    """
 
     constraint_id = "[H#e91c63ab]"
 
-    def apply(self, model, staff_list, assignments, definitions):
-        # TODO: forbid assigning same staff to multiple positions in same shift
-        pass
+    # Shift types in the order used by the compatibility table
+    SHIFT_TYPES = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
+
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
+
+        compat = self._build_compatibility_table(definitions)
+
+        num_staff = len(staff_names)
+        num_dates = len(all_dates)
+
+        # Build position-index → date and shift lookups
+        pos_date: list[str] = [p["date"] for p in positions]
+        pos_shift: list[str] = [p["shift"] for p in positions]
+
+        # Group position indices by date
+        pos_by_date: dict[str, list[int]] = {}
+        for i, p in enumerate(positions):
+            pos_by_date.setdefault(p["date"], []).append(i)
+
+        # For each staff, each consecutive day pair, each incompatible shift pair
+        for si in range(num_staff):
+            for di in range(num_dates - 1):
+                date_d = all_dates[di]
+                date_d1 = all_dates[di + 1]
+                positions_d = pos_by_date.get(date_d, [])
+                positions_d1 = pos_by_date.get(date_d1, [])
+                if not positions_d or not positions_d1:
+                    continue
+
+                for pi_d in positions_d:
+                    shift_a = pos_shift[pi_d]
+                    shift_a_idx = self.SHIFT_TYPES.index(shift_a)
+                    for pi_d1 in positions_d1:
+                        shift_b = pos_shift[pi_d1]
+                        shift_b_idx = self.SHIFT_TYPES.index(shift_b)
+                        if not compat[shift_a_idx][shift_b_idx]:
+                            model.Add(
+                                assignments[si][pi_d] + assignments[si][pi_d1] <= 1
+                            )
+
+    def _build_compatibility_table(
+        self, definitions: dict
+    ) -> list[list[bool]]:
+        """Build 8x8 compatibility table.
+
+        compat[a][b] == True means shift_a on day d and shift_b on day d+1
+        do NOT overlap. False means they overlap and are incompatible.
+        """
+        from datetime import datetime, timedelta
+
+        n = len(self.SHIFT_TYPES)
+        compat: list[list[bool]] = [[True] * n for _ in range(n)]
+
+        for a_idx, shift_a in enumerate(self.SHIFT_TYPES):
+            for b_idx, shift_b in enumerate(self.SHIFT_TYPES):
+                a_start_str = definitions[shift_a]["start"]
+                a_end_str = definitions[shift_a]["end"]
+                a_crosses = definitions[shift_a]["crosses_midnight"]
+                b_start_str = definitions[shift_b]["start"]
+                b_end_str = definitions[shift_b]["end"]
+
+                # Parse times
+                a_start = datetime.strptime(a_start_str, "%H:%M:%S")
+                a_end = datetime.strptime(a_end_str, "%H:%M:%S")
+                b_start = datetime.strptime(b_start_str, "%H:%M:%S")
+
+                # Absolute end of shift_a on day d (may be next day if crosses midnight)
+                a_end_abs = a_end
+                if a_crosses:
+                    a_end_abs += timedelta(days=1)
+
+                # Absolute start of shift_b on day d+1
+                b_start_abs = b_start + timedelta(days=1)
+
+                # Check overlap: intervals [a_start, a_end_abs) and [b_start_abs, ...)
+                if a_end_abs > b_start_abs:
+                    compat[a_idx][b_idx] = False
+
+        return compat
 
 
 class GraduateShiftConstraint(BaseHardConstraint):
@@ -123,9 +226,18 @@ class GraduateShiftConstraint(BaseHardConstraint):
 
     constraint_id = "[H#30479c74]"
 
-    def apply(self, model, staff_list, assignments, definitions):
-        # TODO: forbid assigning Graduate staff to D12, P12, N12
-        pass
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
+        allowed = {"D8", "P8", "L3", "DISCO", "N8"}
+        num_staff = len(staff_names)
+        num_positions = len(positions)
+
+        for si in range(num_staff):
+            staff = staff_by_name[staff_names[si]]
+            if staff.is_graduate:
+                for pi in range(num_positions):
+                    if positions[pi]["shift"] not in allowed:
+                        model.Add(assignments[si][pi] == 0)
 
 
 class RestPeriodConstraint(BaseHardConstraint):
@@ -133,7 +245,8 @@ class RestPeriodConstraint(BaseHardConstraint):
 
     constraint_id = "[H#c1f6e3f5]"
 
-    def apply(self, model, staff_list, assignments, definitions):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
         # TODO: enforce 11h gap using span_hours
         pass
 
@@ -143,7 +256,8 @@ class NightToDayRest(BaseHardConstraint):
 
     constraint_id = "[H#f4c9b6c8]"
 
-    def apply(self, model, staff_list, assignments, definitions):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
         # TODO: enforce day-off between night→day and day→night transitions
         pass
 
@@ -153,9 +267,17 @@ class RedRequestConstraint(BaseHardConstraint):
 
     constraint_id = "[H#a5d0c7d9]"
 
-    def apply(self, model, staff_list, assignments, definitions):
-        # TODO: forbid assignments on red-request dates
-        pass
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
+        num_staff = len(staff_names)
+        num_positions = len(positions)
+
+        for si in range(num_staff):
+            staff = staff_by_name[staff_names[si]]
+            red_dates = set(staff.red_requests)
+            for pi in range(num_positions):
+                if positions[pi]["date"] in red_dates:
+                    model.Add(assignments[si][pi] == 0)
 
 
 class HolidayConstraint(BaseHardConstraint):
@@ -163,9 +285,26 @@ class HolidayConstraint(BaseHardConstraint):
 
     constraint_id = "[H#b6e1d8e0]"
 
-    def apply(self, model, staff_list, assignments, definitions):
-        # TODO: forbid assignments on holiday date ranges
-        pass
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
+        from datetime import date as date_type, timedelta
+
+        num_staff = len(staff_names)
+        num_positions = len(positions)
+
+        for si in range(num_staff):
+            staff = staff_by_name[staff_names[si]]
+            holiday_dates: set[str] = set()
+            for h in staff.holidays:
+                start = date_type.fromisoformat(h["start"])
+                end = date_type.fromisoformat(h["end"])
+                current = start
+                while current <= end:
+                    holiday_dates.add(current.isoformat())
+                    current += timedelta(days=1)
+            for pi in range(num_positions):
+                if positions[pi]["date"] in holiday_dates:
+                    model.Add(assignments[si][pi] == 0)
 
 
 class MaxHoursConstraint(BaseHardConstraint):
@@ -173,8 +312,9 @@ class MaxHoursConstraint(BaseHardConstraint):
 
     constraint_id = "[H#f0c5b2c4]"
 
-    def apply(self, model, staff_list, assignments, definitions):
-        # TODO: cap total paid hours per staff per block at 76
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
+        # Enforced in _create_variables() via IntVar upper bound
         pass
 
 
@@ -186,7 +326,8 @@ class ContractedHoursFloor(BaseHardConstraint):
 
     constraint_id = "[H#d9a8b7c6]"
 
-    def apply(self, model, staff_list, assignments, definitions):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
         # TODO: enforce minimum paid hours per staff per block
         pass
 
@@ -196,13 +337,14 @@ class OvertimeCap(BaseHardConstraint):
 
     constraint_id = "[H#e8f7d6c5]"
 
-    def apply(self, model, staff_list, assignments, definitions):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions):
         # TODO: cap overtime at min(76, contracted + 24)
         pass
 
 
 # ---------------------------------------------------------------------------
-# Soft constraint implementations (stub)
+# Soft constraint implementations
 # ---------------------------------------------------------------------------
 
 
@@ -211,7 +353,8 @@ class OvertimeDistribution(BaseSoftConstraint):
 
     constraint_id = "[S#e9b4a1b3]"
 
-    def apply(self, model, staff_list, assignments, definitions, weight):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, weight):
         # TODO: minimize variance in overtime hours across staff
         pass
 
@@ -221,19 +364,70 @@ class NightShiftFairness(BaseSoftConstraint):
 
     constraint_id = "[S#d2a7f4a6]"
 
-    def apply(self, model, staff_list, assignments, definitions, weight):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, weight):
         # TODO: minimize deviation from proportional night shift allocation
         pass
 
 
 class WeekendFairness(BaseSoftConstraint):
-    """[S#a1d6c3d5] Share weekend hours across staff."""
+    """[S#a1d6c3d5] Share weekend hours across staff.
+
+    Minimizes the sum of absolute deviations of each staff member's weekend
+    hours from the mean, using a scaled formulation that avoids division.
+    """
 
     constraint_id = "[S#a1d6c3d5]"
 
-    def apply(self, model, staff_list, assignments, definitions, weight):
-        # TODO: minimize variance in weekend hours across staff
-        pass
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, weight):
+
+        num_staff = len(staff_names)
+        num_positions = len(positions)
+
+        # Identify weekend position indices and their scaled paid hours
+        weekend_pos_indices: list[int] = []
+        weekend_scaled_hours: list[int] = []
+        for pi, pos in enumerate(positions):
+            day_name = pos["day_name"]
+            if day_name in ("Saturday", "Sunday"):
+                weekend_pos_indices.append(pi)
+                paid = definitions[pos["shift"]]["paid_hours"]
+                weekend_scaled_hours.append(int(round(paid * SCALE)))
+
+        if not weekend_pos_indices:
+            return
+
+        # Per-staff weekend hours (scaled)
+        staff_weekend_hours: list[cp_model.IntVar] = []
+        for si in range(num_staff):
+            terms = [
+                weekend_scaled_hours[j] * assignments[si][weekend_pos_indices[j]]
+                for j in range(len(weekend_pos_indices))
+            ]
+            wh = model.NewIntVar(0, 76 * SCALE, f"weekend_h_{staff_names[si]}")
+            model.Add(wh == sum(terms))
+            staff_weekend_hours.append(wh)
+
+        # Total weekend hours
+        total_weekend = model.NewIntVar(0, num_staff * 76 * SCALE, "total_weekend")
+        model.Add(total_weekend == sum(staff_weekend_hours))
+
+        # Mean = total_weekend / num_staff (scaled: mean * n = total)
+        # Deviation from mean (scaled by n to avoid division):
+        # dev[s] = |weekend_hours[s] * n - total_weekend|
+        n = num_staff
+        deviation_vars: list[cp_model.IntVar] = []
+        for si in range(num_staff):
+            deviation = model.NewIntVar(0, 76 * SCALE * n, f"dev_wk_{staff_names[si]}")
+            model.Add(deviation >= staff_weekend_hours[si] * n - total_weekend)
+            model.Add(deviation >= total_weekend - staff_weekend_hours[si] * n)
+            deviation_vars.append(deviation)
+
+        # Minimize sum of deviations
+        total_deviation = model.NewIntVar(0, 76 * SCALE * n * n, "total_weekend_dev")
+        model.Add(total_deviation == sum(deviation_vars))
+        model.Minimize(total_deviation * weight)
 
 
 class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
@@ -241,7 +435,8 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
 
     constraint_id = "[S#30c6f5ad]"
 
-    def apply(self, model, staff_list, assignments, definitions, weight):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, weight):
         # TODO: penalize runs of 3+ same shift type for same staff
         pass
 
@@ -251,7 +446,8 @@ class SkillLevelTiebreaker(BaseSoftConstraint):
 
     constraint_id = "[S#7b4e19fc]"
 
-    def apply(self, model, staff_list, assignments, definitions, weight):
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, weight):
         # TODO: minimize assigning over-qualified staff to lower slots
         pass
 
