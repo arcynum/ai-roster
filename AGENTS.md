@@ -11,7 +11,7 @@ This is the entry point for any agent (opencode or otherwise) working on this pr
 - **The ground truth is the constraint/data files** — `hard_constraints.md`, `soft_constraints.md`, `roster.yaml`, `staff.yaml`, `definitions.yaml`, `weights.yaml`, and this document. **Code is not ground truth** until it's been verified against those files line-by-line. If code contradicts them, the code is wrong — not the other way around.
 - **The existing test suite is not automatically trustworthy either.** Tests were plausibly written against the broken implementation. If a test asserts behavior that contradicts a hard/soft constraint ID, the test is the thing to fix, not the code you'd otherwise write to satisfy it.
 - **You have explicit standing permission to change, rewrite, or delete existing code** in `.py`, and `tests/` when it conflicts with the constraint files — you do not need to ask first, and you do not need to preserve current output behavior for compatibility. There is no live consumer depending on the current (broken) behavior.
-- This overrides the "reuse what's already here" step in the Ponytail ladder below (§10, step 2) specifically for `.py`/`tests/`: reuse is still the right instinct everywhere else in the codebase, but for these three, verify against the constraint files first — don't treat "it's already implemented this way" as a reason to keep it.
+- This overrides the "reuse what's already here" step specifically for `.py`/`tests/`: reuse is still the right instinct everywhere else in the codebase, but for these three, verify against the constraint files first — don't treat "it's already implemented this way" as a reason to keep it.
 - When you find and fix a real discrepancy between code and the constraint files, say so plainly in your summary (what was wrong, which constraint ID it violated) rather than quietly patching around it.
 
 ---
@@ -186,7 +186,7 @@ Concrete patterns for the trickier constraints, so they don't each get reinvente
 - Run the tests whenever code changes, and update tests to reflect the change.
 - Tests should cover both a positive and a negative case per function.
 - After the roster is produced, scan it and compare against `hard_constraints.md`/`soft_constraints.md` to confirm compliance.
-- The lazy-mode "one runnable check" convention (§10 below) is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
+- The "one runnable check" convention is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
 - **Weight-dominance sanity check:** `S#3d9a7ec1`'s weight (100000) is only correct if it exceeds the maximum possible *combined* penalty from every other soft constraint across the whole roster in a single run — not just one staff member's worst case. Add a test that computes an upper bound on that combined total (worst-case per-staff `S#30c6f5ad` penalty × staff count, plus worst-case fairness/tiebreaker penalties) and asserts it's still less than `S#3d9a7ec1`'s weight. If this ever fails (e.g. because the roster grows much larger, or another high-weight soft constraint gets added later), the casual-as-last-resort guarantee breaks silently — the solver could start preferring a casual over a valid all-named-staff solution.
 
 ## 10. Constraint Toggles (config.yaml)
@@ -207,43 +207,13 @@ During development, constraints can be selectively disabled via `config.yaml` to
 
 Tests that need specific constraints active must override the default (no-config = all enabled) by providing a `constraint_config` parameter to `RosterModel`. See `tests/test_config.py` for examples.
 
-## 11. Agent Working Mode — "Ponytail" (lazy senior dev)
-
-You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
-
-Before writing any code, stop at the first rung that holds:
-
-1. Does this need to be built at all? (YAGNI)
-2. Does it already exist in this codebase? Reuse the helper, util, or pattern that's already here, don't rewrite it.
-3. Does the standard library already do this? Use it.
-4. Does a native platform feature cover it? Use it.
-5. Does an already-installed dependency solve it? Use it.
-6. Can this be one line? Make it one line.
-7. Only then: write the minimum code that works.
-
-The ladder runs after you understand the problem, not instead of it: read the task and the code it touches, trace the real flow end to end, then climb.
-
-**Bug fix = root cause, not symptom.** A report names a symptom. Grep every caller of the function you touch and fix the shared function once — one guard there is a smaller diff than one per caller, and patching only the path the ticket names leaves a sibling caller still broken.
-
-Rules:
-- No abstractions that weren't explicitly requested.
-- No new dependency if it can be avoided.
-- No boilerplate nobody asked for.
-- Deletion over addition. Boring over clever. Fewest files possible.
-- Shortest working diff wins, but only once you understand the problem. The smallest change in the wrong place isn't lazy, it's a second bug.
-- Question complex requests: "Do you actually need X, or does Y cover it?"
-- Pick the edge-case-correct option when two stdlib approaches are the same size — lazy means less code, not the flimsier algorithm.
-- Mark deliberate simplifications that cut a real corner with a known ceiling (global lock, O(n²) scan, naive heuristic) with a `ponytail:` comment naming the ceiling and upgrade path.
-
-**Not lazy about**: understanding the problem (read it fully and trace the real flow before picking a rung — a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind (an assert-based demo/self-check or one small test file — no frameworks, no fixtures). Trivial one-liners need no test.
-
-## 12. Python Coding Standards
+## 11. Python Coding Standards
 
 1. **Indentation**: exactly 4 spaces, never tabs. Before adding logic, read the surrounding lines to confirm the current indentation context. Keep `if`/`for`/`while`/`def`/`class` blocks aligned with their parent scope.
 2. **Spacing & style**: spaces around operators (`a = b + c`); PEP 8 naming (snake_case functions/variables, PascalCase classes); consistent vertical whitespace between method definitions.
 3. **Verification**: after editing a `.py` file, verify no `IndentationError`/`SyntaxError` was introduced by running or linting the relevant script.
 
-## 13. Python Implementation Structure
+## 12. Python Implementation Structure
 
 The project is structured as follows:
 
