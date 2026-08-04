@@ -50,6 +50,7 @@ These are two **independent** attributes on a staff member, not one hierarchy:
 - **`soft_constraints.md`** — preference rules, each tagged with a unique `[S#xxxxxxxx]` ID, optimized via the objective function. If one isn't satisfied, the solver/output should be able to account for why.
 - **`staff.yaml`** — every staff member: `name`, `classification`, `skill_tags` (held skill levels), `contracted_hours_per_fortnight` (a **floor**, not a ceiling — see §7), `red_requests`, `holidays`. See `README.md`'s `staff.yaml` field reference for the full schema, and §4 below for validation rules specific to this file.
 - **`weights.yaml`** — objective-function weights keyed by soft constraint ID. These are **relative ordering signals, not literal cost units** — a weight of 100 means "prioritise avoiding this over one weighted 50," not "twice as bad" in any absolute sense. Don't build logic elsewhere that assumes proportionality between weights.
+- **`templates/roster.html`** — the Jinja2 template for roster HTML output. Self-contained (inline CSS, no external assets). See §6 for content requirements.
 - **`output/`** — created at runtime, not checked into the repo. Holds every run's paired `roster_<run_id>.html` and `roster_<run_id>.log` — see §6 for the full spec.
 
 **Fortnightly blocks**: rosters must span an exact multiple of 14 days. All constraints (max hours, etc.) apply *within* each discrete 14-day block, never averaged across the whole roster period. If `roster.yaml`'s date range isn't a whole multiple of 14 days, the script must error out with a clear message and refuse to build — never silently round, truncate, or prorate.
@@ -102,11 +103,11 @@ Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour
 
 The HTML file has three sections, in this order:
 
-1. **Run summary** — generated timestamp, roster period (`dates.start`–`dates.end` from `roster.yaml`), CP-SAT solver status (e.g. `OPTIMAL`/`FEASIBLE`/`INFEASIBLE`), objective value, and solve time.
-2. **Messages** — everything that used to live in `result.violations.md`, plus general solver messages: any `UNFILLED` shifts (with which skill level/classification was needed but unavailable), any hard constraint that couldn't be satisfied (should never happen in a correct solve, but report it if it does — don't fail silently), which soft constraints incurred a penalty and roughly how much, and overtime allocation notes. If there's nothing to report, say so explicitly (e.g. "No violations or unfilled shifts") rather than leaving the section blank/ambiguous.
-3. **Roster** — everything that used to live in `result.staff.md` and `result.roster.md`, both included:
-   - **By date** (a table per day, or one table with date as a grouping column): everyone on shift, in shift order `D8, D12, P8, P12, L3, DISCO, N8, N12`, staff within a shift ordered by classification then skill level (highest first).
-   - **By staff member**: classification, skill level(s), contracted hours for the period, a block-by-block (14-day) breakdown of hours worked / weekend hours + % / night-shift hours + %, and the full list of shifts assigned across the period.
+1. **Run summary** — generated timestamp, roster period, CP-SAT solver status, objective value, assignments count, unfilled positions count. Displayed as summary cards in a responsive grid.
+2. **Messages** — unfilled shifts (date, shift type, required skill), any hard constraint violations, soft-constraint penalties, overtime notes. Explicitly says "No violations or unfilled shifts" when there's nothing to report.
+3. **Roster** — two views:
+    - **By date (staff×days matrix)**: one row per staff member, one column per day. Shifts shown as color-coded badges (D8=#E3F2FD, D12=#BBDEFB, P8=#F3E5F5, P12=#E1BEE7, L3=#FFF3E0, DISCO=#FFE0B2, N8=#E8F5E9, N12=#C8E6C9). Weekend columns highlighted with a light indigo background. First column (staff name) is sticky on scroll. Empty cells are blank; unfilled shifts would show a red "UNFILLED" marker.
+    - **By staff member**: classification, skill tags, contracted hours, total assigned hours, weekend/night hours and %, plus an **overtime traffic light** indicator (green = on or under contracted, yellow = 0–15% over, red = >15% over). Below that, a **block-by-block table** (per 14-day block) showing hours, contracted, overtime %, weekend %, night %, and shift count — each with its own traffic light. Ends with the full shift list as color-coded badges with date tooltips.
 
 ### Logging
 
@@ -223,7 +224,7 @@ The project is structured as follows:
 - **`models.py`** - Data models for staff, shifts, and roster positions with validation
 - **`constraints.py`** - Base classes for hard and soft constraint implementations
 - **`solver.py`** - OR-Tools CP-SAT integration with model setup
-- **`output.py`** - Builds the single `output/roster_<run_id>.html` file (run summary, messages/violations, roster tables) — see §6 for full content requirements
+- **`output.py`** - Builds the single `output/roster_<run_id>.html` file using a Jinja2 template (see `templates/roster.html`). `_build_context()` pre-computes matrix data, overtime info, and block breakdowns — the template does all rendering.
 - **`utils.py`** - Utility functions for data loading, validation, calculations, and logging setup
 
 ### File Structure
@@ -235,12 +236,19 @@ ai-roster/
 ├── solver.py
 ├── output.py
 ├── utils.py
+├── templates/
+│   └── roster.html              # Jinja2 HTML template (see §6)
+├── tests/
+│   ├── test_output.py           # Output helper tests (shift colors, overtime, etc.)
+│   ├── test_constraints.py      # Compatibility table and constraint tests
+│   └── test_utils.py            # Validation and date utility tests
 ├── definitions.yaml
 ├── roster.yaml
 ├── staff.yaml
 ├── hard_constraints.md
 ├── soft_constraints.md
 ├── weights.yaml
+├── requirements.txt
 ├── README.md
 └── output/                      # created at runtime, not checked in
     ├── roster_20260803_143012.html
@@ -257,3 +265,12 @@ Things surfaced during cleanup that are flagged rather than silently decided —
 - *(none currently open)*
 
 ## Changelog
+
+### 2026-08-04 — Jinja2 template migration
+- Migrated HTML output from f-strings in `output.py` to a Jinja2 template (`templates/roster.html`)
+- Added `jinja2==3.1.6` to `requirements.txt`
+- Staff×days matrix table with color-coded shift badges, weekend column highlighting, sticky first column
+- Overtime traffic light system: green (≤0% over), yellow (0–15% over), red (>15% over)
+- Per-staff block breakdown tables with hours, weekend/night %, overtime %, shift count
+- `output.py` refactored: `_day_info()`, `_overtime_info()`, `_build_context()` helpers; `generate_html()` uses Jinja2
+- New test file `tests/test_output.py` (19 tests covering shift colors, overtime logic, day info, context building)

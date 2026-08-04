@@ -112,7 +112,7 @@ def _run(run_id: str) -> None:
     logger.info("Step 7: Generating output")
     from output import generate_html
     generate_html(result, staff_list, positions, definitions,
-                  roster_start, roster_end, run_id)
+                  roster_start, roster_end, blocks, run_id)
 
     logger.info("Run complete. Output: %s", OUTPUT_DIR)
     logger.info("=" * 60)

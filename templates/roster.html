@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-Roster Report</title>
+<style>
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 2rem; color: #222; background: #fafafa;
+}
+h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
+h2 { margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 0.25rem; }
+h3 { margin-top: 1.5rem; }
+table { border-collapse: collapse; width: 100%; margin-bottom: 1rem;
+        background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 0.9rem; }
+th { background: #f5f5f5; font-weight: 600; }
+tr:nth-child(even) { background: #fafafa; }
+
+/* Summary cards */
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 0.75rem; margin: 1rem 0; }
+.summary-card { background: #fff; border: 1px solid #ddd; border-radius: 6px;
+                padding: 0.75rem 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.summary-card .label { font-size: 0.75rem; text-transform: uppercase; color: #666; }
+.summary-card .value { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
+.optimal { color: #1a7f37; }
+.feasible { color: #e37400; }
+.infeasible { color: #c5221f; }
+.warning { color: #c5221f; }
+
+/* Shift colors */
+.shift-D8    { background-color: #E3F2FD; color: #212121; }
+.shift-D12   { background-color: #BBDEFB; color: #212121; }
+.shift-P8    { background-color: #F3E5F5; color: #212121; }
+.shift-P12   { background-color: #E1BEE7; color: #212121; }
+.shift-L3    { background-color: #FFF3E0; color: #212121; }
+.shift-DISCO  { background-color: #FFE0B2; color: #212121; }
+.shift-N8    { background-color: #E8F5E9; color: #212121; }
+.shift-N12   { background-color: #C8E6C9; color: #212121; }
+
+/* Badge styling */
+.shift-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin: 1px 2px;
+    white-space: nowrap;
+}
+
+/* Traffic light indicators */
+.light-green {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background-color: #1a7f37;
+    margin-right: 4px;
+}
+.light-yellow {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background-color: #e37400;
+    margin-right: 4px;
+}
+.light-red {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background-color: #c5221f;
+    margin-right: 4px;
+}
+.badge-green { background: #e8f5e9; color: #1a7f37; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.badge-yellow { background: #fff3e0; color: #e37400; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+.badge-red { background: #ffebee; color: #c5221f; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+
+/* Staff blocks */
+.staff-block { margin-bottom: 2rem; padding: 1.25rem; background: #fff;
+               border: 1px solid #ddd; border-radius: 8px; }
+.staff-block h3 { margin-top: 0; margin-bottom: 0.5rem; }
+.staff-header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+                margin-bottom: 0.75rem; font-size: 0.9rem; }
+.staff-header .meta { color: #555; }
+
+/* Matrix table */
+.matrix-container { overflow-x: auto; margin-bottom: 2rem; }
+.matrix-table th { font-size: 0.75rem; padding: 4px 6px; min-width: 48px; text-align: center; }
+.matrix-table th.weekend-col { background: #e8eaf6; }
+.matrix-table td { text-align: center; font-size: 0.8rem; padding: 4px 6px; min-width: 48px; }
+.matrix-table td:first-child { text-align: left; font-weight: 500; position: sticky; left: 0;
+                                background: #fff; z-index: 1; min-width: 140px; }
+.matrix-table th:first-child { position: sticky; left: 0; z-index: 2; background: #f5f5f5; }
+.matrix-table .weekend-col td:first-child { background: #fafaff; }
+.matrix-table .weekend-col th:first-child { background: #e8eaf6; }
+
+/* Block tables */
+.block-table { margin: 0.75rem 0 0.5rem 0; font-size: 0.85rem; }
+.block-table th { background: #f0f0f0; font-size: 0.8rem; }
+.block-table td { font-size: 0.85rem; }
+
+/* Shift list */
+.shift-list { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 0.5rem; }
+.shift-list .shift-badge { cursor: default; }
+.shift-list .shift-badge:hover { opacity: 0.8; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+
+/* Messages */
+.messages-list { margin: 0.5rem 0; padding-left: 1.25rem; }
+.messages-list li { margin: 0.25rem 0; }
+</style>
+</head>
+<body>
+<h1>AI-Roster Report</h1>
+
+<!-- Run Summary -->
+<h2>Run Summary</h2>
+<div class="summary-grid">
+  <div class="summary-card">
+    <div class="label">Generated</div>
+    <div class="value">{{ generate_time }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Roster Period</div>
+    <div class="value">{{ roster_start }} &ndash; {{ roster_end }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Solver Status</div>
+    <div class="value {{ solver_status|lower }}">{{ solver_status }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Objective Value</div>
+    <div class="value">{{ objective_value }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Assignments</div>
+    <div class="value">{{ assignments|length }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Unfilled Positions</div>
+    <div class="value warning">{{ unfilled|length }}</div>
+  </div>
+</div>
+
+<!-- Messages -->
+<h2>Messages</h2>
+{% if unfilled %}
+<h3>Unfilled Shifts</h3>
+<ul class="messages-list">
+{% for pos in unfilled %}
+  <li>{{ pos.date }}: {{ pos.shift }} (skill: {{ pos.required_skill_level or 'any' }})</li>
+{% endfor %}
+</ul>
+{% elif assignments|length == 0 %}
+<p>No assignments or unfilled shifts.</p>
+{% else %}
+<p>No violations or unfilled shifts.</p>
+{% endif %}
+
+<!-- Roster Matrix -->
+<h2>Roster by Date</h2>
+<div class="matrix-container">
+<table class="matrix-table">
+<thead>
+<tr>
+  <th>Staff</th>
+  {% for d in all_dates %}
+    <th class="{{ 'weekend-col' if d.is_weekend else '' }}" title="{{ d.day_name }}">
+      {{ d.day }}<br>{{ d.abbrev }}
+    </th>
+  {% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for staff in staff_list %}
+  <tr>
+    <td>{{ staff.name }}<br><small style="color:#888">{{ staff.classification.value }}</small></td>
+    {% for d in all_dates %}
+      {% set shift = staff_matrix[staff.name][d.date_str] %}
+      <td class="{{ 'weekend-col' if d.is_weekend else '' }}">
+        {% if shift %}
+          <span class="shift-badge shift-{{ shift }}">{{ shift }}</span>
+        {% endif %}
+      </td>
+    {% endfor %}
+  </tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+
+<!-- Roster by Staff -->
+<h2>Roster by Staff</h2>
+{% for staff in staff_list %}
+  {% set info = staff_info[staff.name] %}
+  {% set blocks = staff_blocks[staff.name] %}
+
+<div class="staff-block">
+  <h3>{{ staff.name }}</h3>
+  <div class="staff-header">
+    <span class="meta">Classification: <strong>{{ staff.classification.value }}</strong></span>
+    <span class="meta">Skills: {{ staff.skill_tags|join(', ') or 'None' }}</span>
+    <span class="meta">Contracted: <strong>{{ staff.contracted_hours_per_fortnight }}h</strong>/fortnight</span>
+    <span class="badge {{ info.badge_class }}"><span class="{{ info.light_class }}"></span>{{ info.overtime_label }}</span>
+  </div>
+
+  <div class="staff-header">
+    <span class="meta">Assigned: <strong>{{ info.total_hours|round(1) }}h</strong></span>
+    <span class="meta">Weekend: {{ info.weekend_hours|round(1) }}h ({{ info.weekend_pct|round(1) }}%)</span>
+    <span class="meta">Night: {{ info.night_hours|round(1) }}h ({{ info.night_pct|round(1) }}%)</span>
+  </div>
+
+  {% for b in blocks %}
+  <h4>Block {{ b.block_idx + 1 }}: {{ b.block_start }} &ndash; {{ b.block_end }}</h4>
+  <table class="block-table">
+    <tr>
+      <th>Hours</th>
+      <td>{{ b.hours|round(1) }}h</td>
+      <th>Contracted</th>
+      <td>{{ b.contracted }}h</td>
+      <th>Overtime</th>
+      <td><span class="badge {{ b.badge_class }}"><span class="{{ b.light_class }}"></span>{{ b.overtime_label }}</span></td>
+    </tr>
+    <tr>
+      <th>Weekend</th>
+      <td>{{ b.weekend_hours|round(1) }}h ({{ b.weekend_pct|round(1) }}%)</td>
+      <th>Night</th>
+      <td>{{ b.night_hours|round(1) }}h ({{ b.night_pct|round(1) }}%)</td>
+      <th>Shifts</th>
+      <td>{{ b.shift_count }}</td>
+    </tr>
+  </table>
+  {% endfor %}
+
+  {% if info.shifts %}
+  <h4>Shifts</h4>
+  <div class="shift-list">
+    {% for s in info.shifts %}
+      <span class="shift-badge shift-{{ s.shift }}" title="{{ s.date }}">{{ s.shift }}</span>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color:#888; font-style:italic;">No shifts assigned.</p>
+  {% endif %}
+</div>
+{% endfor %}
+</body>
+</html>

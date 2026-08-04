@@ -113,13 +113,14 @@ Full authoritative text and IDs live in the two constraint files — this is a s
 
 Every run writes exactly two files into `output/` (created automatically if it doesn't exist), both sharing the same timestamp so they're always pairable:
 
-- **`output/roster_<run_id>.html`** — the single output artifact. Self-contained (no external CSS/JS), so it opens correctly on its own anywhere. Contains, in order:
-  1. Run summary — generated time, roster period, solver status, objective value, solve time.
-  2. Messages — unfilled shifts, any constraint issues, soft-constraint penalties incurred. Says explicitly when there's nothing to report.
-  3. Roster — the full schedule by date (in shift order, `D8, D12, P8, P12, L3, DISCO, N8, N12`) and by staff member (hours/weekend %/night % per fortnight block, plus their full shift list).
-- **`output/roster_<run_id>.log`** — the full log for that run: data loading, validation, solving, and output writing, not just the solver's own messages.
+- **`output/roster_<run_id>.html`** — the single output artifact. Self-contained (inline CSS, no external dependencies), rendered from `templates/roster.html` via Jinja2. Contains, in order:
+  1. **Run summary** — generated time, roster period, solver status, objective value, assignments count, unfilled positions count (displayed as responsive summary cards).
+  2. **Messages** — unfilled shifts, constraint violations, soft-constraint penalties. Explicitly states when there's nothing to report.
+  3. **Roster by date** — a staff×days matrix table with color-coded shift badges (D8=#E3F2FD, D12=#BBDEFB, P8=#F3E5F5, P12=#E1BEE7, L3=#FFF3E0, DISCO=#FFE0B2, N8=#E8F5E9, N12=#C8E6C9), weekend columns highlighted, sticky first column.
+  4. **Roster by staff** — per staff member: classification, skills, contracted hours, total assigned hours, weekend/night breakdown, overtime traffic light (green ≤0% over, yellow 0–15% over, red >15% over), block-by-block tables with hours/overtime/weekend/night/shift count, and the full shift list with date tooltips.
+- **`output/roster_<run_id>.log`** — the full log for that run: data loading, validation, solving, and output writing.
 
-Runs are never overwritten — each one adds a new timestamped pair to `output/`. There's no separate markdown output; the HTML file is the only result artifact. See `AGENTS.md` §6 for the complete spec.
+Runs are never overwritten — each one adds a new timestamped pair to `output/`. See `AGENTS.md` §6 for the complete spec.
 
 ## Running it
 
@@ -128,7 +129,7 @@ Runs are never overwritten — each one adds a new timestamped pair to `output/`
 ./.venv/bin/python -m pytest tests/
 ```
 
-Python 3.x, dependencies: Google OR-Tools (CP-SAT) and PyYAML, installed in the provided `./.venv/`.
+Python 3.x, dependencies: Google OR-Tools (CP-SAT), PyYAML, and Jinja2 (for HTML rendering), installed in the provided `./.venv/`.
 
 ## Project Structure
 
@@ -138,5 +139,7 @@ The project is structured with the following Python modules:
 - `models.py` - Data models for staff, shifts, and roster positions with validation
 - `constraints.py` - Base classes for hard and soft constraint implementations
 - `solver.py` - OR-Tools CP-SAT integration with model setup
-- `output.py` - Builds the single `output/roster_<run_id>.html` file (run summary, messages, roster)
+- `output.py` - Builds the single `output/roster_<run_id>.html` file using Jinja2 (see `templates/roster.html`)
 - `utils.py` - Utility functions for data loading, validation, calculations, and logging setup
+- `templates/roster.html` - Jinja2 HTML template for roster output
+- `tests/test_output.py` - Unit tests for output helpers (shift colors, overtime, day info, context building)

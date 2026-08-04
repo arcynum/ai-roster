@@ -2,33 +2,202 @@
 """
 ai-roster - HTML roster output generation.
 
-Produces a single self-contained HTML file per run containing:
+Produces a single self-contained HTML file per run using a Jinja2 template.
+Contains:
 1. Run summary (timestamp, period, solver status, objective, solve time)
 2. Messages (unfilled shifts, constraint violations, soft-constraint penalties)
-3. Roster tables (by date and by staff member)
+3. Roster tables (staff x days matrix, and by staff member with block breakdowns)
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from utils import OUTPUT_DIR, is_weekend, shift_span_hours
+from jinja2 import Environment, FileSystemLoader
+
+from utils import OUTPUT_DIR, is_weekend
 
 if TYPE_CHECKING:
     from models import Staff, RosterSlot
     from solver import SolveResult
 
-
 logger = logging.getLogger("ai-roster")
 
-# Shift display order for tables
+# Shift display order
 SHIFT_ORDER = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
 
-# Classification sort order (highest first)
+# Classification sort order
 CLASS_ORDER = {"CN": 0, "RN": 1, "Graduate": 2}
+
+# Shift color map (hex background colors)
+SHIFT_COLORS = {
+    "D8": "#E3F2FD",
+    "D12": "#BBDEFB",
+    "P8": "#F3E5F5",
+    "P12": "#E1BEE7",
+    "L3": "#FFF3E0",
+    "DISCO": "#FFE0B2",
+    "N8": "#E8F5E9",
+    "N12": "#C8E6C9",
+}
+
+DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+             "Saturday", "Sunday"]
+DAY_ABBREVS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+# Template directory
+TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
+
+
+def _day_info(d: date) -> dict:
+    """Return a dict with day metadata for the matrix header."""
+    wd = d.weekday()
+    return {
+        "date_str": d.isoformat(),
+        "day": d.day,
+        "abbrev": DAY_ABBREVS[wd],
+        "day_name": DAY_NAMES[wd],
+        "is_weekend": wd >= 5,
+    }
+
+
+def _overtime_info(hours: float, contracted: float) -> tuple[float, str, str, str]:
+    """Compute overtime percentage and traffic-light styling.
+
+    Returns (over_pct, light_class, badge_class, label).
+    """
+    if contracted <= 0:
+        return 0.0, "light-green", "badge-green", "On track"
+    over_pct = max(0.0, (hours - contracted) / contracted * 100)
+    if over_pct <= 0:
+        return over_pct, "light-green", "badge-green", "On track"
+    if over_pct <= 15:
+        return over_pct, "light-yellow", "badge-yellow", f"+{over_pct:.0f}%"
+    return over_pct, "light-red", "badge-red", f"+{over_pct:.0f}%"
+
+
+def _build_context(
+    result: SolveResult,
+    staff_list: list["Staff"],
+    definitions: dict,
+    roster_start: date,
+    roster_end: date,
+    blocks: list[list[date]],
+) -> dict:
+    """Build the full context dict for the Jinja2 template."""
+    staff_map = {s.name: s for s in staff_list}
+    all_dates = []
+    for i in range((roster_end - roster_start).days + 1):
+        all_dates.append(_day_info(roster_start + timedelta(days=i)))
+    all_date_strs = {d["date_str"] for d in all_dates}
+
+    # Build staff_matrix: {staff_name: {date_str: shift_or_None}}
+    staff_matrix: dict[str, dict[str, str | None]] = {}
+    for staff in staff_list:
+        staff_matrix[staff.name] = {ds: None for ds in all_date_strs}
+    for slot in result.assignments:
+        staff_matrix.setdefault(slot.staff_name, {})[slot.date] = slot.shift
+
+    # Build staff_info and staff_blocks
+    staff_info: dict[str, dict] = {}
+    staff_blocks: dict[str, list[dict]] = {}
+
+    for staff in staff_list:
+        slots = sorted(
+            [s for s in result.assignments if s.staff_name == staff.name],
+            key=lambda s: s.date,
+        )
+        total_hours = 0.0
+        weekend_hours = 0.0
+        night_hours = 0.0
+        shift_list = []
+
+        for slot in slots:
+            paid = definitions[slot.shift]["paid_hours"]
+            total_hours += paid
+            dt = date.fromisoformat(slot.date)
+            if is_weekend(dt):
+                weekend_hours += paid
+            if definitions[slot.shift]["crosses_midnight"]:
+                night_hours += paid
+            shift_list.append({"date": slot.date, "shift": slot.shift})
+
+        weekend_pct = (weekend_hours / total_hours * 100) if total_hours > 0 else 0.0
+        night_pct = (night_hours / total_hours * 100) if total_hours > 0 else 0.0
+        over_pct, light, badge, label = _overtime_info(
+            total_hours, staff.contracted_hours_per_fortnight
+        )
+
+        staff_info[staff.name] = {
+            "total_hours": total_hours,
+            "weekend_hours": weekend_hours,
+            "night_hours": night_hours,
+            "weekend_pct": weekend_pct,
+            "night_pct": night_pct,
+            "over_pct": over_pct,
+            "light_class": light,
+            "badge_class": badge,
+            "overtime_label": label,
+            "shifts": shift_list,
+        }
+
+        # Per-block breakdown
+        block_data = []
+        for bi, block in enumerate(blocks):
+            block_dates = set(d.isoformat() for d in block)
+            block_slots = [s for s in slots if s.date in block_dates]
+            b_hours = sum(definitions[s.shift]["paid_hours"] for s in block_slots)
+            b_weekend = sum(
+                definitions[s.shift]["paid_hours"]
+                for s in block_slots
+                if is_weekend(date.fromisoformat(s.date))
+            )
+            b_night = sum(
+                definitions[s.shift]["paid_hours"]
+                for s in block_slots
+                if definitions[s.shift]["crosses_midnight"]
+            )
+            b_weekend_pct = (b_weekend / b_hours * 100) if b_hours > 0 else 0.0
+            b_night_pct = (b_night / b_hours * 100) if b_hours > 0 else 0.0
+            b_over_pct, b_light, b_badge, b_label = _overtime_info(
+                b_hours, staff.contracted_hours_per_fortnight
+            )
+            block_data.append({
+                "block_idx": bi,
+                "block_start": block[0].isoformat(),
+                "block_end": block[-1].isoformat(),
+                "hours": b_hours,
+                "contracted": staff.contracted_hours_per_fortnight,
+                "over_pct": b_over_pct,
+                "light_class": b_light,
+                "badge_class": b_badge,
+                "overtime_label": b_label,
+                "weekend_hours": b_weekend,
+                "weekend_pct": b_weekend_pct,
+                "night_hours": b_night,
+                "night_pct": b_night_pct,
+                "shift_count": len(block_slots),
+            })
+
+        staff_blocks[staff.name] = block_data
+
+    return {
+        "generate_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "roster_start": roster_start.isoformat(),
+        "roster_end": roster_end.isoformat(),
+        "solver_status": result.status,
+        "objective_value": result.objective_value,
+        "assignments": result.assignments,
+        "unfilled": result.unfilled,
+        "staff_list": staff_list,
+        "all_dates": all_dates,
+        "staff_matrix": staff_matrix,
+        "staff_info": staff_info,
+        "staff_blocks": staff_blocks,
+    }
 
 
 def generate_html(
@@ -38,6 +207,7 @@ def generate_html(
     definitions: dict,
     roster_start: date,
     roster_end: date,
+    blocks: list[list[date]],
     run_id: str,
 ) -> Path:
     """Generate the roster HTML file and write it to output/.
@@ -47,200 +217,16 @@ def generate_html(
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     output_path = OUTPUT_DIR / f"roster_{run_id}.html"
 
-    html = _build_html(result, staff_list, positions, definitions,
-                       roster_start, roster_end)
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATE_DIR),
+        autoescape=False,
+    )
+    template = env.get_template("roster.html")
+
+    context = _build_context(result, staff_list, definitions,
+                             roster_start, roster_end, blocks)
+    html = template.render(**context)
 
     output_path.write_text(html, encoding="utf-8")
     logger.info("Wrote HTML roster to %s", output_path)
     return output_path
-
-
-def _build_html(
-    result: SolveResult,
-    staff_list: list["Staff"],
-    positions: list,
-    definitions: dict,
-    roster_start: date,
-    roster_end: date,
-) -> str:
-    """Build the full HTML string."""
-    summary = _render_summary(result, roster_start, roster_end)
-    messages = _render_messages(result, staff_list, definitions)
-    staff_map = {s.name: s for s in staff_list}
-    roster_by_date = _render_roster_by_date(result, definitions, staff_map)
-    roster_by_staff = _render_roster_by_staff(result, staff_list, definitions)
-
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI-Roster Report</title>
-<style>{_css()}</style>
-</head>
-<body>
-<h1>AI-Roster Report</h1>
-{summary}
-{messages}
-{roster_by_date}
-{roster_by_staff}
-</body>
-</html>"""
-
-
-def _css() -> str:
-    """Inline CSS for the HTML output."""
-    return """
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-       margin: 2rem; color: #222; background: #fafafa; }
-h1 { border-bottom: 2px solid #333; padding-bottom: 0.5rem; }
-h2 { margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 0.25rem; }
-h3 { margin-top: 1.5rem; }
-table { border-collapse: collapse; width: 100%; margin-bottom: 1rem;
-        background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 0.9rem; }
-th { background: #f5f5f5; font-weight: 600; }
-tr:nth-child(even) { background: #fafafa; }
-.summary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-                gap: 0.75rem; margin: 1rem 0; }
-.summary-card { background: #fff; border: 1px solid #ddd; border-radius: 6px;
-                padding: 0.75rem 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-.summary-card .label { font-size: 0.75rem; text-transform: uppercase; color: #666; }
-.summary-card .value { font-size: 1.1rem; font-weight: 600; margin-top: 0.25rem; }
-.optimal { color: #1a7f37; }
-.feasible { color: #e37400; }
-.infeasible { color: #c5221f; }
-.warning { color: #c5221f; }
-.staff-block { margin-bottom: 1.5rem; padding: 1rem; background: #fff;
-              border: 1px solid #ddd; border-radius: 6px; }
-.staff-block h3 { margin-top: 0; }
-.hours-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
-.hours-bar span { background: #e8f5e9; padding: 2px 8px; border-radius: 4px;
-                  font-size: 0.8rem; }
-"""
-
-
-def _render_summary(result: SolveResult, start: date, end: date) -> str:
-    """Render the run summary section."""
-    status_class = result.status.lower()
-    return f"""<h2>Run Summary</h2>
-<div class="summary-grid">
-  <div class="summary-card">
-    <div class="label">Generated</div>
-    <div class="value">{result.solve_time_s:.1f}s</div>
-  </div>
-  <div class="summary-card">
-    <div class="label">Roster Period</div>
-    <div class="value">{start.isoformat()} &ndash; {end.isoformat()}</div>
-  </div>
-  <div class="summary-card">
-    <div class="label">Solver Status</div>
-    <div class="value {status_class}">{result.status}</div>
-  </div>
-  <div class="summary-card">
-    <div class="label">Objective Value</div>
-    <div class="value">{result.objective_value}</div>
-  </div>
-  <div class="summary-card">
-    <div class="label">Assignments</div>
-    <div class="value">{len(result.assignments)}</div>
-  </div>
-  <div class="summary-card">
-    <div class="label">Unfilled Positions</div>
-    <div class="value warning">{len(result.unfilled)}</div>
-  </div>
-</div>"""
-
-
-def _render_messages(result: SolveResult, staff_list: list["Staff"],
-                     definitions: dict) -> str:
-    """Render the messages/violations section."""
-    parts: list[str] = []
-
-    if result.unfilled:
-        parts.append("<h3>Unfilled Shifts</h3><ul>")
-        for pos in result.unfilled:
-            parts.append(f"<li>{pos.get('date', '?')}: {pos.get('shift', '?')} "
-                         f"(skill: {pos.get('required_skill_level', 'any')})</li>")
-        parts.append("</ul>")
-
-    if not result.unfilled and len(result.assignments) == 0:
-        parts.append("<p>No violations or unfilled shifts.</p>")
-
-    return f"""<h2>Messages</h2>
-{''.join(parts)}"""
-
-
-def _render_roster_by_date(result: SolveResult, definitions: dict,
-                           staff_map: dict[str, "Staff"]) -> str:
-    """Render the roster grouped by date."""
-    # Group assignments by date
-    by_date: dict[str, list[RosterSlot]] = {}
-    for slot in result.assignments:
-        by_date.setdefault(slot.date, []).append(slot)
-
-    # Sort dates
-    sorted_dates = sorted(by_date.keys())
-
-    rows: list[str] = []
-    for d in sorted_dates:
-        slots = sorted(by_date[d], key=lambda s: (
-            SHIFT_ORDER.index(s.shift) if s.shift in SHIFT_ORDER else 99,
-            CLASS_ORDER.get(_classification_of(s.staff_name, staff_map), 9),
-        ))
-        date_str = f"<th colspan='3' style='background:#e3f2fd'>{d}</th>"
-        shift_row = "<tr>" + "".join(f"<th>{s.shift}</th>" for s in slots) + "</tr>"
-        staff_row = "<tr>" + "".join(f"<td>{s.staff_name}</td>" for s in slots) + "</tr>"
-        rows.append(f"<table><tr>{date_str}</tr>{shift_row}{staff_row}</table>")
-
-    return f"""<h2>Roster by Date</h2>
-{''.join(rows)}"""
-
-
-def _render_roster_by_staff(result: SolveResult, staff_list: list["Staff"],
-                            definitions: dict) -> str:
-    """Render the roster grouped by staff member."""
-    # Group assignments by staff
-    by_staff: dict[str, list[RosterSlot]] = {}
-    for slot in result.assignments:
-        by_staff.setdefault(slot.staff_name, []).append(slot)
-
-    staff_map = {s.name: s for s in staff_list}
-
-    parts: list[str] = []
-    for staff in sorted(staff_list, key=lambda s: s.name):
-        slots = sorted(by_staff.get(staff.name, []), key=lambda s: s.date)
-        total_hours = sum(
-            definitions[s.shift]["paid_hours"] for s in slots
-        )
-        weekend_hours = sum(
-            definitions[s.shift]["paid_hours"]
-            for s in slots
-            if is_weekend(date.fromisoformat(s.date))
-        )
-        night_hours = sum(
-            definitions[s.shift]["paid_hours"]
-            for s in slots
-            if definitions[s.shift]["crosses_midnight"]
-        )
-
-        shift_list = ", ".join(f"{s.date}: {s.shift}" for s in slots)
-
-        parts.append(f"""<div class="staff-block">
-  <h3>{staff.name} <small>({staff.classification.value})</small></h3>
-  <p>Skills: {", ".join(staff.skill_tags) or "None"}</p>
-  <p>Contracted: {staff.contracted_hours_per_fortnight}h/fortnight</p>
-  <p>Assigned: {total_hours:.1f}h (weekend: {weekend_hours:.1f}h, night: {night_hours:.1f}h)</p>
-  <p>Shifts: {shift_list or "None"}</p>
-</div>""")
-
-    return f"""<h2>Roster by Staff</h2>
-{''.join(parts)}"""
-
-
-def _classification_of(staff_name: str, staff_map: dict[str, "Staff"]) -> str:
-    """Lookup classification for a staff member."""
-    staff = staff_map.get(staff_name)
-    if staff is None:
-        return ""
-    return staff.classification.value
