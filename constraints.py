@@ -333,13 +333,13 @@ class ContractedHoursFloor(BaseHardConstraint):
 
 
 class OvertimeCap(BaseHardConstraint):
-    """[H#e8f7d6c5] Max 24 paid hours of overtime above contracted per block."""
+    """[H#e8f7d6c5] Max 12 paid hours of overtime above contracted per block."""
 
     constraint_id = "[H#e8f7d6c5]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions):
-        # TODO: cap overtime at min(76, contracted + 24)
+        # TODO: cap overtime at min(76, contracted + 12)
         pass
 
 
