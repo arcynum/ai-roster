@@ -16,6 +16,7 @@ A CP-SAT–based rostering system for the pediatric emergency ward at TPCH. Give
 | `hard_constraints.md` | Non-negotiable rules, each with a unique `[H#...]` ID |
 | `soft_constraints.md` | Preferences optimized by the solver, each with a unique `[S#...]` ID |
 | `weights.yaml` | Relative importance of each soft constraint, keyed by ID |
+| `config.yaml` | Optional constraint toggle config — see "Constraint Toggles" below |
 | `output/` | Generated at runtime: one `roster_<run_id>.html` + `roster_<run_id>.log` pair per run — see Output below |
 
 ## `roster.yaml` schema
@@ -133,6 +134,22 @@ Runs are never overwritten — each one adds a new timestamped pair to `output/`
 ```
 
 Python 3.x, dependencies: Google OR-Tools (CP-SAT), PyYAML, and Jinja2 (for HTML rendering), installed in the provided `./.venv/`.
+
+## Constraint Toggles
+
+During development, you can selectively disable constraints by creating a `config.yaml` file. Only constraint IDs listed under `enabled` are active; everything else is skipped.
+
+```yaml
+constraints:
+  hard:
+    enabled:
+      - "[H#e91c63ab]"  # No double booking
+  soft:
+    enabled:
+      - "[S#a1d6c3d5]"  # Weekend fairness
+```
+
+If `config.yaml` doesn't exist, all constraints are enabled (normal operation). Every constraint added to `constraints.py` must have a corresponding toggle entry in `config.yaml` (commented out by default). See `AGENTS.md` §10 for details.
 
 ## Project Structure
 

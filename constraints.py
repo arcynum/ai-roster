@@ -478,3 +478,13 @@ SOFT_CONSTRAINTS = [
     ConsecutiveShiftDiscouraged,
     SkillLevelTiebreaker,
 ]
+
+
+def get_hard_constraint_ids() -> list[str]:
+    """Return the constraint_id of every registered hard constraint."""
+    return [c.constraint_id for c in HARD_CONSTRAINTS]
+
+
+def get_soft_constraint_ids() -> list[str]:
+    """Return the constraint_id of every registered soft constraint."""
+    return [c.constraint_id for c in SOFT_CONSTRAINTS]

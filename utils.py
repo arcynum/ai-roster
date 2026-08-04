@@ -131,6 +131,76 @@ def load_weights(path: Path | None = None) -> dict[str, int]:
     return data
 
 
+def load_config(path: Path | None = None,
+                known_hard_ids: set[str] | None = None,
+                known_soft_ids: set[str] | None = None) -> dict | None:
+    """Load constraint toggle config from config.yaml.
+
+    Returns None if the file doesn't exist or has no ``constraints`` section
+    (all constraints enabled — normal operation).
+
+    Returns
+    -------
+    dict or None
+        ``{"hard": {"enabled": [str]}, "soft": {"enabled": [str]}}`` when
+        the config is present.  Each ``enabled`` list contains the constraint
+        IDs that should be active; everything else is skipped.
+
+    Parameters
+    ----------
+    known_hard_ids / known_soft_ids
+        Sets of valid constraint IDs used for validation.  Unknown IDs are
+        logged as warnings but do not cause the config to be rejected.
+    """
+    path = path or PROJECT_ROOT / "config.yaml"
+    logger = logging.getLogger("ai-roster")
+
+    if not path.exists():
+        logger.info("No config.yaml found — all constraints enabled")
+        return None
+
+    data = load_yaml(path)
+    if not data or not isinstance(data, dict) or "constraints" not in data:
+        logger.info("config.yaml has no constraints section — all constraints enabled")
+        return None
+
+    constraints = data["constraints"]
+    if constraints is None:
+        # `constraints:` with no value → treat as empty mapping
+        constraints = {}
+    elif not isinstance(constraints, dict):
+        logger.info("config.yaml: constraints is not a mapping — all constraints enabled")
+        return None
+
+    result: dict = {"hard": {"enabled": []}, "soft": {"enabled": []}}
+
+    for kind in ("hard", "soft"):
+        kind_data = constraints.get(kind, {}) or {}
+        enabled = kind_data.get("enabled", [])
+        if not isinstance(enabled, list):
+            logger.warning("config.yaml: constraints.%s.enabled is not a list — treating as empty", kind)
+            continue
+        for cid in enabled:
+            if not isinstance(cid, str):
+                logger.warning("config.yaml: constraints.%s.enabled entry %r is not a string — skipping", kind, cid)
+                continue
+            # Validate against known IDs if provided
+            known = known_hard_ids if kind == "hard" else known_soft_ids
+            if known is not None and cid not in known:
+                logger.warning(
+                    "config.yaml: unknown %s constraint ID %r — it will be ignored",
+                    kind, cid,
+                )
+            result[kind]["enabled"].append(cid)
+
+    logger.info(
+        "Loaded config.yaml: %d hard, %d soft constraints enabled",
+        len(result["hard"]["enabled"]),
+        len(result["soft"]["enabled"]),
+    )
+    return result
+
+
 def _parse_constraint_file(path: Path, kind: str) -> list[dict]:
     """Generic parser for hard_constraints.md / soft_constraints.md.
 

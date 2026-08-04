@@ -189,7 +189,25 @@ Concrete patterns for the trickier constraints, so they don't each get reinvente
 - The lazy-mode "one runnable check" convention (§10 below) is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
 - **Weight-dominance sanity check:** `S#3d9a7ec1`'s weight (100000) is only correct if it exceeds the maximum possible *combined* penalty from every other soft constraint across the whole roster in a single run — not just one staff member's worst case. Add a test that computes an upper bound on that combined total (worst-case per-staff `S#30c6f5ad` penalty × staff count, plus worst-case fairness/tiebreaker penalties) and asserts it's still less than `S#3d9a7ec1`'s weight. If this ever fails (e.g. because the roster grows much larger, or another high-weight soft constraint gets added later), the casual-as-last-resort guarantee breaks silently — the solver could start preferring a casual over a valid all-named-staff solution.
 
-## 10. Agent Working Mode — "Ponytail" (lazy senior dev)
+## 10. Constraint Toggles (config.yaml)
+
+During development, constraints can be selectively disabled via `config.yaml` to simplify debugging.
+
+### How it works
+
+- If `config.yaml` doesn't exist or has no `constraints` section → **all constraints enabled** (normal operation).
+- If `constraints` exists → only constraint IDs listed under `enabled` are active. Everything else is skipped.
+- Both `hard:` and `soft:` sections are supported. They're independent — you can toggle hard constraints on and soft constraints off.
+
+### Adding a new constraint
+
+**Every new constraint added to `constraints.py` MUST have a corresponding toggle entry in `config.yaml`** (commented out, under the appropriate `enabled` list). The config file is the single source of truth for which constraints exist in the system. If a constraint is missing from the config, it will silently be excluded from the solver.
+
+### Testing
+
+Tests that need specific constraints active must override the default (no-config = all enabled) by providing a `constraint_config` parameter to `RosterModel`. See `tests/test_config.py` for examples.
+
+## 11. Agent Working Mode — "Ponytail" (lazy senior dev)
 
 You are a lazy senior developer. Lazy means efficient, not careless. The best code is the code never written.
 
@@ -219,13 +237,13 @@ Rules:
 
 **Not lazy about**: understanding the problem (read it fully and trace the real flow before picking a rung — a small diff you don't understand is just laziness dressed up as efficiency), input validation at trust boundaries, error handling that prevents data loss, security, accessibility, the calibration real hardware needs, anything explicitly requested. Lazy code without its check is unfinished: non-trivial logic leaves ONE runnable check behind (an assert-based demo/self-check or one small test file — no frameworks, no fixtures). Trivial one-liners need no test.
 
-## 11. Python Coding Standards
+## 12. Python Coding Standards
 
 1. **Indentation**: exactly 4 spaces, never tabs. Before adding logic, read the surrounding lines to confirm the current indentation context. Keep `if`/`for`/`while`/`def`/`class` blocks aligned with their parent scope.
 2. **Spacing & style**: spaces around operators (`a = b + c`); PEP 8 naming (snake_case functions/variables, PascalCase classes); consistent vertical whitespace between method definitions.
 3. **Verification**: after editing a `.py` file, verify no `IndentationError`/`SyntaxError` was introduced by running or linting the relevant script.
 
-## 12. Python Implementation Structure
+## 13. Python Implementation Structure
 
 The project is structured as follows:
 

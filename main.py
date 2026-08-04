@@ -20,12 +20,14 @@ from datetime import date
 from pathlib import Path
 from uuid import uuid4
 
+from constraints import get_hard_constraint_ids, get_soft_constraint_ids
 from models import Classification, Staff
 from solver import RosterModel, SolveResult
 from utils import (
     OUTPUT_DIR,
     generate_dates,
     get_fortnight_blocks,
+    load_config,
     load_definitions,
     load_hard_constraints,
     load_roster,
@@ -67,6 +69,9 @@ def _run(run_id: str) -> None:
     weights = load_weights()
     hard_constraints = load_hard_constraints()
     soft_constraints = load_soft_constraints()
+    known_hard_ids = set(get_hard_constraint_ids())
+    known_soft_ids = set(get_soft_constraint_ids())
+    config = load_config(known_hard_ids=known_hard_ids, known_soft_ids=known_soft_ids)
 
     # Step 2: Validate data
     logger.info("Step 2: Validating data")
@@ -102,6 +107,7 @@ def _run(run_id: str) -> None:
         definitions=definitions,
         weights=weights,
         blocks=[[d.isoformat() for d in block] for block in blocks],
+        constraint_config=config,
     )
     model.build_model()
 

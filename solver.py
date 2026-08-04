@@ -68,12 +68,14 @@ class RosterModel:
         definitions: dict,
         weights: dict[str, int],
         blocks: list[list[str]],
+        constraint_config: dict | None = None,
     ):
         self.staff_list = staff_list
         self.positions = positions
         self.definitions = definitions
         self.weights = weights
         self.blocks = blocks
+        self.constraint_config = constraint_config
 
         # Derived lookups
         self.staff_by_name: dict[str, Staff] = {s.name: s for s in staff_list}
@@ -168,10 +170,21 @@ class RosterModel:
                      num_staff * num_positions, num_staff * num_blocks)
 
     def _apply_hard_constraints(self) -> None:
-        """Apply all hard constraints to the model."""
+        """Apply hard constraints to the model, filtered by config."""
+        enabled_ids: set[str] | None = None
+        if self.constraint_config is not None:
+            enabled_ids = set(self.constraint_config.get("hard", {}).get("enabled", []))
+
+        applied = 0
+        skipped = 0
         for constraint_cls in HARD_CONSTRAINTS:
+            cid = constraint_cls.constraint_id
+            if enabled_ids is not None and cid not in enabled_ids:
+                logger.debug("Skipping disabled hard constraint %s", cid)
+                skipped += 1
+                continue
             constraint = constraint_cls()
-            logger.debug("Applying hard constraint %s", constraint.constraint_id)
+            logger.debug("Applying hard constraint %s", cid)
             constraint.apply(
                 model=self.model,
                 staff_list=self.staff_list,
@@ -183,14 +196,27 @@ class RosterModel:
                 blocks=self.blocks,
                 positions=self.positions,
             )
+            applied += 1
+
+        logger.info("Hard constraints: %d applied, %d skipped", applied, skipped)
 
     def _apply_soft_constraints(self) -> None:
-        """Apply all soft constraints as objective penalties."""
+        """Apply soft constraints as objective penalties, filtered by config."""
+        enabled_ids: set[str] | None = None
+        if self.constraint_config is not None:
+            enabled_ids = set(self.constraint_config.get("soft", {}).get("enabled", []))
+
+        applied = 0
+        skipped = 0
         for constraint_cls in SOFT_CONSTRAINTS:
+            cid = constraint_cls.constraint_id
+            if enabled_ids is not None and cid not in enabled_ids:
+                logger.debug("Skipping disabled soft constraint %s", cid)
+                skipped += 1
+                continue
             constraint = constraint_cls()
-            weight = self.weights.get(constraint.constraint_id, 1)
-            logger.debug("Applying soft constraint %s (weight=%d)",
-                         constraint.constraint_id, weight)
+            weight = self.weights.get(cid, 1)
+            logger.debug("Applying soft constraint %s (weight=%d)", cid, weight)
             constraint.apply(
                 model=self.model,
                 staff_list=self.staff_list,
@@ -203,6 +229,9 @@ class RosterModel:
                 positions=self.positions,
                 weight=weight,
             )
+            applied += 1
+
+        logger.info("Soft constraints: %d applied, %d skipped", applied, skipped)
 
     def solve(self) -> SolveResult:
         """Run the CP-SAT solver and return the result.

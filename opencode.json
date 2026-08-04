@@ -15,6 +15,7 @@
     "external_directory": "ask",
     "doom_loop": "ask"
   },
+  "plugin": ["@dietrichgebert/ponytail"],
   "provider": {
     "chat": {
       "npm": "@ai-sdk/openai-compatible",
@@ -60,7 +61,7 @@
             "cache_write": 5.34
           },
           "limit": {
-            "context": 110000,
+            "context": 120000,
             "output": 16384
           }
         }
