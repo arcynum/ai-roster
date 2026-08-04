@@ -13,7 +13,7 @@
     "webfetch": "ask",
     "websearch": "ask",
     "external_directory": "ask",
-    "doom_loop": "ask",
+    "doom_loop": "ask"
   },
   "provider": {
     "chat": {
@@ -30,7 +30,7 @@
           "cost": {
             "input": 0.00000427,
             "output": 0.00002135,
-            "cache_read": 0.00000043,
+            "cache_read": 4.3e-7,
             "cache_write": 0.00000534
           },
           "limit": {
@@ -66,5 +66,9 @@
         }
       }
     }
+  },
+  "compaction": {
+    "auto": false,
+    "prune": false
   }
 }
