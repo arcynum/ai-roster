@@ -455,14 +455,29 @@ class ContractedHoursFloor(BaseHardConstraint):
     """[H#d9a8b7c6] Staff must meet contracted hours floor per block.
 
     Holidays proportionally reduce the floor; red requests do not.
+    Uses precomputed adjusted_hours via utils.compute_adjusted_hours.
     """
 
     constraint_id = "[H#d9a8b7c6]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions):
-        # TODO: enforce minimum paid hours per staff per block
-        pass
+              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+        from utils import compute_adjusted_hours
+
+        if staff_hours_vars is None:
+            return
+
+        from datetime import date as date_type
+
+        for si, staff in enumerate(staff_list):
+            for bi, block in enumerate(blocks):
+                block_strs = [d if isinstance(d, str) else d.isoformat() for d in block]
+                adj = compute_adjusted_hours(
+                    staff.contracted_hours_per_fortnight,
+                    staff.holidays,
+                    block_strs,
+                )
+                model.Add(staff_hours_vars[si][bi] >= adj)
 
 
 class OvertimeCap(BaseHardConstraint):

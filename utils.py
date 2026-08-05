@@ -469,3 +469,30 @@ def hours_to_scaled(hours: float) -> int:
 def scaled_to_hours(scaled: int) -> float:
     """Convert a scaled integer back to float hours."""
     return scaled / SCALE
+
+
+def compute_adjusted_hours(
+    contracted_hours: float,
+    holidays: list[dict],
+    block_dates: list[str],
+) -> int:
+    """[H#a3d8f6c1] Compute adjusted contracted hours for one 14-day block.
+
+    adjusted_hours = floor(contracted_hours_per_fortnight * available_days / 14)
+    where available_days = 14 - (count of block days falling within any holiday range).
+
+    Red requests do not factor in. Returns SCALE-d integer.
+    """
+    if not block_dates:
+        return 0
+    holiday_days = 0
+    for h in holidays:
+        h_start = date.fromisoformat(h["start"])
+        h_end = date.fromisoformat(h["end"])
+        for bd in block_dates:
+            bd_date = date.fromisoformat(bd)
+            if h_start <= bd_date <= h_end:
+                holiday_days += 1
+    available = 14 - holiday_days
+    contracted_scaled = int(round(contracted_hours * SCALE))
+    return contracted_scaled * available // 14

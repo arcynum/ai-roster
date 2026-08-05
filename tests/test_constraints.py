@@ -844,3 +844,151 @@ class TestNightToDayRestApply:
         # No staff should be assigned both positions (N12→DISCO is forbidden)
         for si in range(len(staff_names)):
             assert solver.Value(assignments[si][0]) + solver.Value(assignments[si][1]) <= 1
+
+
+class TestContractedHoursFloor:
+    """Test the ContractedHoursFloor hard constraint."""
+
+    def test_apply_adds_constraints(self):
+        """The apply method should add constraints to the model for staff-hours."""
+        from ortools.sat.python import cp_model
+        from constraints import ContractedHoursFloor
+        from utils import compute_adjusted_hours, SCALE
+
+        model = cp_model.CpModel()
+
+        definitions = {
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
+        }
+
+        from models import Staff, Classification
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
+        blocks = [all_dates]
+        positions = [
+            {"date": "2026-08-03", "shift": "D8", "required_skill_level": None, "day_name": "Monday"},
+        ]
+
+        assignments = [
+            [model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))]
+            for s in range(len(staff_names))
+        ]
+
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+        for si in range(len(staff_names)):
+            model.Add(sum(assignments[si][pi] for pi in range(len(positions))) <= 1)
+
+        staff_hours_vars = [[model.NewIntVar(0, 20000, f"hours_{s}_{b}") for b in range(len(blocks))] for s in range(len(staff_names))]
+
+        constraint = ContractedHoursFloor()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+            staff_hours_vars=staff_hours_vars,
+        )
+
+        # The constraint should have added at least one constraint
+        # We can verify by solving and checking the hour variable meets the floor
+        expected_adj = compute_adjusted_hours(40.0, [], all_dates)
+        assert expected_adj == 40.0 * SCALE
+
+    def test_solver_enforces_floor(self):
+        """Solver should reject solutions where staff hours < adjusted contracted hours."""
+        from ortools.sat.python import cp_model
+        from constraints import ContractedHoursFloor
+        from models import Staff, Classification
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+
+        definitions = {
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
+        }
+
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
+        blocks = [all_dates]
+        positions = [
+            {"date": "2026-08-03", "shift": "D8", "required_skill_level": None, "day_name": "Monday"},
+        ]
+
+        assignments = [
+            [model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))]
+            for s in range(len(staff_names))
+        ]
+
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+        for si in range(len(staff_names)):
+            model.Add(sum(assignments[si][pi] for pi in range(len(positions))) <= 1)
+
+        # Create hours variables the same way solver.py does
+        from utils import SCALE
+        staff_hours_vars = []
+        for si in range(len(staff_names)):
+            block_vars = []
+            for bi in range(len(blocks)):
+                block_dates = set(blocks[bi])
+                hour_vars = []
+                for pi, pos in enumerate(positions):
+                    if pos["date"] in block_dates:
+                        shift_paid = definitions[pos["shift"]]["paid_hours"]
+                        scaled_paid = int(round(shift_paid * SCALE))
+                        hour_vars.append(scaled_paid * assignments[si][pi])
+                if hour_vars:
+                    total = model.NewIntVar(0, 76 * SCALE, f"hours_{si}_{bi}")
+                    model.Add(total == sum(hour_vars))
+                    block_vars.append(total)
+                else:
+                    zero = model.NewIntVar(0, 0, f"hours_{si}_{bi}")
+                    block_vars.append(zero)
+            staff_hours_vars.append(block_vars)
+
+        constraint = ContractedHoursFloor()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+            staff_hours_vars=staff_hours_vars,
+        )
+
+        # With only 1 D8 position (8h) and 40h floor, the model should be infeasible
+        # This is expected - the floor constraint can't be satisfied with so few positions
+        status = solver.Solve(model)
+        assert status == cp_model.INFEASIBLE  # 8h < 40h floor

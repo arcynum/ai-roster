@@ -195,6 +195,7 @@ class RosterModel:
                 all_dates=self.all_dates,
                 blocks=self.blocks,
                 positions=self.positions,
+                staff_hours_vars=self._staff_hours_vars,
             )
             applied += 1
 
@@ -227,6 +228,7 @@ class RosterModel:
                 all_dates=self.all_dates,
                 blocks=self.blocks,
                 positions=self.positions,
+                staff_hours_vars=self._staff_hours_vars,
                 weight=weight,
             )
             applied += 1

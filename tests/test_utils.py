@@ -5,6 +5,8 @@ from datetime import date, timedelta
 import pytest
 
 from utils import (
+    SCALE,
+    compute_adjusted_hours,
     generate_dates,
     get_fortnight_blocks,
     validate_roster_period,
@@ -219,3 +221,52 @@ class TestValidateStaffRecords:
         ]
         # Should not raise
         validate_staff_records(records)
+
+
+class TestComputeAdjustedHours:
+    """Test compute_adjusted_hours function for holiday proration."""
+
+    def test_no_holidays_full_block(self):
+        """No holidays should return full contracted hours."""
+        result = compute_adjusted_hours(40.0, [], ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"])
+        assert result == 40.0 * SCALE  # 4000
+
+    def test_single_day_holiday(self):
+        """One holiday day should reduce hours proportionally: 13/14."""
+        result = compute_adjusted_hours(42.0, [{"start": "2026-08-05", "end": "2026-08-05"}], ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"])
+        assert result == int(42.0 * 13 / 14 * SCALE)  # 39 * SCALE
+
+    def test_half_block_holiday(self):
+        """7 holiday days out of 14 should halve the hours."""
+        result = compute_adjusted_hours(40.0, [{"start": "2026-08-03", "end": "2026-08-09"}], ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"])
+        assert result == int(40.0 * 7 / 14 * SCALE)  # 20 * SCALE
+
+    def test_holiday_outside_block_ignored(self):
+        """Holiday outside the block dates should be ignored."""
+        result = compute_adjusted_hours(40.0, [{"start": "2026-08-20", "end": "2026-08-25"}], ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"])
+        assert result == 40.0 * SCALE  # 4000
+
+    def test_holiday_spanning_block_boundary(self):
+        """Holiday starting before block should count only overlapping days."""
+        result = compute_adjusted_hours(42.0, [{"start": "2026-08-01", "end": "2026-08-05"}], ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"])
+        # 3 days overlap (08-03, 08-04, 08-05), so 11/14
+        assert result == int(42.0 * 11 / 14 * SCALE)
+
+    def test_float_contracted_hours(self):
+        """Float contracted hours should be scaled correctly."""
+        result = compute_adjusted_hours(37.5, [], ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"])
+        assert result == 37.5 * SCALE  # 3750
+
+    def test_multiple_holidays_in_block(self):
+        """Multiple non-overlapping holidays should stack."""
+        result = compute_adjusted_hours(56.0, [
+            {"start": "2026-08-03", "end": "2026-08-03"},
+            {"start": "2026-08-10", "end": "2026-08-10"},
+        ], ["2026-08-03", "2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-08", "2026-08-09", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-15", "2026-08-16"])
+        # 2 days off, 12/14
+        assert result == int(56.0 * 12 / 14 * SCALE)  # 48 * SCALE
+
+    def test_empty_block(self):
+        """Empty block should return 0."""
+        result = compute_adjusted_hours(40.0, [], [])
+        assert result == 0

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader
 
-from utils import OUTPUT_DIR, is_weekend
+from utils import OUTPUT_DIR, SCALE, compute_adjusted_hours, is_weekend
 
 if TYPE_CHECKING:
     from models import Staff, RosterSlot
@@ -77,6 +77,22 @@ def _overtime_info(hours: float, contracted: float) -> tuple[float, str, str, st
     if over_pct <= 15:
         return over_pct, "light-yellow", "badge-yellow", f"+{over_pct:.0f}%"
     return over_pct, "light-red", "badge-red", f"+{over_pct:.0f}%"
+
+
+def _hours_floor_info(hours: float, adjusted: float) -> tuple[float, str, str, str]:
+    """Compute hours-to-floor percentage and traffic-light styling.
+
+    Returns (pct, light_class, badge_class, label).
+    Green = at or above floor, yellow = 85-99%, red = below 85%.
+    """
+    if adjusted <= 0:
+        return 100.0, "light-green", "badge-green", "No floor (0h)"
+    pct = hours / adjusted * 100
+    if pct >= 100:
+        return pct, "light-green", "badge-green", f"{pct:.0f}%"
+    if pct >= 85:
+        return pct, "light-yellow", "badge-yellow", f"{pct:.0f}%"
+    return pct, "light-red", "badge-red", f"{pct:.0f}%"
 
 
 def _build_context(
@@ -148,6 +164,7 @@ def _build_context(
         block_data = []
         for bi, block in enumerate(blocks):
             block_dates = set(d.isoformat() for d in block)
+            block_date_strs = list(block_dates)
             block_slots = [s for s in slots if s.date in block_dates]
             b_hours = sum(definitions[s.shift]["paid_hours"] for s in block_slots)
             b_weekend = sum(
@@ -165,6 +182,15 @@ def _build_context(
             b_over_pct, b_light, b_badge, b_label = _overtime_info(
                 b_hours, staff.contracted_hours_per_fortnight
             )
+            b_adjusted_scaled = compute_adjusted_hours(
+                staff.contracted_hours_per_fortnight,
+                staff.holidays,
+                block_date_strs,
+            )
+            b_adjusted = b_adjusted_scaled / SCALE
+            b_floor_pct, b_floor_light, b_floor_badge, b_floor_label = _hours_floor_info(
+                b_hours, b_adjusted
+            )
             block_data.append({
                 "block_idx": bi,
                 "block_start": block[0].isoformat(),
@@ -180,6 +206,11 @@ def _build_context(
                 "night_hours": b_night,
                 "night_pct": b_night_pct,
                 "shift_count": len(block_slots),
+                "adjusted": b_adjusted,
+                "adjusted_floor_pct": b_floor_pct,
+                "adjusted_light_class": b_floor_light,
+                "adjusted_badge_class": b_floor_badge,
+                "adjusted_label": b_floor_label,
             })
 
         staff_blocks[staff.name] = block_data

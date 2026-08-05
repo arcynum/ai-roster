@@ -7,7 +7,7 @@
 #
 # paid_hours: span_hours minus the unpaid break. Use this for every hours-based
 #             constraint tied to contracted/FTE accounting: the 76h absolute cap
-#             (H#f0c5b2c4), the 24h overtime cap (H#e8f7d6c5), the contracted-hours
+#             (H#f0c5b2c4), the 12h overtime cap (H#e8f7d6c5), the contracted-hours
 #             floor (H#d9a8b7c6), and the hour totals/weekend %/night % breakdowns
 #             in result.staff.md. Do NOT use span_hours for any of these — it would
 #             overcount every shift by the unpaid break length.

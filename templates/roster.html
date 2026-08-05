@@ -223,12 +223,20 @@ tr:nth-child(even) { background: #fafafa; }
       <td><span class="badge {{ b.badge_class }}"><span class="{{ b.light_class }}"></span>{{ b.overtime_label }}</span></td>
     </tr>
     <tr>
+      <th>Adjusted Floor</th>
+      <td>{{ b.adjusted|round(1) }}h</td>
+      <th>Hours vs Floor</th>
+      <td><span class="badge {{ b.adjusted_badge_class }}"><span class="{{ b.adjusted_light_class }}"></span>{{ b.adjusted_label }}</span></td>
+      <th>Shifts</th>
+      <td>{{ b.shift_count }}</td>
+    </tr>
+    <tr>
       <th>Weekend</th>
       <td>{{ b.weekend_hours|round(1) }}h ({{ b.weekend_pct|round(1) }}%)</td>
       <th>Night</th>
       <td>{{ b.night_hours|round(1) }}h ({{ b.night_pct|round(1) }}%)</td>
-      <th>Shifts</th>
-      <td>{{ b.shift_count }}</td>
+      <th>&nbsp;</th>
+      <td>&nbsp;</td>
     </tr>
   </table>
   {% endfor %}
