@@ -1,6 +1,6 @@
 # Constraint Implementation Audit & Plan
 
-## Hard Constraints (21 constraint IDs across 12 classes)
+## Hard Constraints (22 constraint IDs across 12 classes)
 
 | Status | Constraint ID | Description | Class | Notes |
 |--------|--------------|-------------|-------|-------|
@@ -43,11 +43,11 @@
 
 | Category | Count |
 |----------|-------|
-| Fully implemented | 18 |
-| Partially implemented | 4 |
-| Not implemented (class exists, `apply()` = pass) | 2 |
-| Not implemented (no class at all) | 0 |
-| **Total constraint IDs** | **24** |
+| Fully implemented | 21 |
+| Partially implemented | 3 |
+| Not implemented (class exists, `apply()` = pass) | 4 |
+| Not implemented (no class at all) | 1 |
+| **Total constraint IDs** | **29** |
 
 ## Out-of-sync items (code/docs vs constraint files)
 
