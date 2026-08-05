@@ -241,14 +241,86 @@ class GraduateShiftConstraint(BaseHardConstraint):
 
 
 class RestPeriodConstraint(BaseHardConstraint):
-    """[H#c1f6e3f5] Minimum 11 hours between shifts (wall-clock)."""
+    """[H#c1f6e3f5] Minimum 11 hours between shifts (wall-clock).
+
+    Uses a precomputed compatibility table of (shift_on_day_d,
+    shift_on_day_d+1) pairs where the gap between end-of-shift_a
+    and start-of-shift_b is less than 11 hours.
+    """
 
     constraint_id = "[H#c1f6e3f5]"
+    SHIFT_TYPES = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
+    REST_PERIOD_SECONDS = 11 * 3600  # 11 hours in seconds
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions):
-        # TODO: enforce 11h gap using span_hours
-        pass
+
+        compat = self._build_compatibility_table(definitions)
+
+        num_staff = len(staff_names)
+        num_dates = len(all_dates)
+
+        pos_date: list[str] = [p["date"] for p in positions]
+        pos_shift: list[str] = [p["shift"] for p in positions]
+
+        pos_by_date: dict[str, list[int]] = {}
+        for i, p in enumerate(positions):
+            pos_by_date.setdefault(p["date"], []).append(i)
+
+        for si in range(num_staff):
+            for di in range(num_dates - 1):
+                date_d = all_dates[di]
+                date_d1 = all_dates[di + 1]
+                positions_d = pos_by_date.get(date_d, [])
+                positions_d1 = pos_by_date.get(date_d1, [])
+                if not positions_d or not positions_d1:
+                    continue
+
+                for pi_d in positions_d:
+                    shift_a = pos_shift[pi_d]
+                    shift_a_idx = self.SHIFT_TYPES.index(shift_a)
+                    for pi_d1 in positions_d1:
+                        shift_b = pos_shift[pi_d1]
+                        shift_b_idx = self.SHIFT_TYPES.index(shift_b)
+                        if not compat[shift_a_idx][shift_b_idx]:
+                            model.Add(
+                                assignments[si][pi_d] + assignments[si][pi_d1] <= 1
+                            )
+
+    def _build_compatibility_table(
+        self, definitions: dict
+    ) -> list[list[bool]]:
+        """Build 8x8 compatibility table.
+
+        compat[a][b] == True means shift_a on day d and shift_b on day d+1
+        have a gap of at least 11 hours between them.
+        """
+        from datetime import datetime, timedelta
+
+        n = len(self.SHIFT_TYPES)
+        compat: list[list[bool]] = [[True] * n for _ in range(n)]
+
+        for a_idx, shift_a in enumerate(self.SHIFT_TYPES):
+            for b_idx, shift_b in enumerate(self.SHIFT_TYPES):
+                a_end_str = definitions[shift_a]["end"]
+                a_crosses = definitions[shift_a]["crosses_midnight"]
+                b_start_str = definitions[shift_b]["start"]
+
+                a_end = datetime.strptime(a_end_str, "%H:%M:%S")
+                b_start = datetime.strptime(b_start_str, "%H:%M:%S")
+
+                # Absolute end of shift_a (on day d or d+1 if crosses midnight)
+                a_end_abs = a_end
+                if a_crosses:
+                    a_end_abs += timedelta(days=1)
+
+                # Absolute start of shift_b (always on day d+1)
+                b_start_abs = b_start + timedelta(days=1)
+
+                gap = (b_start_abs - a_end_abs).total_seconds()
+                compat[a_idx][b_idx] = gap >= self.REST_PERIOD_SECONDS
+
+        return compat
 
 
 class NightToDayRest(BaseHardConstraint):

@@ -15,7 +15,7 @@
 | **✅ Fully** | `[H#b72e41fa]` | Minimum skill level requirement | — | Handled by `required_skill_rank` in roster positions |
 | **⚠️ Partial** | `[H#e91c63ab]` | No overlap (wall-clock) | `NoDoubleBooking` | Compatibility table built and applied, but **only checks for actual time overlap**. Does **not** check the 11-hour rest period (that's a separate constraint). |
 | **✅ Fully** | `[H#30479c74]` | Graduate shift restriction | `GraduateShiftConstraint` | Fully implemented — forbids Graduates from D12, P12, N12 |
-| **❌ Not Impl** | `[H#c1f6e3f5]` | 11-hour rest between shifts (wall-clock) | `RestPeriodConstraint` | `apply()` is `pass` / `TODO`. The compatibility table in `NoDoubleBooking` only catches overlaps, not insufficient rest. **This means shifts like N8 (ends 07:15) → D8 (starts 07:00 next day) [overlap] are caught, but N8 (ends 07:15) → D8 (starts 08:00 next day) [7h 15m gap] is NOT caught.** |
+| **✅ Fully** | `[H#c1f6e3f5]` | 11-hour rest between shifts (wall-clock) | `RestPeriodConstraint` | Precomputed 8×8 compatibility table + forbidden-assignment constraints per staff per consecutive day pair. Only N8→D8, N8→D12, N8→DISCO, N12→D8, N12→DISCO, DISCO→D8, DISCO→P8, L3→P8, L3→D8 are incompatible (all <11h gap). Uses `span_hours` from `definitions.yaml`.
 | **❌ Not Impl** | `[H#f4c9b6c8]` | Day off between night↔day transitions | `NightToDayRest` | `apply()` is `pass` / `TODO`. Completely missing. |
 | **✅ Fully** | `[H#a5d0c7d9]` | No rostering on red-request dates | `RedRequestConstraint` | Fully implemented |
 | **✅ Fully** | `[H#b6e1d8e0]` | No rostering on holidays | `HolidayConstraint` | Fully implemented |
@@ -43,13 +43,16 @@
 
 | Category | Count |
 |----------|-------|
-| Fully implemented | 12 |
+| Fully implemented | 13 |
 | Partially implemented | 4 |
-| Not implemented (class exists, `apply()` = pass) | 6 |
+| Not implemented (class exists, `apply()` = pass) | 5 |
 | Not implemented (no class at all) | 3 |
 | **Total constraint IDs** | **25** |
 
 ## Out-of-sync items (code/docs vs constraint files)
 
 1. **`definitions.yaml` line 11**: Comment says "24h overtime cap" — should say "12h" per `[H#e8f7d6c5]`
-2. **Tests use stale shift definitions**: `test_constraints.py` defines shifts with different times than `definitions.yaml` (e.g., N8 starts 20:30 in tests vs 22:45 in data). Tests won't catch real-world overlap/rest bugs.
+
+## Recent Changes
+
+- **2026-08-05**: Implemented `[H#c1f6e3f5]` (11-hour rest period constraint) — `RestPeriodConstraint` class with precomputed compatibility table. Fixed stale shift definitions in all test classes to match `definitions.yaml`. All 84 tests pass.

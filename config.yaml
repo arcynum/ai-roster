@@ -9,25 +9,6 @@
 constraints:
   hard:
     enabled:
-      # - "[H#4d9f81c2]"   # Coverage
-      # - "[H#c18b42de]"   # Skill level requirement
-      # - "[H#5e6ad8f4]"   # Skill level matching
-      # - "[H#84a1d5c9]"   # Skill level hierarchy
-      # - "[H#e91c63ab]"   # No double booking
-      # - "[H#30479c74]"   # Graduate shift restriction
-      # - "[H#c1f6e3f5]"   # Rest period
-      # - "[H#f4c9b6c8]"   # Night/day rest
-      # - "[H#a5d0c7d9]"   # Red requests
-      # - "[H#b6e1d8e0]"   # Holidays
-      # - "[H#f0c5b2c4]"   # Max hours
-      # - "[H#d9a8b7c6]"   # Contracted hours floor
-      # - "[H#e8f7d6c5]"   # Overtime cap
+      - "[H#c1f6e3f5]"   # Rest period
   soft:
-    enabled:
-      # - "[S#e9b4a1b3]"   # Overtime distribution
-      # - "[S#d2a7f4a6]"   # Night shift fairness
-      # - "[S#a1d6c3d5]"   # Weekend fairness
-      # - "[S#30c6f5ad]"   # Consecutive shift discouraged
-      # - "[S#7b4e19fc]"   # Skill level tiebreaker
-      # - "[S#6c1e9a4d]"   # Day/night run count
-      # - "[S#3d9a7ec1]"   # Casual usage minimisation
+    enabled: []

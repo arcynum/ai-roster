@@ -212,7 +212,7 @@ class TestSolverConstraintFiltering:
             {"date": "2026-08-04", "shift": "D8", "required_skill_level": None, "day_name": "Tuesday"},
         ]
         definitions = {
-            "D8": {"start": "08:00:00", "end": "16:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
         }
         weights = {}
 
