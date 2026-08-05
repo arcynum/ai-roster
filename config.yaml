@@ -8,11 +8,28 @@
 
 constraints:
   hard:
-    enabled: []
+    enabled:
+      # - "[H#4d9f81c2]"  # Roster positions must be filled
+      # - "[H#5e6ad8f4]"  # Skill level matching (threshold)
+      # - "[H#84a1d5c9]"  # Skill level hierarchy (merged into SkillLevelRequirement)
+      # - "[H#e91c63ab]"  # No overlap (wall-clock)
+      # - "[H#30479c74]"  # Graduate shift restriction
+      # - "[H#c1f6e3f5]"  # 11-hour rest between shifts
+      # - "[H#f4c9b6c8]"  # Day off between night<->day transitions
+      # - "[H#a5d0c7d9]"  # No rostering on red-request dates
+      # - "[H#b6e1d8e0]"  # No rostering on holidays
+      # - "[H#f0c5b2c4]"  # 76h absolute paid-hour cap per block
+      # - "[H#d9a8b7c6]"  # Contracted hours floor (adjusted for holidays)
+      # - "[H#e8f7d6c5]"  # 12h overtime cap above raw contracted
+      # - "[H#c92f5e1b]"  # Casuals only for null skill level positions
+      # - "[H#71b4d9ac]"  # Unlimited casual supply
+      # - "[H#4ef8a2c3]"  # Casuals exempt from individual constraints
   soft:
     enabled:
-      - "[S#e9b4a1b3]"  # Even overtime distribution
-      - "[S#d2a7f4a6]"  # Equal night shift distribution
-      - "[S#30c6f5ad]"  # Consecutive same-shift run penalty
-      - "[S#6c1e9a4d]"  # Day/night run count penalty
-      - "[S#7b4e19fc]"  # Skill level tiebreaker
+      # - "[S#e9b4a1b3]"  # Even overtime distribution
+      # - "[S#d2a7f4a6]"  # Night shift fairness by contracted hours
+      # - "[S#a1d6c3d5]"  # Weekend hours fairness
+      # - "[S#30c6f5ad]"  # Consecutive same-shift run length penalty (tiered)
+      # - "[S#6c1e9a4d]"  # Day/night category run-count penalty
+      # - "[S#7b4e19fc]"  # Skill level tiebreaker (minimize over-qualification)
+      # - "[S#3d9a7ec1]"  # Casual usage minimization (last resort)
