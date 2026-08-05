@@ -101,6 +101,8 @@ class RosterModel:
         self._assignment_vars: list[list[cp_model.IntVar]] = []
         # staff_hours_vars[staff_idx][block_idx] -> IntVar (scaled hours)
         self._staff_hours_vars: list[list[cp_model.IntVar]] = []
+        # casual_vars[pos_idx] -> BoolVar or None (populated by CasualStaffingConstraint)
+        self.casual_vars: list[cp_model.IntVar | None] = []
 
     def build_model(self) -> None:
         """Build the full CP-SAT model: variables, constraints, objective."""
@@ -197,6 +199,9 @@ class RosterModel:
                 positions=self.positions,
                 staff_hours_vars=self._staff_hours_vars,
             )
+            # Capture casual_vars from the casual staffing constraint
+            if hasattr(constraint, "casual_vars"):
+                self.casual_vars = constraint.casual_vars
             applied += 1
 
         logger.info("Hard constraints: %d applied, %d skipped", applied, skipped)
@@ -218,7 +223,7 @@ class RosterModel:
             constraint = constraint_cls()
             weight = self.weights.get(cid, 1)
             logger.debug("Applying soft constraint %s (weight=%d)", cid, weight)
-            constraint.apply(
+            apply_kwargs = dict(
                 model=self.model,
                 staff_list=self.staff_list,
                 staff_by_name=self.staff_by_name,
@@ -231,6 +236,10 @@ class RosterModel:
                 staff_hours_vars=self._staff_hours_vars,
                 weight=weight,
             )
+            # Pass casual_vars if the soft constraint accepts it
+            if cid == "[S#3d9a7ec1]":
+                apply_kwargs["casual_vars"] = self.casual_vars
+            constraint.apply(**apply_kwargs)
             applied += 1
 
         logger.info("Soft constraints: %d applied, %d skipped", applied, skipped)
@@ -297,6 +306,22 @@ class RosterModel:
                     ))
                     unfilled_set.discard(pi)
 
+        # Check casual BoolVars for casual-filled positions
+        casual_count = 0
+        for pi in range(num_positions):
+            if self.casual_vars and self.casual_vars[pi] is not None:
+                if self.solver.Value(self.casual_vars[pi]) == 1:
+                    pos = self.positions[pi]
+                    result.assignments.append(RosterSlot(
+                        staff_name="Casual",
+                        date=pos["date"],
+                        shift=pos["shift"],
+                        required_skill_level=pos.get("required_skill_level"),
+                        filled_by_casual=True,
+                    ))
+                    unfilled_set.discard(pi)
+                    casual_count += 1
+
         # Build unfilled list
         for pi in unfilled_set:
             pos = self.positions[pi]
@@ -313,5 +338,5 @@ class RosterModel:
                 result.staff_hours.get(slot.staff_name, 0) + paid
             )
 
-        logger.info("Extracted %d assignments, %d unfilled positions",
-                     len(result.assignments), len(result.unfilled))
+        logger.info("Extracted %d assignments (%d casual), %d unfilled positions",
+                      len(result.assignments), casual_count, len(result.unfilled))

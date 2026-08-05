@@ -28,9 +28,7 @@ constraints:
       # - "[H#d9a8b7c6]"  # Contracted hours floor (adjusted for holidays)
       # - "[H#a3d8f6c1]"  # Holiday proration formula
       # - "[H#e8f7d6c5]"  # 12h overtime cap above raw contracted
-      # - "[H#c92f5e1b]"  # Casuals only for null skill level positions
-      # - "[H#71b4d9ac]"  # Unlimited casual supply
-      # - "[H#4ef8a2c3]"  # Casuals exempt from individual constraints
+      # - "[H#c92f5e1b]"  # Casual staffing (c92f5e1b + 71b4d9ac + 4ef8a2c3)
   soft:
     enabled:
       # - "[S#e9b4a1b3]"  # Even overtime distribution

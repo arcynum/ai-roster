@@ -160,3 +160,4 @@ class RosterSlot:
     date: str
     shift: str
     required_skill_level: Optional[str] = None
+    filled_by_casual: bool = False

@@ -403,6 +403,7 @@ def validate_roster_positions(roster_data: dict, definitions: dict,
                 "day_name": day_name,
                 "shift": shift,
                 "required_skill_level": required_skill,
+                "casual_allowed": required_skill is None,
             })
 
         current += timedelta(days=1)
