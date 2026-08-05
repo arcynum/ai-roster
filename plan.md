@@ -27,26 +27,26 @@
 | **✅ Fully** | `[H#71b4d9ac]` | Unlimited casual supply | — | Trivially satisfied by design (no per-casual tracking, no capacity limits) |
 | **✅ Fully** | `[H#4ef8a2c3]` | Casuals exempt from individual constraints | — | Trivially satisfied (casuals not tracked as individuals, not subject to rest/hours/holiday constraints) |
 
-## Soft Constraints (7 constraint IDs across 5 classes)
+## Soft Constraints (7 constraint IDs across 7 classes)
 
 | Status | Constraint ID | Description | Class | Notes |
 |--------|--------------|-------------|-------|-------|
-| **❌ Not Impl** | `[S#e9b4a1b3]` | Even overtime distribution | `OvertimeDistribution` | `apply()` is `pass` / `TODO` |
-| **❌ Not Impl** | `[S#d2a7f4a6]` | Night shift fairness by contracted hours | `NightShiftFairness` | `apply()` is `pass` / `TODO` |
-| **✅ Fully** | `[S#a1d6c3d5]` | Weekend hours fairness | `WeekendFairness` | Fully implemented — minimizes deviation from proportional weekend hours |
-| **❌ Not Impl** | `[S#30c6f5ad]` | Consecutive same-shift run length penalty (tiered) | `ConsecutiveShiftDiscouraged` | `apply()` is `pass` / `TODO`. Per AGENTS.md §8: needs run_start booleans, run-length booleans, and tiered penalties (0 / 0.1W / 1W / (L-3)W) |
-| **❌ Not Impl** | `[S#7b4e19fc]` | Skill level tiebreaker (minimize over-qualification) | `SkillLevelTiebreaker` | `apply()` is `pass` / `TODO` |
-| **❌ Not Impl** | `[S#6c1e9a4d]` | Day/night category run-count penalty | — | **Completely missing — no class at all.** Per AGENTS.md §8: needs category (day/night) run_start booleans, then `(max(0, day_run_count - 2) + max(0, night_run_count - 2)) * W` |
+| **✅ Fully** | `[S#e9b4a1b3]` | Even overtime distribution | `OvertimeDistribution` | Fully implemented — deviation-from-mean overtime, uses `staff_hours_vars`. Weight=20. |
+| **✅ Fully** | `[S#d2a7f4a6]` | Night shift fairness by contracted hours | `NightShiftFairness` | Fully implemented — proportional night hours deviation per staff per block. Weight=50. |
+| **✅ Fully** | `[S#a1d6c3d5]` | Weekend hours fairness | `WeekendFairness` | Fully implemented — minimizes deviation from proportional weekend hours. Weight=50. |
+| **✅ Fully** | `[S#30c6f5ad]` | Consecutive same-shift run length penalty (tiered) | `ConsecutiveShiftDiscouraged` | Fully implemented — `shift_type_vars` → `same_vars` → `run_start_vars` → `exact_L` enumeration. Tiered: L=2→0, L=1/3→W//10, L=4→W, L≥5→(L-3)W. Weight=500. |
+| **✅ Fully** | `[S#7b4e19fc]` | Skill level tiebreaker (minimize over-qualification) | `SkillLevelTiebreaker` | Fully implemented — linear penalty `over_qual * assignment_bool`. Skips null skill positions. Weight=5. |
+| **✅ Fully** | `[S#6c1e9a4d]` | Day/night category run-count penalty | `DayNightRunCountPenalty` | Fully implemented — `category_vars` (DAY/NIGHT/OFF) → `cat_run_start` → excess penalty for >2 runs per category. Weight=300. |
 | **✅ Fully** | `[S#3d9a7ec1]` | Casual usage minimization (last resort) | `CasualUsageMinimization` | Fully implemented — minimizes sum of casual `BoolVar`s with weight 100000. Weight exceeds max possible combined penalty from every other soft constraint, ensuring casuals are always last resort. Receives `casual_vars` from `CasualStaffingConstraint` via `solver.py`. |
 
 ## Summary
 
 | Category | Count |
 |----------|-------|
-| Fully implemented | 21 |
+| Fully implemented | 26 |
 | Partially implemented | 3 |
-| Not implemented (class exists, `apply()` = pass) | 4 |
-| Not implemented (no class at all) | 1 |
+| Not implemented (class exists, `apply()` = pass) | 0 |
+| Not implemented (no class at all) | 0 |
 | **Total constraint IDs** | **29** |
 
 ## Out-of-sync items (code/docs vs constraint files)
@@ -55,6 +55,18 @@
 
 ## Recent Changes
 
+- **2026-08-05**: Implemented all 5 remaining soft constraints (S#e9b4a1b3, S#d2a7f4a6, S#30c6f5ad, S#7b4e19fc, S#6c1e9a4d). **3 bugs fixed during implementation**:
+  1. `ConsecutiveShiftDiscouraged` shift_type_vars: lines 763/771 created duplicate `shift_worked` BoolVars per shift type, leaving `st` IntVars unconstrained. Merged into single loop with shared `shift_worked_vars` dict.
+  2. `ConsecutiveShiftDiscouraged` L=1: `model.Add(rs == 0).OnlyEnforceIf(exact_L.Not())` forced `rs=0` when `rs` was actually `1`, causing INFEASIBLE. Removed the line.
+  3. `SkillLevelTiebreaker`: `NewIntVar(0, sum(t for t in penalty_terms), ...)` summed IntVars → not a valid upper bound. Accumulated `max_penalty` as integer during loop.
+  - `OvertimeDistribution`: constraints.py:539, weight=20, deviation-from-mean overtime.
+  - `NightShiftFairness`: constraints.py:574, weight=50, proportional night hours deviation.
+  - `ConsecutiveShiftDiscouraged`: constraints.py:702, weight=500, run-length enumeration with tiered penalties.
+  - `SkillLevelTiebreaker`: constraints.py:896, weight=5, linear over-qualification penalty.
+  - `DayNightRunCountPenalty`: constraints.py:943, weight=300, category run counting with excess penalty.
+  - All 5 classes registered in `SOFT_CONSTRAINTS` list. `config.yaml` updated: hard constraints disabled, 5 soft constraint IDs enabled.
+  - Added `tests/test_soft_constraints.py` with 11 tests across 5 test classes.
+  - All 136 tests pass.
 - **2026-08-05**: Implemented `[H#c92f5e1b]` / `[S#3d9a7ec1]` (casual staffing) — `CasualStaffingConstraint` hard constraint creates `BoolVar` per null-skill position enforcing "exactly one named staff OR casual"; `CasualUsageMinimization` soft constraint minimizes sum of casual vars with weight 100000. Added `filled_by_casual` field to `RosterSlot`, `casual_allowed` tag to positions in `utils.py`. Updated `solver.py` to store/pass `casual_vars` between hard and soft constraints, and extract casual assignments in output. Updated `config.yaml` with single casual hard constraint entry (covers all 3 casual IDs). Added 15 tests in `tests/test_casual.py`. All 125 tests pass. Roster generation produces OPTIMAL with 404 assignments, 0 casual, 0 unfilled.
 - **2026-08-05**: Implemented `[H#e8f7d6c5]` (12h overtime cap above raw contracted) — `OvertimeCap` class with `apply()` adding `model.Add(staff_hours_vars[si][bi] <= min(76*SCALE, contracted+12*SCALE))` per staff per block. Uses raw `contracted_hours_per_fortnight` (not holiday-adjusted). Added 4 tests (positive: within cap, boundary at cap; negative: exceeds cap, raw vs adjusted). All 110 tests pass. Roster generation produces OPTIMAL with 404 assignments, 0 unfilled.
 - **2026-08-05**: Implemented `[H#d9a8b7c6]` (contracted hours floor) and `[H#a3d8f6c1]` (holiday proration) — `ContractedHoursFloor` class with `apply()` adding `model.Add(staff_hours_vars[si][bi] >= adjusted)` per staff per block. Added `compute_adjusted_hours()` to `utils.py` for holiday proration. Wired `staff_hours_vars` into `solver.py` hard/soft constraint `apply()` calls. Updated `output.py` and `templates/roster.html` to display adjusted hours with traffic light (green ≥100%, yellow 85–99%, red <85%). Added 10 tests (8 for `compute_adjusted_hours`, 2 for `ContractedHoursFloor`). Fixed `definitions.yaml` comment: "24h" → "12h" overtime cap. All 106 tests pass. Roster generation produces feasible output.

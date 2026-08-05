@@ -8,33 +8,11 @@
 
 constraints:
   hard:
-    enabled:
-      # - "[H#4d9f81c2]"  # Roster positions must be filled
-      # - "[H#7a3e5f91]"  # Each entry is a single roster position
-      # - "[H#c18b42de]"  # Zero or one skill level per position
-      # - "[H#5e6ad8f4]"  # Skill level matching (threshold)
-      # - "[H#91bc3d7e]"  # Null skill level = no restriction
-      # - "[H#2f74e6ab]"  # Multiple same-shift entries = separate positions
-      # - "[H#84a1d5c9]"  # Skill level hierarchy (higher satisfies lower)
-      # - "[H#6db3f120]"  # Skill level ordering
-      # - "[H#b72e41fa]"  # Minimum skill level requirement
-      # - "[H#e91c63ab]"  # No overlap (wall-clock)
-      # - "[H#30479c74]"  # Graduate shift restriction
-      # - "[H#c1f6e3f5]"  # 11-hour rest between shifts
-      # - "[H#f4c9b6c8]"  # Day off between night↔day transitions
-      # - "[H#a5d0c7d9]"  # No rostering on red-request dates
-      # - "[H#b6e1d8e0]"  # No rostering on holidays
-      # - "[H#f0c5b2c4]"  # 76h absolute paid-hour cap per block
-      # - "[H#d9a8b7c6]"  # Contracted hours floor (adjusted for holidays)
-      # - "[H#a3d8f6c1]"  # Holiday proration formula
-      # - "[H#e8f7d6c5]"  # 12h overtime cap above raw contracted
-      # - "[H#c92f5e1b]"  # Casual staffing (c92f5e1b + 71b4d9ac + 4ef8a2c3)
+    enabled: []
   soft:
     enabled:
-      # - "[S#e9b4a1b3]"  # Even overtime distribution
-      # - "[S#d2a7f4a6]"  # Equal night shift distribution
-      # - "[S#a1d6c3d5]"  # Saturday/Sunday hour penalty
-      # - "[S#30c6f5ad]"  # Consecutive same-shift run penalty
-      # - "[S#6c1e9a4d]"  # Day/night run count penalty
-      # - "[S#7b4e19fc]"  # Prefer solutions with fewer shift changes
-      # - "[S#3d9a7ec1]"  # Minimise casual assignments
+      - "[S#e9b4a1b3]"  # Even overtime distribution
+      - "[S#d2a7f4a6]"  # Equal night shift distribution
+      - "[S#30c6f5ad]"  # Consecutive same-shift run penalty
+      - "[S#6c1e9a4d]"  # Day/night run count penalty
+      - "[S#7b4e19fc]"  # Skill level tiebreaker
