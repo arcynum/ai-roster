@@ -1,6 +1,6 @@
 # Constraint Implementation Audit & Plan
 
-## Hard Constraints (22 constraint IDs across 12 classes)
+## Hard Constraints (21 constraint IDs across 12 classes)
 
 | Status | Constraint ID | Description | Class | Notes |
 |--------|--------------|-------------|-------|-------|
@@ -21,7 +21,6 @@
 | **✅ Fully** | `[H#a5d0c7d9]` | No rostering on red-request dates | `RedRequestConstraint` | Fully implemented |
 | **✅ Fully** | `[H#b6e1d8e0]` | No rostering on holidays | `HolidayConstraint` | Fully implemented |
 | **⚠️ Partial** | `[H#f0c5b2c4]` | 76h absolute paid-hour cap per block | `MaxHoursConstraint` | Class says "enforced in `_create_variables()` via IntVar upper bound" — the IntVar is created with `0, 76*SCALE` range, but this is a **variable bound**, not a constraint that can be violated and reported. It silently limits hours but doesn't distinguish between "under contracted" and "over contracted". The class's `apply()` is `pass`. |
-| **❌ Not Impl** | `[H#d9a8b7c6]` | Contracted hours floor (adjusted for holidays) | `ContractedHoursFloor` | `apply()` is `pass` / `TODO`. **Completely missing.** Staff can be assigned zero hours and the model won't complain. |
 | **✅ Fully** | `[H#a3d8f6c1]` | Holiday proration formula | `compute_adjusted_hours()` | Implemented in `utils.py` — computes `adjusted = floor(contracted * available_days / 14)` per staff per block, accounting for holiday overlap. Used by `[H#d9a8b7c6]`. |
 | **✅ Fully** | `[H#e8f7d6c5]` | 12h overtime cap above raw contracted | `OvertimeCap` | Fully implemented — `apply()` adds `model.Add(staff_hours_vars[si][bi] <= min(76*SCALE, contracted+12*SCALE))` per staff per block. Uses raw `contracted_hours_per_fortnight` (not holiday-adjusted). |
 | **✅ Fully** | `[H#c92f5e1b]` | Casuals only for null skill level positions | `CasualStaffingConstraint` | Fully implemented — creates `BoolVar` per null-skill position; enforces `sum(staff_vars) + casual_var == 1` for casual-allowed positions. For skill-required positions, standard "exactly one named staff" applies. Casuals are exempt from all individual constraints (rest, holidays, hours, etc.) by design. |
@@ -46,9 +45,9 @@
 |----------|-------|
 | Fully implemented | 18 |
 | Partially implemented | 4 |
-| Not implemented (class exists, `apply()` = pass) | 3 |
+| Not implemented (class exists, `apply()` = pass) | 2 |
 | Not implemented (no class at all) | 0 |
-| **Total constraint IDs** | **29** |
+| **Total constraint IDs** | **24** |
 
 ## Out-of-sync items (code/docs vs constraint files)
 
