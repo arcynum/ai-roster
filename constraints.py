@@ -108,25 +108,57 @@ class CoverageConstraint(BaseHardConstraint):
 
 
 class SkillLevelRequirement(BaseHardConstraint):
-    """[H#c18b42de] [H#5e6ad8f4] [H#91bc3d7e] [H#b72e41fa]
-    Skill level matching with threshold semantics."""
+    """[H#c18b42de] [H#5e6ad8f4] [H#84a1d5c9] [H#91bc3d7e] [H#b72e41fa]
+    Skill level matching with threshold semantics.
+
+    A staff member is only assignable to a position if their highest skill
+    rank >= the position's required skill rank. Positions with required_skill_rank
+    == -1 (null) impose no restriction.
+
+    The skill hierarchy (Acute < Resus < Triage < Shift Coordinator) is validated
+    at data-loading time (utils.validate_staff_yaml ensures skill_tags is a
+    contiguous prefix). The threshold check below enforces "higher satisfies lower"
+    at solve time. This class covers both [H#5e6ad8f4] and [H#84a1d5c9].
+    """
 
     constraint_id = "[H#5e6ad8f4]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, staff_hours_vars=None):
-        # TODO: enforce skill level threshold matching
-        pass
+        # Precompute staff highest skill ranks
+        staff_ranks: list[int] = [staff.highest_skill_rank for staff in staff_list]
+
+        # Precompute position required skill ranks
+        pos_required_ranks: list[int] = [
+            p.get("required_skill_rank", -1) for p in positions
+        ]
+
+        for si, staff in enumerate(staff_list):
+            staff_rank = staff_ranks[si]
+            for pi, pos in enumerate(positions):
+                required_rank = pos_required_ranks[pi]
+                x = assignments[si][pi]
+                if required_rank < 0:
+                    # Null skill level — no restriction (H#91bc3d7e)
+                    continue
+                # Enforce: if staff assigned, their rank must meet requirement
+                model.Add(staff_rank >= required_rank).OnlyEnforceIf(x)
 
 
 class SkillLevelHierarchy(BaseHardConstraint):
-    """[H#84a1d5c9] [H#6db3f120] Hierarchical skill levels."""
+    """[H#84a1d5c9] [H#6db3f120] Hierarchical skill levels.
+
+    No-op at CP-SAT level. The skill hierarchy is enforced by
+    SkillLevelRequirement ([H#5e6ad8f4]) via threshold semantics.
+    Data validation in utils.validate_staff_yaml ensures skill_tags is always
+    a contiguous prefix of the hierarchy (e.g. [Acute, Resus] not [Resus]).
+    This class exists only as a toggle entry in config.yaml.
+    """
 
     constraint_id = "[H#84a1d5c9]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, staff_hours_vars=None):
-        # TODO: encode hierarchy (higher satisfies lower)
         pass
 
 
@@ -441,13 +473,20 @@ class HolidayConstraint(BaseHardConstraint):
 
 
 class MaxHoursConstraint(BaseHardConstraint):
-    """[H#f0c5b2c4] Absolute 76 paid-hour cap per 14-day block."""
+    """[H#f0c5b2c4] Absolute 76 paid-hour cap per 14-day block.
+
+    Enforced in solver._create_variables() via IntVar upper bound of
+    76 * SCALE on every staff-hour variable. This is a variable bound,
+    not a soft constraint — the solver never produces a solution exceeding
+    76 hours. The ContractedHoursFloor ([H#d9a8b7c6]) enforces the lower
+    bound; this enforces the upper bound.
+    """
 
     constraint_id = "[H#f0c5b2c4]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, staff_hours_vars=None):
-        # Enforced in _create_variables() via IntVar upper bound
+        # Enforced in solver._create_variables() via IntVar(0, 76*SCALE) bounds.
         pass
 
 

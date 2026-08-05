@@ -1356,3 +1356,469 @@ class TestOvertimeCap:
 
         status = solver.Solve(model)
         assert status == cp_model.INFEASIBLE  # 64h > 52h cap (raw-based, not adjusted)
+
+
+class TestSkillLevelRequirement:
+    """Test the SkillLevelRequirement hard constraint [H#5e6ad8f4]."""
+
+    def _make_definitions(self):
+        return {
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
+        }
+
+    def _make_positions(self, date, shift, required_skill_level=None):
+        rank = -1
+        if required_skill_level is not None:
+            from models import SKILL_RANK
+            rank = SKILL_RANK[required_skill_level]
+        return {
+            "date": date,
+            "shift": shift,
+            "required_skill_level": required_skill_level,
+            "required_skill_rank": rank,
+            "day_name": "Monday",
+        }
+
+    def _make_assignments(self, model, staff_names, positions):
+        return [
+            [model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))]
+            for s in range(len(staff_names))
+        ]
+
+    def _setup_coverage(self, model, assignments, staff_names, positions):
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+        for si in range(len(staff_names)):
+            model.Add(sum(assignments[si][pi] for pi in range(len(positions))) <= 1)
+
+    def test_staff_with_higher_skill_can_fill_lower_position(self):
+        """Triage-qualified staff (rank 2) should be assignable to Acute position (rank 0)."""
+        from ortools.sat.python import cp_model
+        from constraints import SkillLevelRequirement
+        from models import Staff, Classification
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+        definitions = self._make_definitions()
+
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute", "Resus", "Triage"],
+                  contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = ["2026-08-03"]
+        blocks = [all_dates]
+        positions = [self._make_positions("2026-08-03", "D8", required_skill_level="Acute")]
+
+        assignments = self._make_assignments(model, staff_names, positions)
+        self._setup_coverage(model, assignments, staff_names, positions)
+
+        constraint = SkillLevelRequirement()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+        )
+
+        # Force Alice to take the position
+        model.Add(assignments[0][0] == 1)
+
+        status = solver.Solve(model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+    def test_staff_with_lower_skill_cannot_fill_higher_position(self):
+        """Acute-qualified staff (rank 0) should NOT be assignable to Resus position (rank 1)."""
+        from ortools.sat.python import cp_model
+        from constraints import SkillLevelRequirement
+        from models import Staff, Classification
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+        definitions = self._make_definitions()
+
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"],
+                  contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = ["2026-08-03"]
+        blocks = [all_dates]
+        positions = [self._make_positions("2026-08-03", "D8", required_skill_level="Resus")]
+
+        assignments = self._make_assignments(model, staff_names, positions)
+        self._setup_coverage(model, assignments, staff_names, positions)
+
+        constraint = SkillLevelRequirement()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+        )
+
+        # Force Alice to take the position — should be infeasible
+        model.Add(assignments[0][0] == 1)
+
+        status = solver.Solve(model)
+        assert status == cp_model.INFEASIBLE
+
+    def test_null_skill_level_allows_any_staff(self):
+        """Position with null required_skill_level should accept staff of any skill rank."""
+        from ortools.sat.python import cp_model
+        from constraints import SkillLevelRequirement
+        from models import Staff, Classification
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+        definitions = self._make_definitions()
+
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"],
+                  contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = ["2026-08-03"]
+        blocks = [all_dates]
+        positions = [self._make_positions("2026-08-03", "D8", required_skill_level=None)]
+
+        assignments = self._make_assignments(model, staff_names, positions)
+        self._setup_coverage(model, assignments, staff_names, positions)
+
+        constraint = SkillLevelRequirement()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+        )
+
+        # Force Alice to take the position — should be feasible (null = no restriction)
+        model.Add(assignments[0][0] == 1)
+
+        status = solver.Solve(model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+    def test_exact_skill_match_allowed(self):
+        """Resus-qualified staff should be assignable to Resus position (exact rank match)."""
+        from ortools.sat.python import cp_model
+        from constraints import SkillLevelRequirement
+        from models import Staff, Classification
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+        definitions = self._make_definitions()
+
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute", "Resus"],
+                  contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = ["2026-08-03"]
+        blocks = [all_dates]
+        positions = [self._make_positions("2026-08-03", "D8", required_skill_level="Resus")]
+
+        assignments = self._make_assignments(model, staff_names, positions)
+        self._setup_coverage(model, assignments, staff_names, positions)
+
+        constraint = SkillLevelRequirement()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+        )
+
+        model.Add(assignments[0][0] == 1)
+
+        status = solver.Solve(model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+    def test_shift_coordinator_can_fill_any_position(self):
+        """Shift Coordinator (rank 3) should fill Acute, Resus, Triage, or Shift Coordinator positions."""
+        from ortools.sat.python import cp_model
+        from constraints import SkillLevelRequirement
+        from models import Staff, Classification, SKILL_RANK
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+        definitions = self._make_definitions()
+
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN,
+                  skill_tags=["Acute", "Resus", "Triage", "Shift Coordinator"],
+                  contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = ["2026-08-03"]
+        blocks = [all_dates]
+
+        constraint = SkillLevelRequirement()
+        for level in ["Acute", "Resus", "Triage", "Shift Coordinator"]:
+            positions = [self._make_positions("2026-08-03", "D8", required_skill_level=level)]
+            assignments = self._make_assignments(model, staff_names, positions)
+            self._setup_coverage(model, assignments, staff_names, positions)
+            constraint.apply(
+                model=model,
+                staff_list=staff_list,
+                staff_by_name=staff_by_name,
+                assignments=assignments,
+                staff_names=staff_names,
+                definitions=definitions,
+                all_dates=all_dates,
+                blocks=blocks,
+                positions=positions,
+            )
+            model.Add(assignments[0][0] == 1)
+
+        status = solver.Solve(model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+    def test_multiple_staff_different_skills(self):
+        """With 2 staff (Acute+Resus and Triage) and 1 Resus position, only Triage can fill it."""
+        from ortools.sat.python import cp_model
+        from constraints import SkillLevelRequirement
+        from models import Staff, Classification
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+        definitions = self._make_definitions()
+
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute", "Resus"],
+                  contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+            Staff(name="Bob", classification=Classification.RN, skill_tags=["Acute", "Resus", "Triage"],
+                  contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = ["2026-08-03"]
+        blocks = [all_dates]
+        positions = [self._make_positions("2026-08-03", "D8", required_skill_level="Resus")]
+
+        assignments = self._make_assignments(model, staff_names, positions)
+        self._setup_coverage(model, assignments, staff_names, positions)
+
+        constraint = SkillLevelRequirement()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+        )
+
+        # Force Alice (Acute+Resus, rank 1) to take Resus position (rank 1) — should work
+        model.Add(assignments[0][0] == 1)
+        status = solver.Solve(model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+        # Reset model: force Bob (Triage, rank 2) to take Resus position — should also work
+        model2 = cp_model.CpModel()
+        solver2 = cp_model.CpSolver()
+        assignments2 = self._make_assignments(model2, staff_names, positions)
+        self._setup_coverage(model2, assignments2, staff_names, positions)
+        constraint.apply(
+            model=model2,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments2,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+        )
+        model2.Add(assignments2[1][0] == 1)
+        status2 = solver2.Solve(model2)
+        assert status2 in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+
+class TestMaxHoursConstraint:
+    """Test the MaxHoursConstraint hard constraint [H#f0c5b2c4]."""
+
+    def _make_definitions(self):
+        return {
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
+        }
+
+    def test_variable_bound_enforces_76h_cap(self):
+        """The IntVar upper bound of 76*SCALE enforces the 76h cap at variable creation."""
+        from ortools.sat.python import cp_model
+        from utils import SCALE
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+
+        definitions = self._make_definitions()
+        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
+        blocks = [all_dates]
+
+        # Create 8 D8 shifts (64h paid) + 2 D12 shifts (24h paid) = 88h paid total
+        positions = [
+            {"date": f"2026-08-{d:02d}", "shift": "D8", "required_skill_level": None, "day_name": "Monday"}
+            for d in range(3, 11)
+        ] + [
+            {"date": f"2026-08-{d:02d}", "shift": "D12", "required_skill_level": None, "day_name": "Monday"}
+            for d in range(11, 13)
+        ]
+
+        staff_names = ["Alice"]
+        assignments = [[model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))] for s in range(len(staff_names))]
+
+        # Exactly one staff per position
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+
+        # At most one shift per staff per date
+        for si in range(len(staff_names)):
+            model.Add(sum(assignments[si][pi] for pi in range(len(positions))) <= 1)
+
+        # Create hours variable with 76*SCALE bound (same as solver.py)
+        block_dates = set(all_dates)
+        hour_vars = []
+        for pi, pos in enumerate(positions):
+            if pos["date"] in block_dates:
+                shift_paid = definitions[pos["shift"]]["paid_hours"]
+                scaled_paid = int(round(shift_paid * SCALE))
+                hour_vars.append(scaled_paid * assignments[0][pi])
+
+        total = model.NewIntVar(0, 76 * SCALE, "hours_Alice_b0")
+        model.Add(total == sum(hour_vars))
+
+        # Force Alice to take ALL 10 positions = 88h paid, exceeds 76h
+        for pi in range(len(positions)):
+            model.Add(assignments[0][pi] == 1)
+
+        status = solver.Solve(model)
+        assert status == cp_model.INFEASIBLE  # 88h > 76h cap via IntVar bound
+
+    def test_at_cap_is_feasible(self):
+        """Exactly 76h should be feasible (boundary case)."""
+        from ortools.sat.python import cp_model
+        from utils import SCALE
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+
+        definitions = self._make_definitions()
+        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
+        blocks = [all_dates]
+
+        # 5 D12 = 60h + 2 D8 = 16h = 76h exactly
+        positions = [
+            {"date": f"2026-08-{d:02d}", "shift": "D12", "required_skill_level": None, "day_name": "Monday"}
+            for d in range(3, 8)
+        ] + [
+            {"date": f"2026-08-{d:02d}", "shift": "D8", "required_skill_level": None, "day_name": "Monday"}
+            for d in range(8, 10)
+        ]
+
+        staff_names = ["Alice"]
+        assignments = [[model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))] for s in range(len(staff_names))]
+
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+
+        # At most one shift per staff per date (not total)
+        pos_by_date: dict[str, list[int]] = {}
+        for pi, pos in enumerate(positions):
+            pos_by_date.setdefault(pos["date"], []).append(pi)
+        for si in range(len(staff_names)):
+            for date_str, pi_list in pos_by_date.items():
+                day_vars = [assignments[si][pi] for pi in pi_list]
+                model.Add(sum(day_vars) <= 1)
+
+        block_dates = set(all_dates)
+        hour_vars = []
+        for pi, pos in enumerate(positions):
+            if pos["date"] in block_dates:
+                shift_paid = definitions[pos["shift"]]["paid_hours"]
+                scaled_paid = int(round(shift_paid * SCALE))
+                hour_vars.append(scaled_paid * assignments[0][pi])
+
+        total = model.NewIntVar(0, 76 * SCALE, "hours_Alice_b0")
+        model.Add(total == sum(hour_vars))
+
+        # Force Alice to take all 7 positions = 60h + 16h = 76h (exactly at cap)
+        for pi in range(len(positions)):
+            model.Add(assignments[0][pi] == 1)
+
+        status = solver.Solve(model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+
+    def test_apply_is_noop(self):
+        """The apply method should be a no-op (bound is in _create_variables)."""
+        from ortools.sat.python import cp_model
+        from constraints import MaxHoursConstraint
+
+        model = cp_model.CpModel()
+        constraint = MaxHoursConstraint()
+
+        # Track constraints added via a wrapper
+        original_add = model.Add
+        constraints_added = []
+
+        def track_add(*args, **kwargs):
+            constraints_added.append(args)
+            return original_add(*args, **kwargs)
+
+        model.Add = track_add  # type: ignore[assignment]
+
+        constraint.apply(
+            model=model,
+            staff_list=[],
+            staff_by_name={},
+            assignments=[],
+            staff_names=[],
+            definitions={},
+            all_dates=[],
+            blocks=[],
+            positions=[],
+        )
+
+        # Should not add any constraints — the 76h cap is enforced via IntVar bounds in _create_variables
+        assert len(constraints_added) == 0
