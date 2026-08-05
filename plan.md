@@ -23,7 +23,7 @@
 | **⚠️ Partial** | `[H#f0c5b2c4]` | 76h absolute paid-hour cap per block | `MaxHoursConstraint` | Class says "enforced in `_create_variables()` via IntVar upper bound" — the IntVar is created with `0, 76*SCALE` range, but this is a **variable bound**, not a constraint that can be violated and reported. It silently limits hours but doesn't distinguish between "under contracted" and "over contracted". The class's `apply()` is `pass`. |
 | **❌ Not Impl** | `[H#d9a8b7c6]` | Contracted hours floor (adjusted for holidays) | `ContractedHoursFloor` | `apply()` is `pass` / `TODO`. **Completely missing.** Staff can be assigned zero hours and the model won't complain. |
 | **✅ Fully** | `[H#a3d8f6c1]` | Holiday proration formula | `compute_adjusted_hours()` | Implemented in `utils.py` — computes `adjusted = floor(contracted * available_days / 14)` per staff per block, accounting for holiday overlap. Used by `[H#d9a8b7c6]`. |
-| **❌ Not Impl** | `[H#e8f7d6c5]` | 12h overtime cap above raw contracted | `OvertimeCap` | `apply()` is `pass` / `TODO`. **Completely missing.** Note: `definitions.yaml` comment still says "24h overtime cap" — needs updating. |
+| **✅ Fully** | `[H#e8f7d6c5]` | 12h overtime cap above raw contracted | `OvertimeCap` | Fully implemented — `apply()` adds `model.Add(staff_hours_vars[si][bi] <= min(76*SCALE, contracted+12*SCALE))` per staff per block. Uses raw `contracted_hours_per_fortnight` (not holiday-adjusted). |
 | **❌ Not Impl** | `[H#c92f5e1b]` | Casuals only for null skill level positions | — | **Completely missing.** No casual assignment variable, no restriction logic. |
 | **✅ Fully** | `[H#71b4d9ac]` | Unlimited casual supply | — | Trivially satisfied by design (no per-casual tracking) |
 | **✅ Fully** | `[H#4ef8a2c3]` | Casuals exempt from individual constraints | — | Trivially satisfied (casuals not tracked as individuals) |
@@ -46,7 +46,7 @@
 |----------|-------|
 | Fully implemented | 16 |
 | Partially implemented | 4 |
-| Not implemented (class exists, `apply()` = pass) | 4 |
+| Not implemented (class exists, `apply()` = pass) | 3 |
 | Not implemented (no class at all) | 1 |
 | **Total constraint IDs** | **29** |
 
@@ -56,6 +56,7 @@
 
 ## Recent Changes
 
+- **2026-08-05**: Implemented `[H#e8f7d6c5]` (12h overtime cap above raw contracted) — `OvertimeCap` class with `apply()` adding `model.Add(staff_hours_vars[si][bi] <= min(76*SCALE, contracted+12*SCALE))` per staff per block. Uses raw `contracted_hours_per_fortnight` (not holiday-adjusted). Added 4 tests (positive: within cap, boundary at cap; negative: exceeds cap, raw vs adjusted). All 110 tests pass. Roster generation produces OPTIMAL with 404 assignments, 0 unfilled.
 - **2026-08-05**: Implemented `[H#d9a8b7c6]` (contracted hours floor) and `[H#a3d8f6c1]` (holiday proration) — `ContractedHoursFloor` class with `apply()` adding `model.Add(staff_hours_vars[si][bi] >= adjusted)` per staff per block. Added `compute_adjusted_hours()` to `utils.py` for holiday proration. Wired `staff_hours_vars` into `solver.py` hard/soft constraint `apply()` calls. Updated `output.py` and `templates/roster.html` to display adjusted hours with traffic light (green ≥100%, yellow 85–99%, red <85%). Added 10 tests (8 for `compute_adjusted_hours`, 2 for `ContractedHoursFloor`). Fixed `definitions.yaml` comment: "24h" → "12h" overtime cap. All 106 tests pass. Roster generation produces feasible output.
 - **2026-08-05**: Implemented `[H#c1f6e3f5]` (11-hour rest period constraint) — `RestPeriodConstraint` class with precomputed compatibility table. Fixed stale shift definitions in all test classes to match `definitions.yaml`. All 84 tests pass.
 - **2026-08-05**: Implemented `[H#f4c9b6c8]` (night↔day transition rest constraint) — `NightToDayRest` class with 8×8 compatibility table enforcing full day-off between night (N8/N12) and day (D8/D12/P8/P12/L3/DISCO) shifts. Added 11 tests across `TestNightToDayRestCompatibilityTable` and `TestNightToDayRestApply`. Fixed test isolation bug in `test_config.py::_make_model()` — restored original `apply()` methods via `constraint_id`-keyed dict instead of broken shallow-copy restoration. All 96 tests pass. Roster generation produces OPTIMAL with 404 assignments, 0 unfilled.

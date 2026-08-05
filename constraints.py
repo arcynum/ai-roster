@@ -486,9 +486,16 @@ class OvertimeCap(BaseHardConstraint):
     constraint_id = "[H#e8f7d6c5]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions):
-        # TODO: cap overtime at min(76, contracted + 12)
-        pass
+              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+        if staff_hours_vars is None:
+            return
+        # Per [H#e8f7d6c5]: effective cap = min(76, contracted + 12)
+        # Uses raw contracted_hours_per_fortnight (not holiday-adjusted).
+        for si, staff in enumerate(staff_list):
+            contracted_scaled = int(round(staff.contracted_hours_per_fortnight * SCALE))
+            overtime_cap_scaled = min(76 * SCALE, contracted_scaled + 12 * SCALE)
+            for bi in range(len(blocks)):
+                model.Add(staff_hours_vars[si][bi] <= overtime_cap_scaled)
 
 
 # ---------------------------------------------------------------------------

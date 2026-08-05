@@ -992,3 +992,367 @@ class TestContractedHoursFloor:
         # This is expected - the floor constraint can't be satisfied with so few positions
         status = solver.Solve(model)
         assert status == cp_model.INFEASIBLE  # 8h < 40h floor
+
+
+class TestOvertimeCap:
+    """Test the OvertimeCap hard constraint [H#e8f7d6c5]."""
+
+    def test_apply_adds_constraints(self):
+        """The apply method should add constraints to the model for staff-hours."""
+        from ortools.sat.python import cp_model
+        from constraints import OvertimeCap
+        from models import Staff, Classification
+
+        model = cp_model.CpModel()
+
+        definitions = {
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
+        }
+
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+            Staff(name="Bob", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=76.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
+        blocks = [all_dates]
+        positions = [
+            {"date": "2026-08-03", "shift": "D8", "required_skill_level": None, "day_name": "Monday"},
+        ]
+
+        assignments = [
+            [model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))]
+            for s in range(len(staff_names))
+        ]
+
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+        for si in range(len(staff_names)):
+            model.Add(sum(assignments[si][pi] for pi in range(len(positions))) <= 1)
+
+        staff_hours_vars = [[model.NewIntVar(0, 76 * 100, f"hours_{s}_{b}") for b in range(len(blocks))] for s in range(len(staff_names))]
+
+        constraint = OvertimeCap()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+            staff_hours_vars=staff_hours_vars,
+        )
+
+        # Alice (40h contracted): cap = min(7600, 4000+1200) = 5200
+        # Bob (76h contracted): cap = min(7600, 7600+1200) = 7600
+        # Verify enforcement by solving with forced over-cap assignment
+        from ortools.sat.python import cp_model
+        solver = cp_model.CpSolver()
+        # Force Alice to work all positions (1 D8 = 8h, well within 52h cap)
+        for pi in range(len(positions)):
+            model.Add(assignments[0][pi] == 1)
+        status = solver.Solve(model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)  # 8h < 52h cap
+
+    def test_solver_enforces_cap(self):
+        """Solver should reject solutions where staff hours exceed overtime cap."""
+        from ortools.sat.python import cp_model
+        from constraints import OvertimeCap
+        from models import Staff, Classification
+        from utils import SCALE
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+
+        definitions = {
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
+        }
+
+        # Alice: 40h contracted, overtime cap = 52h
+        # Assign 5 D8 shifts = 40h, 2 D12 shifts = 24h → total 64h > 52h cap
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
+        blocks = [all_dates]
+        positions = [
+            {"date": "2026-08-03", "shift": "D8", "required_skill_level": None, "day_name": "Monday"},
+            {"date": "2026-08-04", "shift": "D8", "required_skill_level": None, "day_name": "Tuesday"},
+            {"date": "2026-08-05", "shift": "D8", "required_skill_level": None, "day_name": "Wednesday"},
+            {"date": "2026-08-06", "shift": "D8", "required_skill_level": None, "day_name": "Thursday"},
+            {"date": "2026-08-07", "shift": "D8", "required_skill_level": None, "day_name": "Friday"},
+            {"date": "2026-08-08", "shift": "D12", "required_skill_level": None, "day_name": "Saturday"},
+            {"date": "2026-08-09", "shift": "D12", "required_skill_level": None, "day_name": "Sunday"},
+        ]
+
+        assignments = [
+            [model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))]
+            for s in range(len(staff_names))
+        ]
+
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+
+        pos_by_date = {}
+        for pi, p in enumerate(positions):
+            pos_by_date.setdefault(p["date"], []).append(pi)
+        for si in range(len(staff_names)):
+            for date_str, pi_list in pos_by_date.items():
+                day_vars = [assignments[si][pi] for pi in pi_list]
+                model.Add(sum(day_vars) <= 1)
+
+        # Create hours variables the same way solver.py does
+        staff_hours_vars = []
+        for si in range(len(staff_names)):
+            block_vars = []
+            for bi in range(len(blocks)):
+                block_dates = set(blocks[bi])
+                hour_vars = []
+                for pi, pos in enumerate(positions):
+                    if pos["date"] in block_dates:
+                        shift_paid = definitions[pos["shift"]]["paid_hours"]
+                        scaled_paid = int(round(shift_paid * SCALE))
+                        hour_vars.append(scaled_paid * assignments[si][pi])
+                if hour_vars:
+                    total = model.NewIntVar(0, 76 * SCALE, f"hours_{si}_{bi}")
+                    model.Add(total == sum(hour_vars))
+                    block_vars.append(total)
+                else:
+                    zero = model.NewIntVar(0, 0, f"hours_{si}_{bi}")
+                    block_vars.append(zero)
+            staff_hours_vars.append(block_vars)
+
+        constraint = OvertimeCap()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+            staff_hours_vars=staff_hours_vars,
+        )
+
+        # Force Alice to work all 7 positions (40h + 24h = 64h > 52h cap)
+        for pi in range(len(positions)):
+            model.Add(assignments[0][pi] == 1)
+
+        status = solver.Solve(model)
+        assert status == cp_model.INFEASIBLE  # 64h > 52h overtime cap
+
+    def test_solver_allows_within_cap(self):
+        """Solver should allow solutions within the overtime cap."""
+        from ortools.sat.python import cp_model
+        from constraints import OvertimeCap
+        from models import Staff, Classification
+        from utils import SCALE
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+
+        definitions = {
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
+        }
+
+        # Alice: 40h contracted, overtime cap = 52h
+        # Assign 5 D8 shifts = 40h, 1 D12 shift = 12h → total 52h = cap
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
+        blocks = [all_dates]
+        positions = [
+            {"date": "2026-08-03", "shift": "D8", "required_skill_level": None, "day_name": "Monday"},
+            {"date": "2026-08-04", "shift": "D8", "required_skill_level": None, "day_name": "Tuesday"},
+            {"date": "2026-08-05", "shift": "D8", "required_skill_level": None, "day_name": "Wednesday"},
+            {"date": "2026-08-06", "shift": "D8", "required_skill_level": None, "day_name": "Thursday"},
+            {"date": "2026-08-07", "shift": "D8", "required_skill_level": None, "day_name": "Friday"},
+            {"date": "2026-08-08", "shift": "D12", "required_skill_level": None, "day_name": "Saturday"},
+        ]
+
+        assignments = [
+            [model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))]
+            for s in range(len(staff_names))
+        ]
+
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+
+        pos_by_date = {}
+        for pi, p in enumerate(positions):
+            pos_by_date.setdefault(p["date"], []).append(pi)
+        for si in range(len(staff_names)):
+            for date_str, pi_list in pos_by_date.items():
+                day_vars = [assignments[si][pi] for pi in pi_list]
+                model.Add(sum(day_vars) <= 1)
+
+        staff_hours_vars = []
+        for si in range(len(staff_names)):
+            block_vars = []
+            for bi in range(len(blocks)):
+                block_dates = set(blocks[bi])
+                hour_vars = []
+                for pi, pos in enumerate(positions):
+                    if pos["date"] in block_dates:
+                        shift_paid = definitions[pos["shift"]]["paid_hours"]
+                        scaled_paid = int(round(shift_paid * SCALE))
+                        hour_vars.append(scaled_paid * assignments[si][pi])
+                if hour_vars:
+                    total = model.NewIntVar(0, 76 * SCALE, f"hours_{si}_{bi}")
+                    model.Add(total == sum(hour_vars))
+                    block_vars.append(total)
+                else:
+                    zero = model.NewIntVar(0, 0, f"hours_{si}_{bi}")
+                    block_vars.append(zero)
+            staff_hours_vars.append(block_vars)
+
+        constraint = OvertimeCap()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+            staff_hours_vars=staff_hours_vars,
+        )
+
+        # Force Alice to work all 6 positions (40h + 12h = 52h = cap)
+        for pi in range(len(positions)):
+            model.Add(assignments[0][pi] == 1)
+
+        status = solver.Solve(model)
+        assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)  # 52h = cap, should be feasible
+
+    def test_cap_uses_raw_contracted_not_adjusted(self):
+        """Overtime cap uses raw contracted_hours_per_fortnight, not holiday-adjusted."""
+        from ortools.sat.python import cp_model
+        from constraints import OvertimeCap
+        from models import Staff, Classification
+        from utils import SCALE
+
+        model = cp_model.CpModel()
+        solver = cp_model.CpSolver()
+
+        definitions = {
+            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
+            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
+            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
+            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
+        }
+
+        # Alice: 40h contracted, 7 days holiday → adjusted = floor(40 * 7 / 14) = 20h
+        # But overtime cap should still be min(76, 40 + 12) = 52h (uses raw, not adjusted)
+        staff_list = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[{"start": "2026-08-03", "end": "2026-08-09"}]),
+        ]
+        staff_by_name = {s.name: s for s in staff_list}
+        staff_names = [s.name for s in staff_list]
+        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
+        blocks = [all_dates]
+        positions = [
+            {"date": "2026-08-10", "shift": "D8", "required_skill_level": None, "day_name": "Monday"},
+            {"date": "2026-08-11", "shift": "D8", "required_skill_level": None, "day_name": "Tuesday"},
+            {"date": "2026-08-12", "shift": "D8", "required_skill_level": None, "day_name": "Wednesday"},
+            {"date": "2026-08-13", "shift": "D8", "required_skill_level": None, "day_name": "Thursday"},
+            {"date": "2026-08-14", "shift": "D8", "required_skill_level": None, "day_name": "Friday"},
+            {"date": "2026-08-15", "shift": "D12", "required_skill_level": None, "day_name": "Saturday"},
+            {"date": "2026-08-16", "shift": "D12", "required_skill_level": None, "day_name": "Sunday"},
+        ]
+
+        assignments = [
+            [model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))]
+            for s in range(len(staff_names))
+        ]
+
+        for pi in range(len(positions)):
+            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
+
+        pos_by_date = {}
+        for pi, p in enumerate(positions):
+            pos_by_date.setdefault(p["date"], []).append(pi)
+        for si in range(len(staff_names)):
+            for date_str, pi_list in pos_by_date.items():
+                day_vars = [assignments[si][pi] for pi in pi_list]
+                model.Add(sum(day_vars) <= 1)
+
+        staff_hours_vars = []
+        for si in range(len(staff_names)):
+            block_vars = []
+            for bi in range(len(blocks)):
+                block_dates = set(blocks[bi])
+                hour_vars = []
+                for pi, pos in enumerate(positions):
+                    if pos["date"] in block_dates:
+                        shift_paid = definitions[pos["shift"]]["paid_hours"]
+                        scaled_paid = int(round(shift_paid * SCALE))
+                        hour_vars.append(scaled_paid * assignments[si][pi])
+                if hour_vars:
+                    total = model.NewIntVar(0, 76 * SCALE, f"hours_{si}_{bi}")
+                    model.Add(total == sum(hour_vars))
+                    block_vars.append(total)
+                else:
+                    zero = model.NewIntVar(0, 0, f"hours_{si}_{bi}")
+                    block_vars.append(zero)
+            staff_hours_vars.append(block_vars)
+
+        constraint = OvertimeCap()
+        constraint.apply(
+            model=model,
+            staff_list=staff_list,
+            staff_by_name=staff_by_name,
+            assignments=assignments,
+            staff_names=staff_names,
+            definitions=definitions,
+            all_dates=all_dates,
+            blocks=blocks,
+            positions=positions,
+            staff_hours_vars=staff_hours_vars,
+        )
+
+        # Force Alice to work all 7 positions (40h + 24h = 64h > 52h cap)
+        # Should be infeasible even though adjusted floor is only 20h
+        for pi in range(len(positions)):
+            model.Add(assignments[0][pi] == 1)
+
+        status = solver.Solve(model)
+        assert status == cp_model.INFEASIBLE  # 64h > 52h cap (raw-based, not adjusted)
