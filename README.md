@@ -109,6 +109,7 @@ Note: DISCO (17:30–02:00) crosses midnight like the night shifts do, but is cl
 - Night shifts and weekend shifts distributed fairly across staff
 - Working the same shift for 2 consecutive days is the encouraged ideal; 1 or 3 are mildly discouraged, 4+ increasingly strongly discouraged
 - At most 2 separate runs of day-category shifts and 2 of night-category shifts per fortnight block — frequent day/night swapping is discouraged as extremely fatiguing
+- When multiple valid solutions exist, prefer assigning staff to positions matching their highest held skill level (minimising over-qualification)
 - Casual usage is minimised — always the last resort after named-staff options (including the 12h flex) are exhausted, so named staff get the most comfortable roster possible
 
 Full authoritative text and IDs live in the two constraint files — this is a summary, not a substitute.
