@@ -324,14 +324,75 @@ class RestPeriodConstraint(BaseHardConstraint):
 
 
 class NightToDayRest(BaseHardConstraint):
-    """[H#f4c9b6c8] At least 1 full day off between night and day shifts."""
+    """[H#f4c9b6c8] At least 1 full day off between night and day shifts.
+
+    A night shift (N8/N12) on day d forbids any day shift (D8/D12/P8/P12/L3/DISCO)
+    on day d+1, and vice versa. Uses a precomputed 8×8 compatibility table where
+    compat[a][b] == True only when both shifts are in the same category (both
+    day or both night).
+    """
 
     constraint_id = "[H#f4c9b6c8]"
+    SHIFT_TYPES = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
+    DAY_SHIFTS = {"D8", "D12", "P8", "P12", "L3", "DISCO"}
+    NIGHT_SHIFTS = {"N8", "N12"}
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions):
-        # TODO: enforce day-off between night→day and day→night transitions
-        pass
+
+        compat = self._build_night_day_compatibility_table(definitions)
+
+        num_staff = len(staff_names)
+        num_dates = len(all_dates)
+
+        pos_date: list[str] = [p["date"] for p in positions]
+        pos_shift: list[str] = [p["shift"] for p in positions]
+
+        pos_by_date: dict[str, list[int]] = {}
+        for i, p in enumerate(positions):
+            pos_by_date.setdefault(p["date"], []).append(i)
+
+        for si in range(num_staff):
+            for di in range(num_dates - 1):
+                date_d = all_dates[di]
+                date_d1 = all_dates[di + 1]
+                positions_d = pos_by_date.get(date_d, [])
+                positions_d1 = pos_by_date.get(date_d1, [])
+                if not positions_d or not positions_d1:
+                    continue
+
+                for pi_d in positions_d:
+                    shift_a = pos_shift[pi_d]
+                    shift_a_idx = self.SHIFT_TYPES.index(shift_a)
+                    for pi_d1 in positions_d1:
+                        shift_b = pos_shift[pi_d1]
+                        shift_b_idx = self.SHIFT_TYPES.index(shift_b)
+                        if not compat[shift_a_idx][shift_b_idx]:
+                            model.Add(
+                                assignments[si][pi_d] + assignments[si][pi_d1] <= 1
+                            )
+
+    def _build_night_day_compatibility_table(
+        self, definitions: dict
+    ) -> list[list[bool]]:
+        """Build 8×8 compatibility table for night↔day transitions.
+
+        compat[a][b] == True means shift_a on day d and shift_b on day d+1
+        are in the same category (both day or both night). False means they
+        are in different categories and are incompatible.
+        """
+        n = len(self.SHIFT_TYPES)
+        compat: list[list[bool]] = [[True] * n for _ in range(n)]
+
+        for a_idx, shift_a in enumerate(self.SHIFT_TYPES):
+            for b_idx, shift_b in enumerate(self.SHIFT_TYPES):
+                a_is_night = shift_a in self.NIGHT_SHIFTS
+                b_is_night = shift_b in self.NIGHT_SHIFTS
+                # Incompatible when one is night and the other is day
+                if a_is_night != b_is_night:
+                    compat[a_idx][b_idx] = False
+
+        return compat
 
 
 class RedRequestConstraint(BaseHardConstraint):

@@ -229,10 +229,15 @@ class TestSolverConstraintFiltering:
         hard_called = []
         soft_called = []
 
-        original_hard = HARD_CONSTRAINTS[:]
-        original_soft = SOFT_CONSTRAINTS[:]
+        # Save original apply methods keyed by constraint_id before patching
+        original_hard_apply: dict[str, callable] = {}
+        original_soft_apply: dict[str, callable] = {}
+        for cls in HARD_CONSTRAINTS:
+            original_hard_apply[cls.constraint_id] = cls.apply
+        for cls in SOFT_CONSTRAINTS:
+            original_soft_apply[cls.constraint_id] = cls.apply
 
-        for cls in original_hard:
+        for cls in HARD_CONSTRAINTS:
             cid = cls.constraint_id
             def make_apply(called_list, cid, orig_cls):
                 def wrapped(*args, **kwargs):
@@ -240,7 +245,7 @@ class TestSolverConstraintFiltering:
                 return wrapped
             cls.apply = make_apply(hard_called, cid, cls)
 
-        for cls in original_soft:
+        for cls in SOFT_CONSTRAINTS:
             cid = cls.constraint_id
             def make_apply(called_list, cid, orig_cls):
                 def wrapped(*args, **kwargs):
@@ -253,10 +258,10 @@ class TestSolverConstraintFiltering:
         model._apply_soft_constraints()
 
         # Restore original apply methods
-        for cls, orig in zip(original_hard, HARD_CONSTRAINTS):
-            cls.apply = orig.apply
-        for cls, orig in zip(original_soft, SOFT_CONSTRAINTS):
-            cls.apply = orig.apply
+        for cls in HARD_CONSTRAINTS:
+            cls.apply = original_hard_apply[cls.constraint_id]
+        for cls in SOFT_CONSTRAINTS:
+            cls.apply = original_soft_apply[cls.constraint_id]
 
         return hard_called, soft_called
 
