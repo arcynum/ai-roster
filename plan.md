@@ -51,10 +51,11 @@
 
 ## Out-of-sync items (code/docs vs constraint files)
 
-1. **`definitions.yaml` line 10**: Comment says "24h overtime cap" — should say "12h" per `[H#e8f7d6c5]` (fixed)
+_None._
 
 ## Recent Changes
 
+- **2026-08-05**: Fixed roster build failure — 4 soft constraint `apply()` methods (`WeekendFairness`, `ConsecutiveShiftDiscouraged`, `SkillLevelTiebreaker`, `DayNightRunCountPenalty`) missing `staff_hours_vars=None` parameter, causing `TypeError` when `solver.py` passed it to all soft constraints. Also fixed 2 CP-SAT reification bugs: `sw == sum(bool_vars) >= 1` in `ConsecutiveShiftDiscouraged` and `day_worked == sum(day_bools) >= 1` / `night_worked == sum(night_bools) >= 1` in `DayNightRunCountPenalty` — these parsed as chained comparisons `(sw == sum(bool_vars)) >= 1` instead of reified constraints. Fixed by replacing with `.OnlyEnforceIf()` pairs. Roster generation: OPTIMAL, 404 assignments, 0 casual, 0 unfilled. All 136 tests pass.
 - **2026-08-05**: Implemented all 5 remaining soft constraints (S#e9b4a1b3, S#d2a7f4a6, S#30c6f5ad, S#7b4e19fc, S#6c1e9a4d). **3 bugs fixed during implementation**:
   1. `ConsecutiveShiftDiscouraged` shift_type_vars: lines 763/771 created duplicate `shift_worked` BoolVars per shift type, leaving `st` IntVars unconstrained. Merged into single loop with shared `shift_worked_vars` dict.
   2. `ConsecutiveShiftDiscouraged` L=1: `model.Add(rs == 0).OnlyEnforceIf(exact_L.Not())` forced `rs=0` when `rs` was actually `1`, causing INFEASIBLE. Removed the line.

@@ -649,7 +649,7 @@ class WeekendFairness(BaseSoftConstraint):
     constraint_id = "[S#a1d6c3d5]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
 
         num_staff = len(staff_names)
         num_positions = len(positions)
@@ -716,7 +716,7 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
     SHIFT_TYPES = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
 
         num_staff = len(staff_names)
         num_dates = len(all_dates)
@@ -763,7 +763,8 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                     k = SHIFT_INDEX[shift_name]
                     sw = model.NewBoolVar(f"worked_{staff_names[si]}_{date_str}_{shift_name}")
                     shift_worked_vars[shift_name] = sw
-                    model.Add(sw == sum(bool_vars) >= 1)
+                    model.Add(sum(bool_vars) >= 1).OnlyEnforceIf(sw)
+                    model.Add(sum(bool_vars) == 0).OnlyEnforceIf(sw.Not())
                     model.Add(st == k).OnlyEnforceIf(sw)
                     model.Add(st != k).OnlyEnforceIf(sw.Not())
 
@@ -903,7 +904,7 @@ class SkillLevelTiebreaker(BaseSoftConstraint):
     constraint_id = "[S#7b4e19fc]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
 
         num_staff = len(staff_names)
         num_positions = len(positions)
@@ -953,7 +954,7 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
     NIGHT_SHIFTS = {"N8", "N12"}
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
 
         num_staff = len(staff_names)
         num_dates = len(all_dates)
@@ -1000,13 +1001,15 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
                 # day_worked = OR of assignments for day shifts on this day
                 day_bools = [assignments[si][pi] for pi in pos_indices if pos_shift[pi] in self.DAY_SHIFTS]
                 if day_bools:
-                    model.Add(day_worked == sum(day_bools) >= 1)
+                    model.Add(sum(day_bools) >= 1).OnlyEnforceIf(day_worked)
+                    model.Add(sum(day_bools) == 0).OnlyEnforceIf(day_worked.Not())
                 else:
                     model.Add(day_worked == 0)
 
                 night_bools = [assignments[si][pi] for pi in pos_indices if pos_shift[pi] in self.NIGHT_SHIFTS]
                 if night_bools:
-                    model.Add(night_worked == sum(night_bools) >= 1)
+                    model.Add(sum(night_bools) >= 1).OnlyEnforceIf(night_worked)
+                    model.Add(sum(night_bools) == 0).OnlyEnforceIf(night_worked.Not())
                 else:
                     model.Add(night_worked == 0)
 
