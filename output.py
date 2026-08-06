@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader
 
-from utils import OUTPUT_DIR, SCALE, compute_adjusted_hours, is_weekend
+from utils import NIGHT_SHIFTS, OUTPUT_DIR, SCALE, compute_adjusted_hours, is_weekend
 
 if TYPE_CHECKING:
     from models import Staff, RosterSlot
@@ -102,6 +102,8 @@ def _build_context(
     roster_start: date,
     roster_end: date,
     blocks: list[list[date]],
+    hard_constraints: list[dict] | None = None,
+    soft_constraints: list[dict] | None = None,
 ) -> dict:
     """Build the full context dict for the Jinja2 template."""
     staff_map = {s.name: s for s in staff_list}
@@ -137,7 +139,7 @@ def _build_context(
             dt = date.fromisoformat(slot.date)
             if is_weekend(dt):
                 weekend_hours += paid
-            if definitions[slot.shift]["crosses_midnight"]:
+            if slot.shift in NIGHT_SHIFTS:
                 night_hours += paid
             shift_list.append({"date": slot.date, "shift": slot.shift})
 
@@ -175,7 +177,7 @@ def _build_context(
             b_night = sum(
                 definitions[s.shift]["paid_hours"]
                 for s in block_slots
-                if definitions[s.shift]["crosses_midnight"]
+                if s.shift in NIGHT_SHIFTS
             )
             b_weekend_pct = (b_weekend / b_hours * 100) if b_hours > 0 else 0.0
             b_night_pct = (b_night / b_hours * 100) if b_hours > 0 else 0.0
@@ -191,6 +193,14 @@ def _build_context(
             b_floor_pct, b_floor_light, b_floor_badge, b_floor_label = _hours_floor_info(
                 b_hours, b_adjusted
             )
+            # Shortfall info from solver result
+            shortfall = 0.0
+            if hasattr(result, "shortfall") and staff.name in result.shortfall:
+                block_key = f"b{bi}"
+                shortfall = result.shortfall[staff.name].get(block_key, 0.0)
+            shortfall_label = f"{shortfall:.1f}h under" if shortfall > 0 else "On track"
+            shortfall_light = "light-red" if shortfall > 0 else "light-green"
+
             block_data.append({
                 "block_idx": bi,
                 "block_start": block[0].isoformat(),
@@ -211,6 +221,9 @@ def _build_context(
                 "adjusted_light_class": b_floor_light,
                 "adjusted_badge_class": b_floor_badge,
                 "adjusted_label": b_floor_label,
+                "shortfall": shortfall,
+                "shortfall_label": shortfall_label,
+                "shortfall_light_class": shortfall_light,
             })
 
         staff_blocks[staff.name] = block_data
@@ -228,18 +241,23 @@ def _build_context(
         "staff_matrix": staff_matrix,
         "staff_info": staff_info,
         "staff_blocks": staff_blocks,
+        "soft_penalty": result.soft_penalty,
+        "casual_usage": result.casual_usage,
+        "hard_constraints": result.hard_constraints,
+        "soft_constraints": result.soft_constraints,
     }
 
 
 def generate_html(
     result: SolveResult,
     staff_list: list["Staff"],
-    positions: list,
     definitions: dict,
     roster_start: date,
     roster_end: date,
     blocks: list[list[date]],
     run_id: str,
+    hard_constraints: list[dict] | None = None,
+    soft_constraints: list[dict] | None = None,
 ) -> Path:
     """Generate the roster HTML file and write it to output/.
 
@@ -255,7 +273,9 @@ def generate_html(
     template = env.get_template("roster.html")
 
     context = _build_context(result, staff_list, definitions,
-                             roster_start, roster_end, blocks)
+                              roster_start, roster_end, blocks,
+                              hard_constraints=hard_constraints,
+                              soft_constraints=soft_constraints)
     html = template.render(**context)
 
     output_path.write_text(html, encoding="utf-8")

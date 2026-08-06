@@ -26,6 +26,7 @@ constraints:
       # - "[H#4ef8a2c3]"  # Casuals exempt from individual constraints
   soft:
     enabled:
+      # - "[S#d9a8b7c6]"  # Soft contracted-hours floor (reclassified from hard)
       # - "[S#e9b4a1b3]"  # Even overtime distribution
       # - "[S#d2a7f4a6]"  # Night shift fairness by contracted hours
       # - "[S#a1d6c3d5]"  # Weekend hours fairness

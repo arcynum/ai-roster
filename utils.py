@@ -178,7 +178,12 @@ def load_config(path: Path | None = None,
         kind_data = constraints.get(kind, {}) or {}
         enabled = kind_data.get("enabled", [])
         if not isinstance(enabled, list):
-            logger.warning("config.yaml: constraints.%s.enabled is not a list — treating as empty", kind)
+            # enabled is None (all commented out) or wrong type —
+            # treat as "section absent for this kind", i.e. all enabled
+            logger.info(
+                "config.yaml: constraints.%s.enabled is not a list — all %s constraints enabled",
+                kind, kind,
+            )
             continue
         for cid in enabled:
             if not isinstance(cid, str):
@@ -191,12 +196,13 @@ def load_config(path: Path | None = None,
                     "config.yaml: unknown %s constraint ID %r — it will be ignored",
                     kind, cid,
                 )
+            result[kind]["enabled"] = result[kind].get("enabled") or []
             result[kind]["enabled"].append(cid)
 
     logger.info(
         "Loaded config.yaml: %d hard, %d soft constraints enabled",
-        len(result["hard"]["enabled"]),
-        len(result["soft"]["enabled"]),
+        len(result["hard"]["enabled"]) if result["hard"]["enabled"] else "all",
+        len(result["soft"]["enabled"]) if result["soft"]["enabled"] else "all",
     )
     return result
 
@@ -486,14 +492,21 @@ def compute_adjusted_hours(
     """
     if not block_dates:
         return 0
-    holiday_days = 0
+    # Collect all holiday dates in a set to avoid double-counting
+    # overlapping holiday ranges
+    holiday_dates_set: set[date] = set()
     for h in holidays:
         h_start = date.fromisoformat(h["start"])
         h_end = date.fromisoformat(h["end"])
-        for bd in block_dates:
-            bd_date = date.fromisoformat(bd)
-            if h_start <= bd_date <= h_end:
-                holiday_days += 1
+        current = h_start
+        while current <= h_end:
+            holiday_dates_set.add(current)
+            current += timedelta(days=1)
+    # Count how many block dates fall within any holiday range
+    holiday_days = sum(
+        1 for bd in block_dates
+        if date.fromisoformat(bd) in holiday_dates_set
+    )
     available = 14 - holiday_days
     contracted_scaled = int(round(contracted_hours * SCALE))
     return contracted_scaled * available // 14

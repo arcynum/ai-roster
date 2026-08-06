@@ -585,7 +585,8 @@ class OvertimeDistribution(BaseSoftConstraint):
     constraint_id = "[S#e9b4a1b3]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
+              objective_terms=None):
         if staff_hours_vars is None:
             return
 
@@ -607,7 +608,10 @@ class OvertimeDistribution(BaseSoftConstraint):
 
         total_ot = model.NewIntVar(0, num_staff * num_blocks * 76 * SCALE, "total_overtime_dist")
         model.Add(total_ot == sum(overtime_dev_vars))
-        model.Minimize(total_ot * weight)
+        if objective_terms is not None:
+            objective_terms.append(total_ot * weight)
+        else:
+            model.Minimize(total_ot * weight)
 
 
 class NightShiftFairness(BaseSoftConstraint):
@@ -622,7 +626,8 @@ class NightShiftFairness(BaseSoftConstraint):
     NIGHT_HOURS = {"N8": 8.0, "N12": 12.0}
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
+              objective_terms=None):
         if staff_hours_vars is None:
             return
 
@@ -675,7 +680,10 @@ class NightShiftFairness(BaseSoftConstraint):
 
         total_night_dev = model.NewIntVar(0, num_staff * num_blocks * 76 * SCALE, "total_night_dev")
         model.Add(total_night_dev == sum(night_dev_vars))
-        model.Minimize(total_night_dev * weight)
+        if objective_terms is not None:
+            objective_terms.append(total_night_dev * weight)
+        else:
+            model.Minimize(total_night_dev * weight)
 
 
 class WeekendFairness(BaseSoftConstraint):
@@ -688,7 +696,8 @@ class WeekendFairness(BaseSoftConstraint):
     constraint_id = "[S#a1d6c3d5]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
+              objective_terms=None):
 
         num_staff = len(staff_names)
         num_positions = len(positions)
@@ -735,7 +744,10 @@ class WeekendFairness(BaseSoftConstraint):
         # Minimize sum of deviations
         total_deviation = model.NewIntVar(0, 76 * SCALE * n * n, "total_weekend_dev")
         model.Add(total_deviation == sum(deviation_vars))
-        model.Minimize(total_deviation * weight)
+        if objective_terms is not None:
+            objective_terms.append(total_deviation * weight)
+        else:
+            model.Minimize(total_deviation * weight)
 
 
 class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
@@ -755,7 +767,8 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
     SHIFT_TYPES = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
+              objective_terms=None):
 
         num_staff = len(staff_names)
         num_dates = len(all_dates)
@@ -929,7 +942,10 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
 
         if penalty_terms:
             model.Add(total_penalty == sum(penalty_terms))
-            model.Minimize(total_penalty * 1)  # weight already baked into tier penalties
+            if objective_terms is not None:
+                objective_terms.append(total_penalty * 1)
+            else:
+                model.Minimize(total_penalty * 1)
 
 
 class SkillLevelTiebreaker(BaseSoftConstraint):
@@ -943,7 +959,8 @@ class SkillLevelTiebreaker(BaseSoftConstraint):
     constraint_id = "[S#7b4e19fc]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
+              objective_terms=None):
 
         num_staff = len(staff_names)
         num_positions = len(positions)
@@ -976,7 +993,10 @@ class SkillLevelTiebreaker(BaseSoftConstraint):
         if penalty_terms:
             total_sq = model.NewIntVar(0, max_penalty, "skill_tiebreaker")
             model.Add(total_sq == sum(penalty_terms))
-            model.Minimize(total_sq * weight)
+            if objective_terms is not None:
+                objective_terms.append(total_sq * weight)
+            else:
+                model.Minimize(total_sq * weight)
 
 
 class DayNightRunCountPenalty(BaseSoftConstraint):
@@ -993,7 +1013,8 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
     NIGHT_SHIFTS = {"N8", "N12"}
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
+              objective_terms=None):
 
         num_staff = len(staff_names)
         num_dates = len(all_dates)
@@ -1129,7 +1150,10 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
         if penalty_terms:
             total_penalty = model.NewIntVar(0, len(penalty_terms) * 2 * num_dates, "day_night_penalty")
             model.Add(total_penalty == sum(penalty_terms))
-            model.Minimize(total_penalty * weight)
+            if objective_terms is not None:
+                objective_terms.append(total_penalty * weight)
+            else:
+                model.Minimize(total_penalty * weight)
 
 
 class CasualUsageMinimization(BaseSoftConstraint):
@@ -1144,7 +1168,7 @@ class CasualUsageMinimization(BaseSoftConstraint):
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, weight, casual_vars=None,
-              staff_hours_vars=None):
+              staff_hours_vars=None, objective_terms=None):
         if casual_vars is None:
             return
 
@@ -1155,7 +1179,10 @@ class CasualUsageMinimization(BaseSoftConstraint):
 
         total_casual = model.NewIntVar(0, len(active_casual_vars), "total_casual_usage")
         model.Add(total_casual == sum(active_casual_vars))
-        model.Minimize(total_casual * weight)
+        if objective_terms is not None:
+            objective_terms.append(total_casual * weight)
+        else:
+            model.Minimize(total_casual * weight)
 
 
 # ---------------------------------------------------------------------------

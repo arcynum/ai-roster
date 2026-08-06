@@ -108,6 +108,8 @@ def _run(run_id: str) -> None:
         weights=weights,
         blocks=[[d.isoformat() for d in block] for block in blocks],
         constraint_config=config,
+        hard_constraints=hard_constraints,
+        soft_constraints=soft_constraints,
     )
     model.build_model()
 
@@ -117,8 +119,10 @@ def _run(run_id: str) -> None:
     # Step 7: Generate output
     logger.info("Step 7: Generating output")
     from output import generate_html
-    generate_html(result, staff_list, positions, definitions,
-                  roster_start, roster_end, blocks, run_id)
+    generate_html(result, staff_list, definitions,
+                  roster_start, roster_end, blocks, run_id,
+                  hard_constraints=hard_constraints,
+                  soft_constraints=soft_constraints)
 
     logger.info("Run complete. Output: %s", OUTPUT_DIR)
     logger.info("=" * 60)

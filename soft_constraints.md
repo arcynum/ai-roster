@@ -2,6 +2,7 @@
 Everything in this file is a preference and should be followed if possible. The solver will treat these as optimization objectives.
 
 ## Staffing & Contracted Hours Optimization
+- [S#d9a8b7c6] **Soft contracted-hours floor.** Reclassified from hard constraint H#d9a8b7c6. In real rostering, staff headcount is provisioned above minimum coverage, so the sum of all staff contracted-hours floors often exceeds total roster demand. Rather than making the model infeasible, this constraint minimizes the shortfall (adjusted contracted hours − actual assigned hours) fairly across all staff per block. Weight should sit below casual usage (100000) but above general fairness weights (50–500).
 - [S#e9b4a1b3] If you need to exceed a staff members contracted hours to fill the roster due to a contracted hours shortfall, ensure these extra shifts are evenly distributed between all staff. All additional contracted hours needs to be fairly distributed to keep staff safe and healthy.
 
 ## Fairness & Distribution

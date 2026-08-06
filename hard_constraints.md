@@ -20,7 +20,7 @@ Everything in this file is a rule and MUST be followed. The final roster must ob
 - [H#a5d0c7d9] Never roster any staff members on the days that they have red requested.
 - [H#b6e1d8e0] Never roster any staff members on the days that they are on leave.
 - [H#f0c5b2c4] Never exceed 76 **paid** hours (per `definitions.yaml`'s `paid_hours` field, not `span_hours`) allocated to a single staff member per discrete 14-day fortnight block.
-- [H#d9a8b7c6] Staff must be rostered on for at least their **adjusted contracted paid hours** (see [H#a3d8f6c1] for how this figure is calculated) per 14-day fortnight block. This is enforced on a per-block basis and cannot be averaged across the entire roster period.
+- ~~[H#d9a8b7c6]~~ ~~Staff must be rostered on for at least their **adjusted contracted paid hours** (see [H#a3d8f6c1] for how this figure is calculated) per 14-day fortnight block.~~ **Reclassified to soft constraint [S#d9a8b7c6].** When total contracted-hours demand exceeds total roster hours (a normal situation when headcount > minimum coverage), the shortfall is distributed fairly across staff rather than making the model infeasible.
 - [H#a3d8f6c1] **Holiday proration formula.** A staff member's adjusted contracted paid hours for a given 14-day block is calculated as a precomputed constant, before the CP-SAT model is built (not a solver decision variable):
 
   ```

@@ -39,6 +39,11 @@ class SolveResult:
         assignments: List of resolved RosterSlot assignments.
         unfilled: List of positions that could not be filled.
         staff_hours: Dict of staff_name -> total paid hours for the period.
+        shortfall: Dict of staff_name -> {block_key: hours under contracted floor}.
+        soft_penalty: Dict of constraint_id -> total penalty incurred.
+        casual_usage: List of {date, shift, required_skill_level} for casual fills.
+        hard_constraints: List of hard constraint records (for HTML output).
+        soft_constraints: List of soft constraint records (for HTML output).
     """
     status: str = ""
     objective_value: int = 0
@@ -46,6 +51,11 @@ class SolveResult:
     assignments: list[RosterSlot] = field(default_factory=list)
     unfilled: list[dict] = field(default_factory=list)
     staff_hours: dict[str, float] = field(default_factory=dict)
+    shortfall: dict[str, dict[str, float]] = field(default_factory=dict)
+    soft_penalty: dict[str, float] = field(default_factory=dict)
+    casual_usage: list[dict] = field(default_factory=list)
+    hard_constraints: list[dict] = field(default_factory=list)
+    soft_constraints: list[dict] = field(default_factory=list)
 
 
 class RosterModel:
@@ -69,6 +79,8 @@ class RosterModel:
         weights: dict[str, int],
         blocks: list[list[str]],
         constraint_config: dict | None = None,
+        hard_constraints: list[dict] | None = None,
+        soft_constraints: list[dict] | None = None,
     ):
         self.staff_list = staff_list
         self.positions = positions
@@ -76,6 +88,8 @@ class RosterModel:
         self.weights = weights
         self.blocks = blocks
         self.constraint_config = constraint_config
+        self._hard_constraints = hard_constraints or []
+        self._soft_constraints = soft_constraints or []
 
         # Derived lookups
         self.staff_by_name: dict[str, Staff] = {s.name: s for s in staff_list}
@@ -103,15 +117,31 @@ class RosterModel:
         self._staff_hours_vars: list[list[cp_model.IntVar]] = []
         # casual_vars[pos_idx] -> BoolVar or None (populated by CasualStaffingConstraint)
         self.casual_vars: list[cp_model.IntVar | None] = []
+        # unfilled_vars[pos_idx] -> BoolVar (populated by _create_variables)
+        self._unfilled_vars: list[cp_model.IntVar] = []
+        # shortfall_vars[staff_idx][block_idx] -> IntVar (populated by ContractedHoursFloorSoft)
+        self._shortfall_vars: list[list[cp_model.IntVar]] = []
+        # soft_penalty_vars[cid] -> IntVar for reading back penalty values
+        self._soft_penalty_vars: dict[str, cp_model.IntVar] = {}
 
     def build_model(self) -> None:
         """Build the full CP-SAT model: variables, constraints, objective."""
         logger.info("Building CP-SAT model: %d staff, %d positions, %d blocks",
                     len(self.staff_list), len(self.positions), len(self.blocks))
 
+        # Collect all objective penalty terms here; each constraint appends to
+        # this list instead of calling model.Minimize() directly (which would
+        # overwrite the previous objective).  The combined objective is set
+        # once at the end.
+        self._objective_terms: list[cp_model.IntVar] = []
+
         self._create_variables()
         self._apply_hard_constraints()
         self._apply_soft_constraints()
+
+        # Build combined objective from all collected penalty terms
+        if self._objective_terms:
+            self.model.Minimize(sum(self._objective_terms))
 
     def _create_variables(self) -> None:
         """Create CP-SAT decision variables.
@@ -134,10 +164,14 @@ class RosterModel:
                 row.append(var)
             self._assignment_vars.append(row)
 
-        # --- Exactly one staff per position ---
+        # --- Unfilled slack variables for every position ---
+        # These allow positions to be left unfilled (feasible solve) rather than
+        # making the model infeasible. The CoverageConstraint adds the actual
+        # coverage constraint per position, incorporating casual and unfilled vars.
+        self._unfilled_vars: list[cp_model.IntVar] = []
         for pi in range(num_positions):
-            staff_vars = [self._assignment_vars[si][pi] for si in range(num_staff)]
-            self.model.Add(sum(staff_vars) == 1)
+            unfilled = self.model.NewBoolVar(f"unfilled_{pi}")
+            self._unfilled_vars.append(unfilled)
 
         # --- At most one shift per staff per date ---
         for si in range(num_staff):
@@ -175,7 +209,10 @@ class RosterModel:
         """Apply hard constraints to the model, filtered by config."""
         enabled_ids: set[str] | None = None
         if self.constraint_config is not None:
-            enabled_ids = set(self.constraint_config.get("hard", {}).get("enabled", []))
+            raw = self.constraint_config.get("hard", {}).get("enabled")
+            if raw is not None:
+                enabled_ids = set(raw)
+            # If raw is None, enabled_ids stays None → all constraints enabled
 
         applied = 0
         skipped = 0
@@ -204,7 +241,67 @@ class RosterModel:
                 self.casual_vars = constraint.casual_vars
             applied += 1
 
+        # Add coverage constraint after CasualStaffingConstraint has run,
+        # so it can reference casual variables. This enforces:
+        # - casual-eligible positions: sum(staff_vars) + casual_var + unfilled_var == 1
+        # - non-casual positions: sum(staff_vars) + unfilled_var == 1
+        self._apply_coverage_constraint()
+
+        # Append unfilled penalty to the shared objective terms
+        # (the coverage constraint creates these internally)
+        if hasattr(self, "_objective_terms") and hasattr(self, "_unfilled_penalty_terms") and self._unfilled_penalty_terms:
+            self._objective_terms.extend(self._unfilled_penalty_terms)
+
+        # Warn if 0 hard constraints were enabled (likely a config error)
+        if applied == 0 and enabled_ids is not None:
+            logger.warning(
+                "No hard constraints enabled — this is likely a configuration error. "
+                "The roster will have no safety constraints."
+            )
+
         logger.info("Hard constraints: %d applied, %d skipped", applied, skipped)
+
+    def _apply_coverage_constraint(self) -> None:
+        """Add coverage constraints for all positions.
+
+        For casual-eligible positions, the constraint includes the casual variable
+        (already created by CasualStaffingConstraint) and the unfilled variable.
+        For non-casual positions, only staff assignment and unfilled are included.
+
+        Also adds a high-weight penalty for unfilled positions to the objective,
+        ensuring the solver fills positions whenever possible (unfilled is last
+        resort after named staff and casuals).
+        """
+        num_positions = len(self.positions)
+        num_staff = len(self.staff_names)
+
+        # Unfilled penalty: high weight so solver fills positions whenever possible
+        UNFILLED_PENALTY_WEIGHT = 200000
+        self._unfilled_penalty_terms: list[cp_model.IntVar] = []
+        for pi in range(num_positions):
+            penalty = self.model.NewIntVar(0, UNFILLED_PENALTY_WEIGHT, f"unfilled_penalty_{pi}")
+            self.model.Add(penalty == UNFILLED_PENALTY_WEIGHT).OnlyEnforceIf(self._unfilled_vars[pi])
+            self.model.Add(penalty == 0).OnlyEnforceIf(self._unfilled_vars[pi].Not())
+            self._unfilled_penalty_terms.append(penalty)
+
+        for pi in range(num_positions):
+            staff_vars = [self._assignment_vars[si][pi] for si in range(num_staff)]
+            options = list(staff_vars)
+
+            if self.positions[pi].get("casual_allowed"):
+                # Casual-eligible: staff OR casual OR unfilled
+                if self.casual_vars and pi < len(self.casual_vars) and self.casual_vars[pi] is not None:
+                    options.append(self.casual_vars[pi])
+                else:
+                    # Casual constraint was disabled or didn't create a var —
+                    # treat as non-casual for coverage purposes
+                    options.append(self._unfilled_vars[pi])
+                    continue
+            options.append(self._unfilled_vars[pi])
+
+            self.model.Add(sum(options) == 1)
+
+        logger.info("Coverage constraints added: %d positions", num_positions)
 
     def _apply_soft_constraints(self) -> None:
         """Apply soft constraints as objective penalties, filtered by config."""
@@ -235,11 +332,15 @@ class RosterModel:
                 positions=self.positions,
                 staff_hours_vars=self._staff_hours_vars,
                 weight=weight,
+                objective_terms=getattr(self, "_objective_terms", None),
             )
             # Pass casual_vars if the soft constraint accepts it
             if cid == "[S#3d9a7ec1]":
                 apply_kwargs["casual_vars"] = self.casual_vars
             constraint.apply(**apply_kwargs)
+            # Capture shortfall_vars from the soft floor constraint
+            if hasattr(constraint, "_shortfall_vars"):
+                self._shortfall_vars = constraint._shortfall_vars
             applied += 1
 
         logger.info("Soft constraints: %d applied, %d skipped", applied, skipped)
@@ -275,6 +376,8 @@ class RosterModel:
             status=status_str,
             objective_value=obj_val,
             solve_time_s=solve_time,
+            hard_constraints=getattr(self, "_hard_constraints", []),
+            soft_constraints=getattr(self, "_soft_constraints", []),
         )
 
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -288,7 +391,7 @@ class RosterModel:
         """Extract assignment values from the solver solution.
 
         Reads BoolVar values to build RosterSlot list and track unfilled positions.
-        Also computes staff hours for the result.
+        Also computes staff hours, shortfall, and casual usage for the result.
         """
         num_positions = len(self.positions)
         num_staff = len(self.staff_names)
@@ -321,6 +424,11 @@ class RosterModel:
                     ))
                     unfilled_set.discard(pi)
                     casual_count += 1
+                    result.casual_usage.append({
+                        "date": pos["date"],
+                        "shift": pos["shift"],
+                        "required_skill_level": pos.get("required_skill_level"),
+                    })
 
         # Build unfilled list
         for pi in unfilled_set:
@@ -337,6 +445,23 @@ class RosterModel:
             result.staff_hours[slot.staff_name] = (
                 result.staff_hours.get(slot.staff_name, 0) + paid
             )
+
+        # Read back shortfall values per staff per block
+        if hasattr(self, "_shortfall_vars") and self._shortfall_vars:
+            for si, staff in enumerate(self.staff_list):
+                staff_shortfall: dict[str, float] = {}
+                for bi in range(len(self.blocks)):
+                    if si < len(self._shortfall_vars) and bi < len(self._shortfall_vars[si]):
+                        var = self._shortfall_vars[si][bi]
+                        val = self.solver.Value(var)
+                        block_key = f"b{bi}"
+                        staff_shortfall[block_key] = val / SCALE
+                result.shortfall[staff.name] = staff_shortfall
+
+        # Read back soft-constraint penalty values
+        if hasattr(self, "_soft_penalty_vars") and self._soft_penalty_vars:
+            for cid, var in self._soft_penalty_vars.items():
+                result.soft_penalty[cid] = self.solver.Value(var) / SCALE
 
         logger.info("Extracted %d assignments (%d casual), %d unfilled positions",
                       len(result.assignments), casual_count, len(result.unfilled))
