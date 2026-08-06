@@ -210,9 +210,11 @@ class RosterModel:
         enabled_ids: set[str] | None = None
         if self.constraint_config is not None:
             raw = self.constraint_config.get("hard", {}).get("enabled")
-            if raw is not None:
+            if raw is not None and len(raw) > 0:
                 enabled_ids = set(raw)
-            # If raw is None, enabled_ids stays None → all constraints enabled
+            # If raw is None or empty list, enabled_ids stays None → all
+            # constraints enabled (empty list = section present but no entries
+            # uncommented, which should behave identically to absent section).
 
         applied = 0
         skipped = 0
@@ -307,7 +309,9 @@ class RosterModel:
         """Apply soft constraints as objective penalties, filtered by config."""
         enabled_ids: set[str] | None = None
         if self.constraint_config is not None:
-            enabled_ids = set(self.constraint_config.get("soft", {}).get("enabled", []))
+            raw = self.constraint_config.get("soft", {}).get("enabled", [])
+            if raw is not None and len(raw) > 0:
+                enabled_ids = set(raw)
 
         applied = 0
         skipped = 0

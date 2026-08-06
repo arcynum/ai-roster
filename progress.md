@@ -13,12 +13,15 @@
 - [x] **3.2** Messages section — `SolveResult` tracks soft-constraint penalties and casual usage; `_build_context` passes them through
 - [x] **3.3** Unused `hard_constraints`/`soft_constraints` loads in `main.py` — wired into output context
 - [x] **5.x** `compute_adjusted_hours` holiday double-counting — uses `set()` for deduplication
+- [x] **5.x** Red request/holiday date cross-validation against roster period (warns when dates fall outside)
+- [x] **5.x** Unknown ID hardening — raises `ValueError` instead of warning
+- [x] **5.x** Duplicated shift-type constants — removed dead `SHIFT_ORDER` from `output.py`; `test_output.py` imports `SHIFT_ORDER` from `utils`
+- [x] **5.x** `SHIFT_TYPES` class attributes added to `NoDoubleBooking`, `RestPeriodConstraint`, `NightToDayRest` (fixed 30 test failures)
+- [x] **4.1–4.3** Redundant compatibility tables — extracted shared `_emit_compatibility_constraints()` utility; three `apply()` methods now use it
 - [x] Constraint docs updated — `H#d9a8b7c6` moved to soft_constraints.md with reclassification note; config.yaml commented-out entries updated
 - [x] `weights.yaml` updated — added soft floor weight (1000)
+- [x] Run tests and verify all fixes work — 145/145 pass
 
 ## Pending
 
-- [ ] **2.4** ConsecutiveShiftDiscouraged run-length cap — raise from 14 to `num_dates`
-- [ ] **4.1–4.3** Redundant compatibility tables / large auxiliary-variable count
-- [ ] **5.x** Red request/holiday date cross-validation, duplicated shift-type constants, unknown ID hardening
-- [x] Run tests and verify all fixes work — 145/145 pass
+*(None — all audit items addressed)*

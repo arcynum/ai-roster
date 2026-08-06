@@ -26,9 +26,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger("ai-roster")
 
-# Shift display order
-SHIFT_ORDER = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
-
 # Classification sort order
 CLASS_ORDER = {"CN": 0, "RN": 1, "Graduate": 2}
 

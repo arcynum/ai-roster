@@ -28,9 +28,17 @@ NIGHT_SHIFTS = {"N8", "N12"}
 GRADUATE_ALLOWED_SHIFTS = {"D8", "P8", "L3", "DISCO", "N8"}
 SHIFT_ORDER = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
 SCALE = 100  # integer scaling factor for CP-SAT float arithmetic
+REST_PERIOD_SECONDS = 11 * 3600  # 11 hours in seconds
+NIGHT_HOURS = {"N8": 8.0, "N12": 12.0}
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 OUTPUT_DIR = PROJECT_ROOT / "output"
+
+# ---------------------------------------------------------------------------
+# Logger
+# ---------------------------------------------------------------------------
+
+logger = logging.getLogger("ai-roster")
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -192,17 +200,18 @@ def load_config(path: Path | None = None,
             # Validate against known IDs if provided
             known = known_hard_ids if kind == "hard" else known_soft_ids
             if known is not None and cid not in known:
-                logger.warning(
-                    "config.yaml: unknown %s constraint ID %r — it will be ignored",
-                    kind, cid,
+                raise ValueError(
+                    f"config.yaml: unknown {kind} constraint ID {cid!r} — "
+                    f"ensure it is registered in constraints.py"
                 )
             result[kind]["enabled"] = result[kind].get("enabled") or []
             result[kind]["enabled"].append(cid)
 
+    hard_label = len(result["hard"]["enabled"]) if result["hard"]["enabled"] else "all"
+    soft_label = len(result["soft"]["enabled"]) if result["soft"]["enabled"] else "all"
     logger.info(
-        "Loaded config.yaml: %d hard, %d soft constraints enabled",
-        len(result["hard"]["enabled"]) if result["hard"]["enabled"] else "all",
-        len(result["soft"]["enabled"]) if result["soft"]["enabled"] else "all",
+        "Loaded config.yaml: %s hard, %s soft constraints enabled",
+        hard_label, soft_label,
     )
     return result
 
@@ -249,10 +258,15 @@ def _parse_constraint_file(path: Path, kind: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def validate_staff_records(records: list[dict]) -> list[dict]:
+def validate_staff_records(
+    records: list[dict],
+    roster_dates: set[str] | set[date] | None = None,
+) -> list[dict]:
     """Validate every staff record per AGENTS.md §4.
 
     Returns validated list (same objects) or raises ValueError with details.
+    If roster_dates is provided, warns about red_requests/holidays outside the
+    roster period.
     """
     seen_names: set[str] = set()
 
@@ -313,6 +327,14 @@ def validate_staff_records(records: list[dict]) -> list[dict]:
                 raise ValueError(
                     f"staff.yaml row {i + 1} ({name}): invalid red_request date '{d}'"
                 )
+        if roster_dates:
+            for d in red_requests:
+                if d not in roster_dates:
+                    logger.warning(
+                        "staff.yaml: %s has red_request date '%s' outside "
+                        "the roster period — it will have no effect",
+                        name, d,
+                    )
 
         # holidays — list of {start, end} objects
         holidays = rec.get("holidays", [])
@@ -337,6 +359,22 @@ def validate_staff_records(records: list[dict]) -> list[dict]:
                     f"staff.yaml row {i + 1} ({name}): holiday start ({h['start']}) "
                     f"must not be after end ({h['end']})"
                 )
+        if roster_dates:
+            roster_date_set: set[date] = {
+                d if isinstance(d, date) else date.fromisoformat(d)
+                for d in roster_dates
+            }
+            roster_start = min(roster_date_set)
+            roster_end = max(roster_date_set)
+            for h in holidays:
+                h_start = date.fromisoformat(h["start"])
+                h_end = date.fromisoformat(h["end"])
+                if h_end < roster_start or h_start > roster_end:
+                    logger.warning(
+                        "staff.yaml: %s has holiday %s–%s outside "
+                        "the roster period — it will have no effect",
+                        name, h["start"], h["end"],
+                    )
 
     return records
 

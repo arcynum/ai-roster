@@ -279,19 +279,19 @@ class TestSolverConstraintFiltering:
         assert len(hard_called) == 1
         assert hard_called[0] == enabled_ids[0]
 
-    def test_no_hard_constraints_applied_when_enabled_empty(self):
-        """Empty enabled list means no hard constraints applied."""
+    def test_empty_enabled_means_all_constraints_applied(self):
+        """Empty enabled list means all constraints applied (same as absent)."""
         config = {"hard": {"enabled": []}, "soft": {"enabled": []}}
         hard_called, soft_called = self._make_model(constraint_config=config)
-        assert len(hard_called) == 0
-        assert len(soft_called) == 0
+        assert len(hard_called) == len(HARD_CONSTRAINTS)
+        assert len(soft_called) == len(SOFT_CONSTRAINTS)
 
     def test_only_enabled_soft_constraints_applied(self):
-        """Only soft constraints in enabled list are applied."""
+        """Only soft constraints in enabled list are applied; empty hard = all."""
         enabled_ids = [SOFT_CONSTRAINTS[0].constraint_id]
         config = {"hard": {"enabled": []}, "soft": {"enabled": enabled_ids}}
         hard_called, soft_called = self._make_model(constraint_config=config)
-        assert len(hard_called) == 0
+        assert len(hard_called) == len(HARD_CONSTRAINTS)
         assert len(soft_called) == 1
         assert soft_called[0] == enabled_ids[0]
 
@@ -306,9 +306,9 @@ class TestSolverConstraintFiltering:
         assert set(hard_called) == set(hard_ids)
         assert soft_called[0] == soft_ids[0]
 
-    def test_unknown_id_in_config_does_not_crash(self):
-        """Unknown ID in config is skipped without error."""
+    def test_unknown_id_in_config_is_skipped(self):
+        """Unknown ID in config is skipped; other constraints still apply."""
         config = {"hard": {"enabled": ["[H#nonexistent]"]}, "soft": {"enabled": []}}
         hard_called, soft_called = self._make_model(constraint_config=config)
-        assert len(hard_called) == 0
-        assert len(soft_called) == 0
+        assert len(hard_called) == 0  # unknown ID is skipped
+        assert len(soft_called) == len(SOFT_CONSTRAINTS)  # empty = all

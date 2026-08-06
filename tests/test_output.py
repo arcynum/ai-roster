@@ -14,9 +14,7 @@ from output import (
 )
 from models import Classification, RosterSlot, Staff
 from solver import SolveResult
-
-
-SHIFT_TYPES = ["D8", "D12", "P8", "P12", "L3", "DISCO", "N8", "N12"]
+from utils import SHIFT_ORDER as SHIFT_TYPES
 
 
 class TestShiftColors:

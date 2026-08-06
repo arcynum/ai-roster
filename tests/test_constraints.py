@@ -911,10 +911,10 @@ class TestContractedHoursFloor:
         expected_adj = compute_adjusted_hours(40.0, [], all_dates)
         assert expected_adj == 40.0 * SCALE
 
-    def test_solver_enforces_floor(self):
-        """Solver should reject solutions where staff hours < adjusted contracted hours."""
+    def test_soft_floor_allows_shortfall(self):
+        """Soft floor should allow infeasible floors but penalise shortfall."""
         from ortools.sat.python import cp_model
-        from constraints import ContractedHoursFloor
+        from constraints import ContractedHoursFloorSoft
         from models import Staff, Classification
 
         model = cp_model.CpModel()
@@ -952,7 +952,6 @@ class TestContractedHoursFloor:
         for si in range(len(staff_names)):
             model.Add(sum(assignments[si][pi] for pi in range(len(positions))) <= 1)
 
-        # Create hours variables the same way solver.py does
         from utils import SCALE
         staff_hours_vars = []
         for si in range(len(staff_names)):
@@ -974,7 +973,7 @@ class TestContractedHoursFloor:
                     block_vars.append(zero)
             staff_hours_vars.append(block_vars)
 
-        constraint = ContractedHoursFloor()
+        constraint = ContractedHoursFloorSoft()
         constraint.apply(
             model=model,
             staff_list=staff_list,
@@ -985,13 +984,18 @@ class TestContractedHoursFloor:
             all_dates=all_dates,
             blocks=blocks,
             positions=positions,
+            weight=1000,
             staff_hours_vars=staff_hours_vars,
+            objective_terms=None,
         )
 
-        # With only 1 D8 position (8h) and 40h floor, the model should be infeasible
-        # This is expected - the floor constraint can't be satisfied with so few positions
+        # With only 1 D8 position (8h) and 40h floor, the model should be
+        # feasible (soft floor) but with shortfall = 40*SCALE - 8*SCALE = 3200
+        model.Minimize(0)  # dummy objective since soft constraint adds its own
         status = solver.Solve(model)
-        assert status == cp_model.INFEASIBLE  # 8h < 40h floor
+        assert status == cp_model.OPTIMAL
+        # Shortfall should be 32*SCALE = 3200 (40h floor - 8h worked)
+        assert solver.Value(constraint._shortfall_vars[0][0]) == 3200
 
 
 class TestOvertimeCap:

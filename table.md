@@ -35,8 +35,6 @@ On days with fewer shifts than the 15-row template (e.g. Tuesday has 1 L3, not 2
 
 Unfilled positions show red `UNFILLED` text.
 
-Casual-filled shifts show `Casual` in the cell.
-
 ## Changes
 
 ### 1. `main.py:119-121` — Pass `positions` to `generate_html()`
@@ -61,5 +59,4 @@ Add `<h2>Roster by Shift</h2>` section between "Roster by Date" and "Roster by S
 - `test_shift_rows_labels` — correct labels ("D8", "D12", "L3", etc.)
 - `test_shift_matrix_has_key` — `shift_matrix` present in context
 - `test_shift_matrix_multi_staff_cell` — 2 L3 shifts shows 2 names
-- `test_shift_matrix_casual_included` — casual appears in cell
 - `test_shift_matrix_empty_for_missing_shift` — Tuesday L3 #2 is empty

@@ -75,12 +75,9 @@ def _run(run_id: str) -> None:
 
     # Step 2: Validate data
     logger.info("Step 2: Validating data")
-    validate_staff_records(staff_records)
     roster_start, roster_end = validate_roster_period(roster_data)
-
-    # Step 3: Parse dates and build roster positions
-    logger.info("Step 3: Building roster positions")
     all_dates = generate_dates(roster_start, roster_end)
+    validate_staff_records(staff_records, roster_dates=set(all_dates))
     blocks = get_fortnight_blocks(all_dates)
     positions = validate_roster_positions(roster_data, definitions,
                                           roster_start, roster_end)
