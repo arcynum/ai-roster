@@ -239,7 +239,6 @@ def _build_context(
         "staff_info": staff_info,
         "staff_blocks": staff_blocks,
         "soft_penalty": result.soft_penalty,
-        "casual_usage": result.casual_usage,
         "hard_constraints": result.hard_constraints,
         "soft_constraints": result.soft_constraints,
     }

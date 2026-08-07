@@ -104,7 +104,7 @@ Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour
 The HTML file has three sections, in this order:
 
 1. **Run summary** — generated timestamp, roster period (`dates.start`–`dates.end` from `roster.yaml`), CP-SAT solver status (e.g. `OPTIMAL`/`FEASIBLE`/`INFEASIBLE`), objective value, solve time, assignments count, and unfilled positions count. Displayed as summary cards in a responsive grid.
-2. **Messages** — everything that used to live in `result.violations.md`, plus general solver messages: any `UNFILLED` shifts (date, shift type, required skill/classification), any hard constraint that couldn't be satisfied (should never happen in a correct solve, but report it if it does — don't fail silently), which soft constraints incurred a penalty and roughly how much, overtime allocation notes, and **a summary of casual usage** — total casual shifts used, and which dates/shifts they filled, so it's visible at a glance how much the roster relied on casuals rather than named staff. Explicitly says "No violations or unfilled shifts" when there's nothing to report.
+2. **Messages** — everything that used to live in `result.violations.md`, plus general solver messages: any `UNFILLED` shifts (date, shift type, required skill/classification), any hard constraint that couldn't be satisfied (should never happen in a correct solve, but report it if it does — don't fail silently), which soft constraints incurred a penalty and roughly how much, overtime allocation notes. Explicitly says "No violations or unfilled shifts" when there's nothing to report.
 3. **Roster** — everything that used to live in `result.staff.md` and `result.roster.md`, as two views:
    - **By date (staff×days matrix)**: one row per staff member, one column per day. Shifts shown as color-coded badges (D8=#E3F2FD, D12=#BBDEFB, P8=#F3E5F5, P12=#E1BEE7, L3=#FFF3E0, DISCO=#FFE0B2, N8=#E8F5E9, N12=#C8E6C9). Weekend columns highlighted with a light indigo background. First column (staff name) is sticky on scroll. Empty cells are blank; unfilled shifts show a red "UNFILLED" marker.
    - **By staff member**: classification, skill tags, contracted hours, total assigned hours, weekend/night hours and %, plus an **overtime traffic light** indicator (green = on or under contracted, yellow = 0–15% over, red = >15% over). Below that, a **block-by-block table** (per 14-day block) showing hours, contracted, overtime %, weekend %, night %, and shift count — each with its own traffic light. Ends with the full shift list as color-coded badges with date tooltips.
@@ -127,18 +127,17 @@ Use Python's standard `logging` module — no new dependency. Each run:
 
 1. **Named staff within their contracted-hours floor.** Optimise this tier for named-staff wellbeing first — well-distributed hours, fair night/weekend load ([S#d2a7f4a6]/[S#a1d6c3d5]), the consecutive-shift preference ([S#30c6f5ad]) — since this is what "the nicest possible roster" for named staff actually means in practice.
 2. **Named staff using the overtime flex**, up to 12 additional paid hours above their raw contracted hours ([H#e8f7d6c5]), distributed **as evenly as possible** across all eligible staff ([S#e9b4a1b3]) — don't stack it onto the same few people. All other hard constraints still apply on top of this (max hours, red requests, holidays, skill level requirements) — overtime never overrides a hard constraint, and **never** overrides the 76h absolute ceiling ([H#f0c5b2c4]) either.
-3. **Casual staff** ([H#c92f5e1b]/[H#71b4d9ac]/[H#4ef8a2c3]), for positions whose `required_skill_level` is `null` — casuals never fill positions with any specific skill level requirement. This is deliberately the last resort ([S#3d9a7ec1]) — the solver should exhaust tiers 1–2 for a position before reaching for a casual, never substitute a casual just to reduce some other soft-constraint penalty.
-4. **`UNFILLED`** — reachable only when neither named staff (even flexed) nor a casual can cover a position. In practice this means gaps requiring Acute, Resus, Triage, or Shift Coordinator with no eligible named staff available, since casuals only ever cover `null`-requirement positions. Record it in the output and note which classification/skill level was required but unavailable.
+3. **`UNFILLED`** — reachable when no eligible named staff can cover a position. Record it in the output and note which classification/skill level was required but unavailable.
 
 If hard constraints make it impossible to produce **any** valid roster at all (e.g. a required Shift Coordinator role has zero qualified staff in the entire roster, on a day where the shortfall can't be resolved even via `UNFILLED`), stop and tell the user why — never produce a broken or partial file silently.
 
 **Which hours cap actually binds for named staff:** two separate caps exist and the *lower* one always governs —
 - Absolute ceiling: never exceed 76 hours per staff member per 14-day block ([H#f0c5b2c4]). **This never changes regardless of the overtime cap below** — overtime headroom and this ceiling are independent, and the ceiling always wins if they conflict.
-- Relative ceiling: never more than 12 **paid** hours of overtime above that person's **raw `contracted_hours_per_fortnight`** in the block ([H#e8f7d6c5] — history: raised to 24 before casual staffing existed in this model, reduced back down to 12 now that casuals can absorb the rest of a coverage gap instead of stretching named staff further).
+- Relative ceiling: never more than 12 **paid** hours of overtime above that person's **raw `contracted_hours_per_fortnight`** in the block ([H#e8f7d6c5] — a named-staff wellbeing limit in its own right, not because something else was going to absorb the rest of the gap).
 
 Note the ceiling and the floor use **different bases on purpose**: the floor ([H#d9a8b7c6]) is measured against `adjusted_hours` (holiday-prorated, per [H#a3d8f6c1]), while this ceiling is measured against the **unadjusted** `contracted_hours_per_fortnight` — a staff member's overtime headroom doesn't shrink just because they had a holiday in the block.
 
-For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (52h) binds well before the absolute one. Apply `min(76, contracted_hours_per_fortnight + 12)` as the effective cap per person, per block — and only for named staff; casuals aren't subject to either cap (see [H#4ef8a2c3]).
+For a staff member contracted at 76h, the relative ceiling has zero room before hitting the absolute one; for someone contracted at 40h, the relative ceiling (52h) binds well before the absolute one. Apply `min(76, contracted_hours_per_fortnight + 12)` as the effective cap per person, per block — and only for named staff.
 
 ## 8. Technical Implementation Guide
 
@@ -178,7 +177,7 @@ Concrete patterns for the trickier constraints, so they don't each get reinvente
   3. Sum `run_start[d]` booleans where `category[d] == day` to get `day_run_count`; same for night to get `night_run_count`. Since [H#f4c9b6c8] already forces an off-day at every category transition, you don't need to separately handle the "same day, different category" adjacency case — it can't occur in a feasible solution.
   4. Penalty = `(max(0, day_run_count - 2) + max(0, night_run_count - 2)) * W` — a single `max(0, ...)` reification per category is enough, no per-run-length tiering needed here (unlike `S#30c6f5ad`).
 
-- **Casual fallback ([H#c92f5e1b]/[S#3d9a7ec1]):** for each roster position whose `required_skill_level` is `null`, add one extra boolean "filled by casual" option alongside the named-staff assignment options — no per-day/per-staff continuity variables needed, since casuals aren't tracked as individuals ([H#4ef8a2c3]) and supply is unlimited ([H#71b4d9ac]). Positions with any specific skill level requirement (Acute/Resus/Triage/Shift Coordinator) don't get this option at all. Add `S#3d9a7ec1`'s weight to the objective once per casual assignment used; because that weight is deliberately far larger than any other soft-constraint contribution, the solver will only pick it once tiers 1–2 (named staff, including the 12h flex) can't cover a position.
+
 
 ## 9. Testing
 
@@ -187,7 +186,7 @@ Concrete patterns for the trickier constraints, so they don't each get reinvente
 - Tests should cover both a positive and a negative case per function.
 - After the roster is produced, scan it and compare against `hard_constraints.md`/`soft_constraints.md` to confirm compliance.
 - The "one runnable check" convention is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
-- **Weight-dominance sanity check:** `S#3d9a7ec1`'s weight (100000) is only correct if it exceeds the maximum possible *combined* penalty from every other soft constraint across the whole roster in a single run — not just one staff member's worst case. Add a test that computes an upper bound on that combined total (worst-case per-staff `S#30c6f5ad` penalty × staff count, plus worst-case fairness/tiebreaker penalties) and asserts it's still less than `S#3d9a7ec1`'s weight. If this ever fails (e.g. because the roster grows much larger, or another high-weight soft constraint gets added later), the casual-as-last-resort guarantee breaks silently — the solver could start preferring a casual over a valid all-named-staff solution.
+
 
 ## 10. Constraint Toggles (config.yaml)
 

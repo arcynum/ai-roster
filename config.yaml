@@ -21,9 +21,6 @@ constraints:
       # - "[H#f0c5b2c4]"  # 76h absolute paid-hour cap per block
       # - "[H#d9a8b7c6]"  # Contracted hours floor (adjusted for holidays)
       # - "[H#e8f7d6c5]"  # 12h overtime cap above raw contracted
-      # - "[H#c92f5e1b]"  # Casuals only for null skill level positions
-      # - "[H#71b4d9ac]"  # Unlimited casual supply
-      # - "[H#4ef8a2c3]"  # Casuals exempt from individual constraints
   soft:
     enabled:
       # - "[S#d9a8b7c6]"  # Soft contracted-hours floor (reclassified from hard)
@@ -33,4 +30,3 @@ constraints:
       # - "[S#30c6f5ad]"  # Consecutive same-shift run length penalty (tiered)
       # - "[S#6c1e9a4d]"  # Day/night category run-count penalty
       # - "[S#7b4e19fc]"  # Skill level tiebreaker (minimize over-qualification)
-      # - "[S#3d9a7ec1]"  # Casual usage minimization (last resort)

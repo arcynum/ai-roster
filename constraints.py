@@ -566,39 +566,6 @@ class OvertimeCap(BaseHardConstraint):
 # ---------------------------------------------------------------------------
 
 
-class CasualStaffingConstraint(BaseHardConstraint):
-    """[H#c92f5e1b] [H#71b4d9ac] [H#4ef8a2c3] Casual staffing.
-
-    For null-skill-level positions, adds a BoolVar 'filled_by_casual' as an
-    alternative to named-staff assignment. Casuals are exempt from all
-    individual staff constraints (rest, holidays, hours, etc.).
-
-    For positions with skill requirements, the standard "exactly one named
-    staff" constraint applies — casuals cannot fill them.
-    """
-
-    constraint_id = "[H#c92f5e1b]"
-
-    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
-        num_staff = len(staff_names)
-        num_positions = len(positions)
-
-        # casual_vars[pi] = BoolVar for each position, True if filled by casual
-        self.casual_vars: list[cp_model.IntVar | None] = []
-
-        for pi in range(num_positions):
-            if positions[pi].get("casual_allowed"):
-                var = model.NewBoolVar(f"casual_{pi}")
-                self.casual_vars.append(var)
-                # Exactly one: either a named staff member or a casual
-                staff_vars = [assignments[si][pi] for si in range(num_staff)]
-                model.Add(sum(staff_vars) + var == 1)
-            else:
-                # No casual option — dummy variable (never used)
-                self.casual_vars.append(None)  # type: ignore[list-item]
-
-
 class OvertimeDistribution(BaseSoftConstraint):
     """[S#e9b4a1b3] Distribute overtime evenly across staff.
 
@@ -1189,35 +1156,6 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
                 model.Minimize(total_penalty * weight)
 
 
-class CasualUsageMinimization(BaseSoftConstraint):
-    """[S#3d9a7ec1] Minimise total casual assignments.
-
-    Weight 100000 in weights.yaml ensures casuals are always last resort.
-    The weight exceeds the maximum possible combined penalty from every other
-    soft constraint across the whole roster.
-    """
-
-    constraint_id = "[S#3d9a7ec1]"
-
-    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, casual_vars=None,
-              staff_hours_vars=None, objective_terms=None):
-        if casual_vars is None:
-            return
-
-        # Sum all casual BoolVars and minimize
-        active_casual_vars = [v for v in casual_vars if v is not None]
-        if not active_casual_vars:
-            return
-
-        total_casual = model.NewIntVar(0, len(active_casual_vars), "total_casual_usage")
-        model.Add(total_casual == sum(active_casual_vars))
-        if objective_terms is not None:
-            objective_terms.append(total_casual * weight)
-        else:
-            model.Minimize(total_casual * weight)
-
-
 # ---------------------------------------------------------------------------
 # Constraint registry
 # ---------------------------------------------------------------------------
@@ -1234,7 +1172,6 @@ HARD_CONSTRAINTS = [
     HolidayConstraint,
     MaxHoursConstraint,
     OvertimeCap,
-    CasualStaffingConstraint,
 ]
 
 SOFT_CONSTRAINTS = [
@@ -1245,7 +1182,6 @@ SOFT_CONSTRAINTS = [
     ConsecutiveShiftDiscouraged,
     DayNightRunCountPenalty,
     SkillLevelTiebreaker,
-    CasualUsageMinimization,
 ]
 
 

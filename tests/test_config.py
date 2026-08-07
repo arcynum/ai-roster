@@ -76,11 +76,10 @@ class TestLoadConfig:
             "    enabled:\n"
             '      - "[S#e9b4a1b3]"\n'
             '      - "[S#d2a7f4a6]"\n'
-            '      - "[S#3d9a7ec1]"\n'
         )
         result = load_config(path=path)
         assert result is not None
-        assert result["soft"]["enabled"] == ["[S#e9b4a1b3]", "[S#d2a7f4a6]", "[S#3d9a7ec1]"]
+        assert result["soft"]["enabled"] == ["[S#e9b4a1b3]", "[S#d2a7f4a6]"]
         assert result["hard"]["enabled"] == []
 
     def test_hard_only_config(self, tmp_path):
