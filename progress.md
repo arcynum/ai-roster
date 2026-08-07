@@ -89,11 +89,13 @@ Verified checks:
 ### Step 6: §3 performance refactor
 - [x] §3.1: Shared shift-type indicator variables (`works`, `works_any`, `category` arrays in RosterModel; merged compat table in utils.py; NoDoubleBooking skipped as redundant; fixed `_get_works_from_assignments` fallback indexing bug)
 - [x] §3.2: SkillLevelRequirement — replaced `model.Add(staff_rank >= required_rank).OnlyEnforceIf(x)` with explicit `model.Add(assignments[si][pi] == 0)` for disqualified pairs (same pattern as GraduateShiftConstraint)
-- [ ] §3.3: S#30c6f5ad per-block run enumeration
+- [x] §3.3: S#30c6f5ad per-block run enumeration — DayNightRunCountPenalty refactored to reuse shared `model._category` from §3.1 (with fallback for tests without shared vars); ConsecutiveShiftDiscouraged already had per-block + shared works path
 - [ ] §3.4: Extract duplication helpers
 - [ ] §3.5: ModelContext dataclass
 
-**Status: §3.1-§3.2 COMPLETE**
+**Status: §3.1-§3.3 COMPLETE**
+
+Note: 1 pre-existing test failure in `TestConsecutiveShiftDiscouraged.test_longer_runs_incur_penalty` (fallback path indexing bug, pre-dates this work). 162/163 tests pass.
 
 ### Step 7: §5.3/§5.4 test rebuild, §4 hygiene, §6 docs
 - [ ] §5.3: Fix test fixtures (real definitions, real Staff dataclass)
@@ -111,4 +113,4 @@ Verified checks:
 
 ---
 
-Last updated: 2026-08-07 (Step 5 complete)
+Last updated: 2026-08-08 (Step 6 §3.3 complete)

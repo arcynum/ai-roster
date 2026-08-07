@@ -1304,6 +1304,9 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
     per 14-day block. Penalty = (max(0, day_run_count - 2) + max(0, night_run_count - 2)) * W.
     Only fires beyond 2 runs per category per block. Uses day/night classification
     from utils.DAY_SHIFTS/NIGHT_SHIFTS.
+
+    Reuses shared category[si][di] from §3.1 when available (model._category),
+    falling back to building category from assignments for tests without shared vars.
     """
 
     constraint_id = "[S#6c1e9a4d]"
@@ -1312,6 +1315,125 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
               definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
               objective_terms=None):
 
+        num_staff = len(staff_names)
+
+        # Check for shared category vars from §3.1
+        shared_category = getattr(model, "_category", None)
+
+        if shared_category is not None:
+            return self._apply_with_shared_category(
+                model, shared_category, staff_names, all_dates, blocks, weight, objective_terms,
+            )
+        else:
+            return self._apply_fallback(
+                model, staff_list, staff_by_name, assignments, staff_names,
+                definitions, all_dates, blocks, positions, weight, objective_terms,
+            )
+
+    def _apply_with_shared_category(
+        self, model, category, staff_names, all_dates, blocks, weight, objective_terms,
+    ):
+        """Apply S#6c1e9a4d using shared category BoolVar array from §3.1.
+
+        category[si][di] is an IntVar with domain {0=day, 1=night, 2=off}.
+        Loops per 14-day block (D3a).
+        """
+        num_staff = len(staff_names)
+        all_penalty_terms: list[cp_model.IntVar] = []
+
+        for bi, block in enumerate(blocks):
+            block_start = block[0]
+            block_end = block[-1]
+
+            # Find date indices for this block
+            block_date_indices = [
+                di for di, d in enumerate(all_dates) if block_start <= d <= block_end
+            ]
+            block_size = len(block_date_indices)
+            if block_size == 0:
+                continue
+
+            # Compute category run_start per block using shared category
+            cat_run_start: list[list[cp_model.IntVar]] = []
+            for si in range(num_staff):
+                row: list[cp_model.IntVar] = []
+                for idx, di in enumerate(block_date_indices):
+                    cat = category[si][di]
+                    if idx == 0:
+                        rs = model.NewBoolVar(f"cat_rs_{staff_names[si]}_b{bi}_d{idx}")
+                        model.Add(cat != 2).OnlyEnforceIf(rs)
+                        model.Add(cat == 2).OnlyEnforceIf(rs.Not())
+                    else:
+                        prev_di = block_date_indices[idx - 1]
+                        prev_cat = category[si][prev_di]
+                        different = model.NewBoolVar(f"cat_diff_{staff_names[si]}_b{bi}_d{idx}")
+                        model.Add(prev_cat != cat).OnlyEnforceIf(different)
+                        model.Add(prev_cat == cat).OnlyEnforceIf(different.Not())
+                        worked = model.NewBoolVar(f"cat_worked_{staff_names[si]}_b{bi}_d{idx}")
+                        model.Add(cat != 2).OnlyEnforceIf(worked)
+                        model.Add(cat == 2).OnlyEnforceIf(worked.Not())
+                        rs = model.NewBoolVar(f"cat_rs_{staff_names[si]}_b{bi}_d{idx}")
+                        model.Add(rs == 1).OnlyEnforceIf(different, worked)
+                        model.Add(rs == 0).OnlyEnforceIf(different.Not())
+                        model.Add(rs == 0).OnlyEnforceIf(worked.Not())
+                    row.append(rs)
+                cat_run_start.append(row)
+
+            # Compute penalties per staff for this block
+            for si in range(num_staff):
+                day_terms = []
+                night_terms = []
+                for idx, di in enumerate(block_date_indices):
+                    rs = cat_run_start[si][idx]
+                    cat = category[si][di]
+
+                    is_day = model.NewBoolVar(f"is_day_{staff_names[si]}_b{bi}_d{idx}")
+                    model.Add(cat == 0).OnlyEnforceIf(is_day)
+                    model.Add(cat != 0).OnlyEnforceIf(is_day.Not())
+                    day_term = model.NewIntVar(0, 1, f"day_term_{staff_names[si]}_b{bi}_d{idx}")
+                    model.Add(day_term == rs).OnlyEnforceIf(is_day)
+                    model.Add(day_term == 0).OnlyEnforceIf(is_day.Not())
+                    day_terms.append(day_term)
+
+                    is_night = model.NewBoolVar(f"is_night_{staff_names[si]}_b{bi}_d{idx}")
+                    model.Add(cat == 1).OnlyEnforceIf(is_night)
+                    model.Add(cat != 1).OnlyEnforceIf(is_night.Not())
+                    night_term = model.NewIntVar(0, 1, f"night_term_{staff_names[si]}_b{bi}_d{idx}")
+                    model.Add(night_term == rs).OnlyEnforceIf(is_night)
+                    model.Add(night_term == 0).OnlyEnforceIf(is_night.Not())
+                    night_terms.append(night_term)
+
+                staff_day_runs = model.NewIntVar(0, block_size, f"staff_day_runs_{staff_names[si]}_b{bi}")
+                staff_night_runs = model.NewIntVar(0, block_size, f"staff_night_runs_{staff_names[si]}_b{bi}")
+                model.Add(staff_day_runs == sum(day_terms))
+                model.Add(staff_night_runs == sum(night_terms))
+
+                day_excess = model.NewIntVar(0, block_size, f"day_excess_{staff_names[si]}_b{bi}")
+                night_excess = model.NewIntVar(0, block_size, f"night_excess_{staff_names[si]}_b{bi}")
+                model.Add(day_excess >= staff_day_runs - 2)
+                model.Add(day_excess >= 0)
+                model.Add(night_excess >= staff_night_runs - 2)
+                model.Add(night_excess >= 0)
+
+                staff_penalty = model.NewIntVar(0, 2 * block_size, f"dn_penalty_{staff_names[si]}_b{bi}")
+                model.Add(staff_penalty == day_excess + night_excess)
+                all_penalty_terms.append(staff_penalty)
+
+        if all_penalty_terms:
+            total_penalty = model.NewIntVar(0, len(all_penalty_terms) * 2 * 14, "day_night_penalty")
+            model.Add(total_penalty == sum(all_penalty_terms))
+            if objective_terms is not None:
+                objective_terms.append(total_penalty * weight)
+            else:
+                model.Minimize(total_penalty * weight)
+            return total_penalty
+        return None
+
+    def _apply_fallback(
+        self, model, staff_list, staff_by_name, assignments, staff_names,
+        definitions, all_dates, blocks, positions, weight, objective_terms,
+    ):
+        """Apply S#6c1e9a4d using assignment vars (fallback for tests without shared category)."""
         num_staff = len(staff_names)
 
         # Build position-index → date and shift lookups
@@ -1330,9 +1452,6 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
             block_size = len(block_dates)
             if block_size == 0:
                 continue
-
-            # Map date string → index within this block
-            date_to_idx: dict[str, int] = {d: i for i, d in enumerate(block_dates)}
 
             # For each staff, for each date in block, determine category:
             # DAY=0, NIGHT=1, OFF=2
