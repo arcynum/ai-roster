@@ -15,7 +15,7 @@
     "external_directory": "ask",
     "doom_loop": "ask"
   },
-  "plugin": ["@dietrichgebert/ponytail"],
+  // "plugin": ["@dietrichgebert/ponytail"],
   "provider": {
     "chat": {
       "npm": "@ai-sdk/openai-compatible",
