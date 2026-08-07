@@ -784,102 +784,80 @@ class WeekdayNightFairness(BaseSoftConstraint):
         return total_night_dev
 
 
-class SaturdayFairness(BaseSoftConstraint):
+class _DayOfWeekFairness(BaseSoftConstraint):
+    """[S#s1a2t3u4]/[S#s2u3n4d5] Share hours of a specific weekday across staff.
+
+    Minimizes the sum of absolute deviations of each staff member's hours on
+    the target day from the proportional mean. Subclasses set DAY_NAME,
+    constraint_id, and var_prefix.
+    """
+
+    DAY_NAME: str = ""       # subclass responsibility
+    VAR_PREFIX: str = ""     # subclass responsibility
+
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
+              objective_terms=None):
+
+        day_name = self.DAY_NAME
+        prefix = self.VAR_PREFIX
+
+        # Identify day-of-week position indices and their paid hours (whole hours)
+        day_pos_indices: list[int] = []
+        day_hours: list[int] = []
+        for pi, pos in enumerate(positions):
+            if pos["day_name"] == day_name:
+                day_pos_indices.append(pi)
+                paid = definitions[pos["shift"]]["paid_hours"]
+                day_hours.append(int(paid))
+
+        if not day_pos_indices:
+            return
+
+        # Per-staff day-of-week hours (whole hours)
+        staff_day_hours: list[cp_model.IntVar] = []
+        for si in range(len(staff_names)):
+            terms = [
+                day_hours[j] * assignments[si][day_pos_indices[j]]
+                for j in range(len(day_pos_indices))
+            ]
+            sh = model.NewIntVar(0, 76, f"{prefix}_h_{staff_names[si]}")
+            model.Add(sh == sum(terms))
+            staff_day_hours.append(sh)
+
+        contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
+        total_deviation = fair_share_deviation(
+            model, staff_day_hours, contracted_list, f"{prefix}_dev",
+        )
+        if objective_terms is not None:
+            objective_terms.append(total_deviation * weight)
+        else:
+            model.Minimize(total_deviation * weight)
+        return total_deviation
+
+
+class SaturdayFairness(_DayOfWeekFairness):
     """[S#s1a2t3u4] Share Saturday hours across staff.
 
-    Minimizes the sum of absolute deviations of each staff member's Saturday
-    hours from the mean. Saturday is the most valuable weekend day (150% loading)
-    and should be distributed fairly. Replaces the blended WeekendFairness
-    ([S#a1d6c3d5]) with a Saturday-specific fairness pool per plan.md §1.3b.
+    Saturday is the most valuable weekend day (150% loading) and should be
+    distributed fairly.
     """
 
     constraint_id = "[S#s1a2t3u4]"
-
-    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
-              objective_terms=None):
-
-        # Identify Saturday position indices and their paid hours (whole hours)
-        sat_pos_indices: list[int] = []
-        sat_hours: list[int] = []
-        for pi, pos in enumerate(positions):
-            if pos["day_name"] == "Saturday":
-                sat_pos_indices.append(pi)
-                paid = definitions[pos["shift"]]["paid_hours"]
-                sat_hours.append(int(paid))
-
-        if not sat_pos_indices:
-            return
-
-        # Per-staff Saturday hours (whole hours)
-        staff_sat_hours: list[cp_model.IntVar] = []
-        for si in range(len(staff_names)):
-            terms = [
-                sat_hours[j] * assignments[si][sat_pos_indices[j]]
-                for j in range(len(sat_pos_indices))
-            ]
-            sh = model.NewIntVar(0, 76, f"sat_h_{staff_names[si]}")
-            model.Add(sh == sum(terms))
-            staff_sat_hours.append(sh)
-
-        contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
-        total_deviation = fair_share_deviation(
-            model, staff_sat_hours, contracted_list, "sat_dev",
-        )
-        if objective_terms is not None:
-            objective_terms.append(total_deviation * weight)
-        else:
-            model.Minimize(total_deviation * weight)
-        return total_deviation
+    DAY_NAME = "Saturday"
+    VAR_PREFIX = "sat"
 
 
-class SundayFairness(BaseSoftConstraint):
+class SundayFairness(_DayOfWeekFairness):
     """[S#s2u3n4d5] Share Sunday hours across staff.
 
-    Minimizes the sum of absolute deviations of each staff member's Sunday
-    hours from the mean. Sunday is the most valuable shift day (200% loading)
-    and should be distributed fairly. Replaces the blended WeekendFairness
-    ([S#a1d6c3d5]) with a Sunday-specific fairness pool per plan.md §1.3b.
+    Sunday is the most valuable shift day (200% loading) and should be
+    distributed fairly.
     """
 
     constraint_id = "[S#s2u3n4d5]"
-
-    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
-              objective_terms=None):
-
-        # Identify Sunday position indices and their paid hours (whole hours)
-        sun_pos_indices: list[int] = []
-        sun_hours: list[int] = []
-        for pi, pos in enumerate(positions):
-            if pos["day_name"] == "Sunday":
-                sun_pos_indices.append(pi)
-                paid = definitions[pos["shift"]]["paid_hours"]
-                sun_hours.append(int(paid))
-
-        if not sun_pos_indices:
-            return
-
-        # Per-staff Sunday hours (whole hours)
-        staff_sun_hours: list[cp_model.IntVar] = []
-        for si in range(len(staff_names)):
-            terms = [
-                sun_hours[j] * assignments[si][sun_pos_indices[j]]
-                for j in range(len(sun_pos_indices))
-            ]
-            sh = model.NewIntVar(0, 76, f"sun_h_{staff_names[si]}")
-            model.Add(sh == sum(terms))
-            staff_sun_hours.append(sh)
-
-        contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
-        total_deviation = fair_share_deviation(
-            model, staff_sun_hours, contracted_list, "sun_dev",
-        )
-        if objective_terms is not None:
-            objective_terms.append(total_deviation * weight)
-        else:
-            model.Minimize(total_deviation * weight)
-        return total_deviation
+    DAY_NAME = "Sunday"
+    VAR_PREFIX = "sun"
 
 
 class ConsecutiveShiftDiscouraged(BaseSoftConstraint):

@@ -64,7 +64,7 @@
             "cache_write": 5.34
           },
           "limit": {
-            "context": 102000,
+            "context": 99000,
             "output": 9800
           }
         }

@@ -89,7 +89,6 @@ def load_yaml(path: Path) -> Any:
 def load_definitions(path: Path | None = None) -> dict[str, dict]:
     """Load shift definitions from definitions.yaml."""
     path = path or PROJECT_ROOT / "definitions.yaml"
-    logger = logging.getLogger("ai-roster")
     data = load_yaml(path)
     logger.info("Loaded shift definitions from %s (%d shifts)", path.name, len(data))
     return data
@@ -98,7 +97,6 @@ def load_definitions(path: Path | None = None) -> dict[str, dict]:
 def load_staff(path: Path | None = None) -> list[dict]:
     """Load staff list from staff.yaml."""
     path = path or PROJECT_ROOT / "staff.yaml"
-    logger = logging.getLogger("ai-roster")
     data = load_yaml(path)
     logger.info("Loaded %d staff members from %s", len(data), path.name)
     return data
@@ -107,7 +105,6 @@ def load_staff(path: Path | None = None) -> list[dict]:
 def load_roster(path: Path | None = None) -> dict:
     """Load roster configuration from roster.yaml."""
     path = path or PROJECT_ROOT / "roster.yaml"
-    logger = logging.getLogger("ai-roster")
     data = load_yaml(path)
     logger.info("Loaded roster period %s → %s from %s",
                 data["dates"]["start"], data["dates"]["end"], path.name)
@@ -149,7 +146,6 @@ def load_weights(
     """
     path = path or PROJECT_ROOT / "weights.yaml"
     data = load_yaml(path)
-    logger = logging.getLogger("ai-roster")
     logger.info("Loaded %d weights from %s", len(data), path.name)
 
     # Validate: every registered constraint ID must have a weight entry.
@@ -194,7 +190,6 @@ def load_config(path: Path | None = None,
         logged as warnings but do not cause the config to be rejected.
     """
     path = path or PROJECT_ROOT / "config.yaml"
-    logger = logging.getLogger("ai-roster")
 
     if not path.exists():
         logger.info("No config.yaml found — all constraints enabled")
@@ -321,7 +316,6 @@ def _parse_constraint_file(path: Path, kind: str) -> list[dict]:
     if current is not None:
         constraints.append(current)
 
-    logger = logging.getLogger("ai-roster")
     logger.info("Parsed %d %s constraints from %s", len(constraints), kind, path.name)
     return constraints
 

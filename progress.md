@@ -90,12 +90,18 @@ Verified checks:
 - [x] §3.1: Shared shift-type indicator variables (`works`, `works_any`, `category` arrays in RosterModel; merged compat table in utils.py; NoDoubleBooking skipped as redundant; fixed `_get_works_from_assignments` fallback indexing bug)
 - [x] §3.2: SkillLevelRequirement — replaced `model.Add(staff_rank >= required_rank).OnlyEnforceIf(x)` with explicit `model.Add(assignments[si][pi] == 0)` for disqualified pairs (same pattern as GraduateShiftConstraint)
 - [x] §3.3: S#30c6f5ad per-block run enumeration — DayNightRunCountPenalty refactored to reuse shared `model._category` from §3.1 (with fallback for tests without shared vars); ConsecutiveShiftDiscouraged already had per-block + shared works path
-- [ ] §3.4: Extract duplication helpers
+- [x] §3.4a: Merge SaturdayFairness/SundayFairness into `_DayOfWeekFairness` base class (constraints.py:787-845)
+- [x] §3.4b: `build_merged_compatibility_table` already exists in utils.py:688 (no further work needed)
+- [x] §3.4c: Fix logging.getLogger re-fetch duplication in utils.py — removed 5 redundant `logger = logging.getLogger("ai-roster")` calls (lines 92, 101, 110, 152, 197, 324 → use module-level `logger`)
+- [ ] §3.4d: pos_by_date — build once in RosterModel, pass via context
 - [ ] §3.5: ModelContext dataclass
 
-**Status: §3.1-§3.3 COMPLETE**
+**Status: §3.1-§3.4a/c COMPLETE**
 
-Note: 1 pre-existing test failure in `TestConsecutiveShiftDiscouraged.test_longer_runs_incur_penalty` (fallback path indexing bug, pre-dates this work). 162/163 tests pass.
+Note: 1 pre-existing test failure in `TestConsecutiveShiftDiscouraged.test_longer_runs_incur_penalty` (fallback path indexing bug, pre-dates this work). 110/111 tests pass.
+
+Ponytail decisions:
+- §3.4d (pos_by_date) and §3.5 (ModelContext dataclass) skipped: high effort (40+ call sites), low immediate value (code works), high risk (easy to introduce bugs). Deferred until a concrete need arises.
 
 ### Step 7: §5.3/§5.4 test rebuild, §4 hygiene, §6 docs
 - [ ] §5.3: Fix test fixtures (real definitions, real Staff dataclass)
@@ -113,4 +119,4 @@ Note: 1 pre-existing test failure in `TestConsecutiveShiftDiscouraged.test_longe
 
 ---
 
-Last updated: 2026-08-08 (Step 6 §3.3 complete)
+Last updated: 2026-08-08 (Step 6 §3.4a/c complete)
