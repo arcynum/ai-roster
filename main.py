@@ -121,6 +121,28 @@ def _run(run_id: str) -> None:
     logger.info("Step 5: Solving")
     result: SolveResult = model.solve()
 
+    # §2.9: INFEASIBLE — log error, write HTML (records status), exit non-zero
+    if result.status in ("INFEASIBLE", "MODEL_INVALID"):
+        logger.error(
+            "Solver returned %s — the model has no valid solution. "
+            "Check hard constraints and data for conflicts.",
+            result.status,
+        )
+        print(
+            f"\nERROR: Solver returned {result.status}. "
+            "The model has no valid solution. "
+            "Check hard constraints and data for conflicts.\n"
+            f"See {OUTPUT_DIR}/roster_{run_id}.log for details.\n",
+        )
+        # Still write HTML so the status is recorded
+        from output import generate_html
+        generate_html(result, staff_list, definitions,
+                      roster_start, roster_end, blocks, run_id,
+                      positions=positions,
+                      hard_constraints=hard_constraints,
+                      soft_constraints=soft_constraints)
+        sys.exit(2)
+
     # Step 5.5: Verify produced roster against hard constraints
     logger.info("Step 5.5: Verifying produced roster")
     from verify import verify as _verify

@@ -112,15 +112,21 @@ def _make_result(
 class TestCoverage:
     def test_positive_all_positions_filled(self):
         """Every position assigned once → no violations."""
+        week_dates = _BLOCK_DATES[:7]
         assignments = [
             RosterSlot(staff_name="Alice", date=d.isoformat(), shift="D8")
-            for d in _BLOCK_DATES
+            for d in week_dates
+        ]
+        positions = [
+            {"date": d.isoformat(), "day_name": d.strftime("%A"), "shift": "D8",
+             "required_skill_level": None, "slot_id": "D8-General-1"}
+            for d in week_dates
         ]
         vr = verify(
             _make_result(assignments),
             [_staff_alice()],
             _definitions(),
-            _positions_single_d8(),
+            positions,
             [_BLOCK_STRS],
         )
         assert vr.is_clean, f"Expected clean, got violations: {[v.message for v in vr.violations]}"
@@ -150,16 +156,22 @@ class TestCoverage:
 class TestSkillLevels:
     def test_positive_skill_sufficient(self):
         """Resus-skilled staff on Resus-required shift → clean."""
+        week_dates = _BLOCK_DATES[:7]
         assignments = [
             RosterSlot(staff_name="Alice", date=d.isoformat(), shift="D8",
                        required_skill_level="Resus")
-            for d in _BLOCK_DATES
+            for d in week_dates
+        ]
+        positions = [
+            {"date": d.isoformat(), "day_name": d.strftime("%A"), "shift": "D8",
+             "required_skill_level": "Resus", "slot_id": "D8-Resus-1"}
+            for d in week_dates
         ]
         vr = verify(
             _make_result(assignments),
             [_staff_alice()],
             _definitions(),
-            _positions_skill_required(),
+            positions,
             [_BLOCK_STRS],
         )
         assert vr.is_clean
@@ -591,6 +603,7 @@ class TestGraduateRestrictions:
 class TestHolidayProration:
     def test_positive_proration_computed(self):
         """Proration check never produces violations (soft constraint)."""
+        holiday_start = date(2026, 8, 5)
         alice = Staff(
             name="Alice",
             classification=Classification.RN,
@@ -598,15 +611,21 @@ class TestHolidayProration:
             contracted_hours_per_fortnight=56.0,
             holidays=[{"start": "2026-08-05", "end": "2026-08-05"}],
         )
+        # Assign Alice on all non-holiday days (13 days × 8h = 104h, but only 7 shifts to stay under cap)
         assignments = [
             RosterSlot(staff_name="Alice", date=d.isoformat(), shift="D8")
-            for d in _BLOCK_DATES
+            for d in _BLOCK_DATES if d != holiday_start
+        ][:7]
+        positions = [
+            {"date": a.date, "day_name": date.fromisoformat(a.date).strftime("%A"),
+             "shift": "D8", "required_skill_level": None, "slot_id": "D8-General-1"}
+            for a in assignments
         ]
         vr = verify(
             _make_result(assignments),
             [alice],
             _definitions(),
-            _positions_single_d8(),
+            positions,
             [_BLOCK_STRS],
         )
         assert vr.is_clean

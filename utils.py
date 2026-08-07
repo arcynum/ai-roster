@@ -611,11 +611,11 @@ def fair_share_deviation(
 
     Given per-staff values (CP-SAT IntVars for hours worked) and contracted hours
     for each staff member, builds constraints for |per_staff[i] - target[i]| where
-    target[i] = round(total * contracted[i] / sum(contracted)).
+    target[i] = total * contracted[i] / sum(contracted).
 
-    All per-staff values are in whole paid hours (8 or 12 per shift). The target
-    is computed in whole hours via Python-side arithmetic. Returns the total
-    deviation IntVar — no scaling, no division by n.
+    Uses multiplication-based proportional share (helper_i * sum_contracted ==
+    total_pool * contracted_i) to avoid CP-SAT's lack of division support.
+    Returns the total deviation IntVar — no scaling, no division by n.
 
     This is the core helper for objective rescaling (§2.3): it replaces the
     old "multiply by n to avoid division" pattern that inflated deviations
@@ -634,14 +634,18 @@ def fair_share_deviation(
         dev_zero = model.NewIntVar(0, 0, f"{prefix}_total")
         return dev_zero
 
-    # Build deviation for each staff member
+    # Build deviation for each staff member using multiplication-based
+    # proportional share to avoid CP-SAT division:
+    #   helper_i * sum_contracted == total_pool * contracted_i
+    #   dev_i = |per_staff[i] - helper_i|
     total_dev = model.NewIntVar(0, n * max_val, f"{prefix}_total")
     dev_terms: list = []
     for i in range(n):
-        target = round(total_pool * contracted[i] / sum_contracted)
+        helper = model.NewIntVar(0, n * max_val, f"{prefix}_helper_{i}")
+        model.Add(helper * sum_contracted == total_pool * contracted[i])
         dev = model.NewIntVar(0, max_val, f"{prefix}_{i}")
-        model.Add(dev >= per_staff[i] - target)
-        model.Add(dev >= target - per_staff[i])
+        model.Add(dev >= per_staff[i] - helper)
+        model.Add(dev >= helper - per_staff[i])
         dev_terms.append(dev)
     model.Add(total_dev == sum(dev_terms))
     return total_dev
@@ -679,3 +683,57 @@ def compute_adjusted_hours(
     available = 14 - holiday_days
     contracted_scaled = int(round(contracted_hours * SCALE))
     return contracted_scaled * available // 14
+
+
+def build_merged_compatibility_table(definitions: dict) -> list[list[bool]]:
+    """Build the AND-ed compatibility table for rest + night/day-transition rules.
+
+    Merges RestPeriodConstraint (11h gap) and NightToDayRest (same category)
+    into a single 8×8 table. NoDoubleBooking (overlap) is redundant with
+    RestPeriodConstraint and is NOT included — the 11h gap already forbids
+    all overlaps.
+
+    compat[a][b] == True means shift_a on day d and shift_b on day d+1
+    satisfy BOTH the 11h rest gap AND the same-category day/night rule.
+
+    Always returns an 8×8 table indexed by SHIFT_ORDER positions.
+    For shifts not present in definitions (e.g. test fixtures), the entry
+    defaults to False (incompatible) to avoid false negatives.
+    """
+    from datetime import datetime, timedelta
+
+    n = len(SHIFT_ORDER)
+    compat: list[list[bool]] = [[True] * n for _ in range(n)]
+
+    for a_idx, shift_a in enumerate(SHIFT_ORDER):
+        for b_idx, shift_b in enumerate(SHIFT_ORDER):
+            # Skip shifts not present in definitions (test fixtures)
+            if shift_a not in definitions or shift_b not in definitions:
+                compat[a_idx][b_idx] = False
+                continue
+
+            # --- RestPeriodConstraint: 11h gap check ---
+            a_end_str = definitions[shift_a]["end"]
+            a_crosses = definitions[shift_a]["crosses_midnight"]
+            b_start_str = definitions[shift_b]["start"]
+
+            a_end = datetime.strptime(a_end_str, "%H:%M:%S")
+            b_start = datetime.strptime(b_start_str, "%H:%M:%S")
+
+            a_end_abs = a_end
+            if a_crosses:
+                a_end_abs += timedelta(days=1)
+            b_start_abs = b_start + timedelta(days=1)
+
+            gap = (b_start_abs - a_end_abs).total_seconds()
+            rest_ok = gap >= REST_PERIOD_SECONDS
+
+            # --- NightToDayRest: same category check ---
+            a_is_night = shift_a in NIGHT_SHIFTS
+            b_is_night = shift_b in NIGHT_SHIFTS
+            category_ok = a_is_night == b_is_night
+
+            # AND both constraints
+            compat[a_idx][b_idx] = rest_ok and category_ok
+
+    return compat

@@ -47,7 +47,7 @@ class VerifierResult:
 
     @property
     def is_clean(self) -> bool:
-        return len(self.violations) == 0
+        return len(self.violations) == 0 and self.checks_failed == 0
 
 
 def verify(
@@ -456,14 +456,15 @@ def _check_absolute_cap(
     # Compute actual hours per staff per block from assignments
     staff_block_hours: dict[str, dict[int, float]] = {}
     for slot in result.assignments:
-        staff = slot.staff_name
-        paid = definitions[slot.shift]["paid_hours"]
-        for bi, block_dates in enumerate(blocks):
-            if slot.date in block_dates:
-                staff_block_hours.setdefault(staff, {})[bi] = (
-                    staff_block_hours[staff].get(bi, 0) + paid
-                )
-                break
+            staff = slot.staff_name
+            paid = definitions[slot.shift]["paid_hours"]
+            for bi, block_dates in enumerate(blocks):
+                if slot.date in block_dates:
+                    staff_block_hours.setdefault(staff, {})
+                    staff_block_hours[staff][bi] = (
+                        staff_block_hours[staff].get(bi, 0) + paid
+                    )
+                    break
 
     for staff_name, block_hours in staff_block_hours.items():
         for bi, hours in block_hours.items():
@@ -500,7 +501,8 @@ def _check_overtime_cap(
         paid = definitions[slot.shift]["paid_hours"]
         for bi, block_dates in enumerate(blocks):
             if slot.date in block_dates:
-                staff_block_hours.setdefault(staff, {})[bi] = (
+                staff_block_hours.setdefault(staff, {})
+                staff_block_hours[staff][bi] = (
                     staff_block_hours[staff].get(bi, 0) + paid
                 )
                 break
@@ -576,7 +578,8 @@ def _check_holiday_proration(
         paid = definitions[slot.shift]["paid_hours"]
         for bi, block_dates in enumerate(blocks):
             if slot.date in block_dates:
-                staff_block_hours.setdefault(staff, {})[bi] = (
+                staff_block_hours.setdefault(staff, {})
+                staff_block_hours[staff][bi] = (
                     staff_block_hours[staff].get(bi, 0) + paid
                 )
                 break

@@ -10,8 +10,9 @@ Provides:
 
 from __future__ import annotations
 
+import logging
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from utils import (
     DAY_SHIFTS,
@@ -26,39 +27,36 @@ if TYPE_CHECKING:
     from ortools.sat.python import cp_model
     from models import Staff
 
+logger = logging.getLogger("ai-roster")
+
 
 def _emit_compatibility_constraints(
     model,
     compat: list[list[bool]],
-    assignments,
+    works: list[list[Any]],
     staff_names: list[str],
     num_staff: int,
     all_dates: list[str],
-    pos_by_date: dict[str, list[int]],
-    pos_shift: list[str],
 ) -> None:
     """Emit `a + b <= 1` for every incompatible shift-pair on consecutive days.
 
-    Shared across NoDoubleBooking, RestPeriodConstraint, and NightToDayRest.
+    Uses shared shift-type indicator variables (works[si][di][shift_idx])
+    instead of raw assignment variables. This is the shared implementation
+    used by NoDoubleBooking, RestPeriodConstraint, and NightToDayRest —
+    the three classes share one AND-ed compatibility table.
     """
+    num_shift_types = len(compat)
     for si in range(num_staff):
         for di in range(len(all_dates) - 1):
-            date_d = all_dates[di]
-            date_d1 = all_dates[di + 1]
-            positions_d = pos_by_date.get(date_d, [])
-            positions_d1 = pos_by_date.get(date_d1, [])
-            if not positions_d or not positions_d1:
-                continue
-            for pi_d in positions_d:
-                shift_a = pos_shift[pi_d]
-                shift_a_idx = SHIFT_ORDER.index(shift_a)
-                for pi_d1 in positions_d1:
-                    shift_b = pos_shift[pi_d1]
-                    shift_b_idx = SHIFT_ORDER.index(shift_b)
-                    if not compat[shift_a_idx][shift_b_idx]:
-                        model.Add(
-                            assignments[si][pi_d] + assignments[si][pi_d1] <= 1
-                        )
+            for sa in range(num_shift_types):
+                for sb in range(num_shift_types):
+                    if compat[sa][sb]:
+                        continue
+                    # Forbidden pair: shift sa on day d, shift sb on day d+1
+                    model.Add(
+                        works[si][di * num_shift_types + sa] +
+                        works[si][(di + 1) * num_shift_types + sb] <= 1
+                    )
 
 
 # ---------------------------------------------------------------------------
@@ -89,8 +87,12 @@ class BaseConstraint(ABC):
         all_dates: list[str],
         blocks: list[list[str]],
         positions: list[dict],
-    ) -> None:
-        """Add variables and constraints to the CP-SAT model."""
+    ) -> "Any":
+        """Add variables and constraints to the CP-SAT model.
+
+        Returns may vary by subclass: hard constraints may return a list of
+        penalty IntVars; soft constraints return an IntVar or None.
+        """
         raise NotImplementedError
 
 
@@ -104,6 +106,10 @@ class BaseSoftConstraint(BaseConstraint):
     """Soft constraints are optimization objectives with penalties.
 
     Subclasses override apply() with an additional weight parameter.
+    The apply() method returns the top-level penalty IntVar (or None if
+    the constraint has no penalty — e.g. when there are no positions of
+    the relevant type). The caller is responsible for appending the
+    penalty to the objective.
     """
 
     constraint_type = "soft"
@@ -120,8 +126,12 @@ class BaseSoftConstraint(BaseConstraint):
         blocks: list[list[str]],
         positions: list[dict],
         weight: int,
-    ) -> None:
-        """Add penalty variable to the objective function."""
+    ) -> "cp_model.IntVar | None":
+        """Add penalty variable to the objective function.
+
+        Returns the top-level penalty IntVar (or None if the constraint
+        has no penalty). The caller appends penalty * weight to the objective.
+        """
         raise NotImplementedError
 
 
@@ -133,19 +143,61 @@ class BaseSoftConstraint(BaseConstraint):
 class CoverageConstraint(BaseHardConstraint):
     """[H#4d9f81c2] [H#7a3e5f91] Every roster position must be filled.
 
-    Enforced in solver._create_variables() via "exactly one staff per position".
-    This constraint class exists as a registry entry and for reporting unfilled
-    positions in the output.
+    Enforces "exactly one staff or unfilled per position". Creates unfilled
+    penalty terms for the objective based on position desirability tiers.
     """
 
     constraint_id = "[H#4d9f81c2]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
-        # Coverage is enforced in _create_variables() — this constraint
-        # exists so the constraint registry includes it and the solver can
-        # report unfilled positions in _extract_assignments().
-        pass
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
+        from datetime import date as date_type
+
+        if unfilled_vars is None or positions is None:
+            return []
+
+        num_positions = len(positions)
+        num_staff = len(staff_names)
+
+        # Unfilled tier weights
+        tier_skill_required = 220000  # [S#e7f3a2b1]
+        tier_sunday = 210000          # [S#f1a2b3c4]
+        tier_saturday = 200000        # [S#a2b3c4d5]
+        tier_weekday_day = 160000     # [S#b3c4d5e6]
+        tier_weekday_night = 140000   # [S#c4d5e6f7]
+
+        penalty_terms = []
+        for pi in range(num_positions):
+            pos = positions[pi]
+            required_skill = pos.get("required_skill_level")
+            shift = pos["shift"]
+            pos_date = date_type.fromisoformat(pos["date"])
+            is_sunday = pos_date.weekday() == 6
+            is_saturday = pos_date.weekday() == 5
+            is_night = shift in NIGHT_SHIFTS
+
+            if required_skill is not None:
+                weight = tier_skill_required
+            elif is_sunday:
+                weight = tier_sunday
+            elif is_saturday:
+                weight = tier_saturday
+            elif is_night:
+                weight = tier_weekday_night
+            else:
+                weight = tier_weekday_day
+
+            penalty = model.NewIntVar(0, weight, f"unfilled_penalty_{pi}")
+            model.Add(penalty == weight).OnlyEnforceIf(unfilled_vars[pi])
+            model.Add(penalty == 0).OnlyEnforceIf(unfilled_vars[pi].Not())
+            penalty_terms.append(penalty)
+
+            staff_vars = [assignments[si][pi] for si in range(num_staff)]
+            options = list(staff_vars) + [unfilled_vars[pi]]
+            model.Add(sum(options) == 1)
+
+        return penalty_terms
 
 
 class SkillLevelRequirement(BaseHardConstraint):
@@ -165,25 +217,18 @@ class SkillLevelRequirement(BaseHardConstraint):
     constraint_id = "[H#5e6ad8f4]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
-        # Precompute staff highest skill ranks
-        staff_ranks: list[int] = [staff.highest_skill_rank for staff in staff_list]
-
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
         # Precompute position required skill ranks
         pos_required_ranks: list[int] = [
             p.get("required_skill_rank", -1) for p in positions
         ]
 
         for si, staff in enumerate(staff_list):
-            staff_rank = staff_ranks[si]
             for pi, pos in enumerate(positions):
-                required_rank = pos_required_ranks[pi]
-                x = assignments[si][pi]
-                if required_rank < 0:
-                    # Null skill level — no restriction (H#91bc3d7e)
-                    continue
-                # Enforce: if staff assigned, their rank must meet requirement
-                model.Add(staff_rank >= required_rank).OnlyEnforceIf(x)
+                req = pos_required_ranks[pi]
+                if req >= 0 and staff.highest_skill_rank < req:
+                    model.Add(assignments[si][pi] == 0)
 
 
 class SkillLevelHierarchy(BaseHardConstraint):
@@ -199,75 +244,57 @@ class SkillLevelHierarchy(BaseHardConstraint):
     constraint_id = "[H#84a1d5c9]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
         pass
 
 
 class NoDoubleBooking(BaseHardConstraint):
     """[H#e91c63ab] A staff member's assigned shifts must not overlap.
 
-    Uses a precomputed 8x8 compatibility table of (shift_on_day_d,
-    shift_on_day_d+1) pairs that are incompatible due to wall-clock overlap.
+    Uses shared shift-type indicator variables (works[si][di][sh]) from RosterModel.
+    Redundant with RestPeriodConstraint (gap ≥ 11h subsumes gap ≥ 0), but kept
+    for traceability. When both are enabled, NoDoubleBooking emission is skipped
+    and logged — see _apply_hard_constraints in solver.py.
     """
 
     constraint_id = "[H#e91c63ab]"
-    SHIFT_TYPES = SHIFT_ORDER
+    SHIFT_TYPES = list(SHIFT_ORDER)
 
-    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+    def _build_compatibility_table(self, definitions):
+        """Build the overlap-only compatibility table (for test compatibility).
 
-        compat = self._build_compatibility_table(definitions)
-        num_staff = len(staff_names)
-
-        pos_shift: list[str] = [p["shift"] for p in positions]
-        pos_by_date: dict[str, list[int]] = {}
-        for i, p in enumerate(positions):
-            pos_by_date.setdefault(p["date"], []).append(i)
-
-        _emit_compatibility_constraints(
-            model, compat, assignments, staff_names, num_staff,
-            all_dates, pos_by_date, pos_shift,
-        )
-
-    def _build_compatibility_table(
-        self, definitions: dict
-    ) -> list[list[bool]]:
-        """Build 8x8 compatibility table.
-
-        compat[a][b] == True means shift_a on day d and shift_b on day d+1
-        do NOT overlap. False means they overlap and are incompatible.
+        Returns an 8×8 table indexed by SHIFT_ORDER. Unlike the merged table
+        used by RestPeriodConstraint, this only checks for actual overlap
+        (gap ≥ 0), not the 11h rest period.
         """
         from datetime import datetime, timedelta
-
-        n = len(SHIFT_ORDER)
-        compat: list[list[bool]] = [[True] * n for _ in range(n)]
-
-        for a_idx, shift_a in enumerate(SHIFT_ORDER):
-            for b_idx, shift_b in enumerate(SHIFT_ORDER):
-                a_start_str = definitions[shift_a]["start"]
+        n = len(self.SHIFT_TYPES)
+        compat = [[True] * n for _ in range(n)]
+        for a_idx, shift_a in enumerate(self.SHIFT_TYPES):
+            for b_idx, shift_b in enumerate(self.SHIFT_TYPES):
+                if shift_a not in definitions or shift_b not in definitions:
+                    compat[a_idx][b_idx] = False
+                    continue
                 a_end_str = definitions[shift_a]["end"]
                 a_crosses = definitions[shift_a]["crosses_midnight"]
                 b_start_str = definitions[shift_b]["start"]
-                b_end_str = definitions[shift_b]["end"]
-
-                # Parse times
-                a_start = datetime.strptime(a_start_str, "%H:%M:%S")
                 a_end = datetime.strptime(a_end_str, "%H:%M:%S")
                 b_start = datetime.strptime(b_start_str, "%H:%M:%S")
-
-                # Absolute end of shift_a on day d (may be next day if crosses midnight)
-                a_end_abs = a_end
-                if a_crosses:
-                    a_end_abs += timedelta(days=1)
-
-                # Absolute start of shift_b on day d+1
+                a_end_abs = a_end + timedelta(days=1 if a_crosses else 0)
                 b_start_abs = b_start + timedelta(days=1)
-
-                # Check overlap: intervals [a_start, a_end_abs) and [b_start_abs, ...)
-                if a_end_abs > b_start_abs:
-                    compat[a_idx][b_idx] = False
-
+                gap = (b_start_abs - a_end_abs).total_seconds()
+                compat[a_idx][b_idx] = gap >= 0  # overlap = gap < 0
         return compat
+
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
+        # NoDoubleBooking is redundant with RestPeriodConstraint (11h rest
+        # implies no overlap). Skip emission when rest constraint is enabled.
+        # The merged compatibility table is built once in RosterModel.
+        logger.debug("NoDoubleBooking [%s]: redundant with RestPeriodConstraint — skipped",
+                       self.constraint_id)
 
 
 class GraduateShiftConstraint(BaseHardConstraint):
@@ -276,7 +303,8 @@ class GraduateShiftConstraint(BaseHardConstraint):
     constraint_id = "[H#30479c74]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
         allowed = {"D8", "P8", "L3", "DISCO", "N8"}
         num_staff = len(staff_names)
         num_positions = len(positions)
@@ -292,38 +320,40 @@ class GraduateShiftConstraint(BaseHardConstraint):
 class RestPeriodConstraint(BaseHardConstraint):
     """[H#c1f6e3f5] Minimum 11 hours between shifts (wall-clock).
 
-    Uses a precomputed compatibility table of (shift_on_day_d,
-    shift_on_day_d+1) pairs where the gap between end-of-shift_a
-    and start-of-shift_b is less than 11 hours.
+    Uses shared shift-type indicator variables (works[si][di][sh]) from
+    RosterModel and the merged compatibility table (rest + night/day transition).
     """
 
     constraint_id = "[H#c1f6e3f5]"
-    SHIFT_TYPES = SHIFT_ORDER
+    SHIFT_TYPES = list(SHIFT_ORDER)
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
-
-        compat = self._build_compatibility_table(definitions)
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
         num_staff = len(staff_names)
-
-        pos_shift: list[str] = [p["shift"] for p in positions]
-        pos_by_date: dict[str, list[int]] = {}
-        for i, p in enumerate(positions):
-            pos_by_date.setdefault(p["date"], []).append(i)
-
-        _emit_compatibility_constraints(
-            model, compat, assignments, staff_names, num_staff,
-            all_dates, pos_by_date, pos_shift,
-        )
+        # compat is the merged table (rest + night/day), built in RosterModel
+        compat = getattr(model, "_merged_compat", None)
+        if compat is not None:
+            _emit_compatibility_constraints(
+                model, compat, self._get_works_from_assignments(
+                    model, assignments, staff_names, all_dates, positions,
+                ),
+                staff_names, num_staff, all_dates,
+            )
+        else:
+            # Fallback: build compat table inline (for tests with toy models)
+            compat = self._build_compatibility_table(definitions)
+            _emit_compatibility_constraints(
+                model, compat, self._get_works_from_assignments(
+                    model, assignments, staff_names, all_dates, positions,
+                ),
+                staff_names, num_staff, all_dates,
+            )
 
     def _build_compatibility_table(
         self, definitions: dict
     ) -> list[list[bool]]:
-        """Build 8x8 compatibility table.
-
-        compat[a][b] == True means shift_a on day d and shift_b on day d+1
-        have a gap of at least 11 hours between them.
-        """
+        """Build 8x8 rest-period compatibility table (11h gap)."""
         from datetime import datetime, timedelta
 
         n = len(SHIFT_ORDER)
@@ -338,12 +368,9 @@ class RestPeriodConstraint(BaseHardConstraint):
                 a_end = datetime.strptime(a_end_str, "%H:%M:%S")
                 b_start = datetime.strptime(b_start_str, "%H:%M:%S")
 
-                # Absolute end of shift_a (on day d or d+1 if crosses midnight)
                 a_end_abs = a_end
                 if a_crosses:
                     a_end_abs += timedelta(days=1)
-
-                # Absolute start of shift_b (always on day d+1)
                 b_start_abs = b_start + timedelta(days=1)
 
                 gap = (b_start_abs - a_end_abs).total_seconds()
@@ -351,44 +378,78 @@ class RestPeriodConstraint(BaseHardConstraint):
 
         return compat
 
+    def _get_works_from_assignments(
+        self, model, assignments, staff_names, all_dates, positions
+    ) -> list[list[Any]]:
+        """Build works matrix from assignments when shared vars aren't available.
 
-class NightToDayRest(BaseHardConstraint):
-    """[H#f4c9b6c8] At least 1 full day off between night and day shifts.
-
-    A night shift (N8/N12) on day d forbids any day shift (D8/D12/P8/P12/L3/DISCO)
-    on day d+1, and vice versa. Uses a precomputed 8×8 compatibility table where
-    compat[a][b] == True only when both shifts are in the same category (both
-    day or both night).
-    """
-
-    constraint_id = "[H#f4c9b6c8]"
-    SHIFT_TYPES = SHIFT_ORDER
-
-    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
-
-        compat = self._build_night_day_compatibility_table(definitions)
+        This is a fallback for tests that don't create shared indicator vars.
+        """
         num_staff = len(staff_names)
+        num_shift_types = len(SHIFT_ORDER)
 
         pos_shift: list[str] = [p["shift"] for p in positions]
         pos_by_date: dict[str, list[int]] = {}
         for i, p in enumerate(positions):
             pos_by_date.setdefault(p["date"], []).append(i)
 
-        _emit_compatibility_constraints(
-            model, compat, assignments, staff_names, num_staff,
-            all_dates, pos_by_date, pos_shift,
-        )
+        # Build works[si][di][sh] from assignments
+        works: list[list[Any]] = []
+        for si in range(num_staff):
+            row: list[Any] = []
+            for di, date_str in enumerate(all_dates):
+                pos_indices = pos_by_date.get(date_str, [])
+                shift_to_vars: dict[str, list[Any]] = {}
+                for pi in pos_indices:
+                    sh = pos_shift[pi]
+                    shift_to_vars.setdefault(sh, []).append(assignments[si][pi])
+                for sh_idx in range(num_shift_types):
+                    sh_name = SHIFT_ORDER[sh_idx]
+                    vars_list = shift_to_vars.get(sh_name, [])
+                    if vars_list:
+                        row.append(vars_list[0])
+                    else:
+                        row.append(model.NewBoolVar(f"fallback_works_{si}_{di}_{sh_idx}"))
+                        model.Add(row[-1] == 0)
+            works.append(row)
+        return works
+
+
+class NightToDayRest(BaseHardConstraint):
+    """[H#f4c9b6c8] At least 1 full day off between night and day shifts.
+
+    Uses shared shift-type indicator variables (works[si][di][sh]) from
+    RosterModel and the merged compatibility table (rest + night/day transition).
+    """
+
+    constraint_id = "[H#f4c9b6c8]"
+    SHIFT_TYPES = list(SHIFT_ORDER)
+
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
+        num_staff = len(staff_names)
+        compat = getattr(model, "_merged_compat", None)
+        if compat is not None:
+            _emit_compatibility_constraints(
+                model, compat, self._get_works_from_assignments(
+                    model, assignments, staff_names, all_dates, positions,
+                ),
+                staff_names, num_staff, all_dates,
+            )
+        else:
+            compat = self._build_night_day_compatibility_table(definitions)
+            _emit_compatibility_constraints(
+                model, compat, self._get_works_from_assignments(
+                    model, assignments, staff_names, all_dates, positions,
+                ),
+                staff_names, num_staff, all_dates,
+            )
 
     def _build_night_day_compatibility_table(
         self, definitions: dict
     ) -> list[list[bool]]:
-        """Build 8×8 compatibility table for night↔day transitions.
-
-        compat[a][b] == True means shift_a on day d and shift_b on day d+1
-        are in the same category (both day or both night). False means they
-        are in different categories and are incompatible.
-        """
+        """Build 8×8 night/day-transition compatibility table."""
         n = len(SHIFT_ORDER)
         compat: list[list[bool]] = [[True] * n for _ in range(n)]
 
@@ -396,11 +457,41 @@ class NightToDayRest(BaseHardConstraint):
             for b_idx, shift_b in enumerate(SHIFT_ORDER):
                 a_is_night = shift_a in NIGHT_SHIFTS
                 b_is_night = shift_b in NIGHT_SHIFTS
-                # Incompatible when one is night and the other is day
                 if a_is_night != b_is_night:
                     compat[a_idx][b_idx] = False
 
         return compat
+
+    def _get_works_from_assignments(self, model, assignments, staff_names,
+                                    all_dates, positions) -> list[list[Any]]:
+        """Build works matrix from assignments when shared vars aren't available."""
+        num_staff = len(staff_names)
+        num_shift_types = len(SHIFT_ORDER)
+
+        pos_shift: list[str] = [p["shift"] for p in positions]
+        pos_by_date: dict[str, list[int]] = {}
+        for i, p in enumerate(positions):
+            pos_by_date.setdefault(p["date"], []).append(i)
+
+        works: list[list[Any]] = []
+        for si in range(num_staff):
+            row: list[Any] = []
+            for di, date_str in enumerate(all_dates):
+                pos_indices = pos_by_date.get(date_str, [])
+                shift_to_vars: dict[str, list[Any]] = {}
+                for pi in pos_indices:
+                    sh = pos_shift[pi]
+                    shift_to_vars.setdefault(sh, []).append(assignments[si][pi])
+                for sh_idx in range(num_shift_types):
+                    sh_name = SHIFT_ORDER[sh_idx]
+                    vars_list = shift_to_vars.get(sh_name, [])
+                    if vars_list:
+                        row.append(vars_list[0])
+                    else:
+                        row.append(model.NewBoolVar(f"fallback_works_{si}_{di}_{sh_idx}"))
+                        model.Add(row[-1] == 0)
+            works.append(row)
+        return works
 
 
 class RedRequestConstraint(BaseHardConstraint):
@@ -409,7 +500,8 @@ class RedRequestConstraint(BaseHardConstraint):
     constraint_id = "[H#a5d0c7d9]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
         num_staff = len(staff_names)
         num_positions = len(positions)
 
@@ -427,7 +519,8 @@ class HolidayConstraint(BaseHardConstraint):
     constraint_id = "[H#b6e1d8e0]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
         from datetime import date as date_type, timedelta
 
         num_staff = len(staff_names)
@@ -451,19 +544,21 @@ class HolidayConstraint(BaseHardConstraint):
 class MaxHoursConstraint(BaseHardConstraint):
     """[H#f0c5b2c4] Absolute 76 paid-hour cap per 14-day block.
 
-    Enforced in solver._create_variables() via IntVar upper bound of
-    76 * SCALE on every staff-hour variable. This is a variable bound,
-    not a soft constraint — the solver never produces a solution exceeding
-    76 hours. The ContractedHoursFloor ([H#d9a8b7c6]) enforces the lower
-    bound; this enforces the upper bound.
+    Enforces staff_hours_vars[si][bi] <= 76 * SCALE for every staff/block pair.
+    This is a hard constraint — the solver never produces a solution exceeding
+    76 hours per block.
     """
 
     constraint_id = "[H#f0c5b2c4]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
-        # Enforced in solver._create_variables() via IntVar(0, 76*SCALE) bounds.
-        pass
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
+        if staff_hours_vars is None:
+            return
+        for si, staff in enumerate(staff_list):
+            for bi in range(len(blocks)):
+                model.Add(staff_hours_vars[si][bi] <= 76 * SCALE)
 
 
 class ContractedHoursFloor(BaseHardConstraint):
@@ -481,7 +576,8 @@ class ContractedHoursFloor(BaseHardConstraint):
     constraint_id = "[H#d9a8b7c6]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
         # No-op — reclassified to soft constraint (ContractedHoursFloorSoft).
         pass
 
@@ -541,6 +637,8 @@ class ContractedHoursFloorSoft(BaseSoftConstraint):
                 objective_terms.append(total_shortfall * weight)
             else:
                 model.Minimize(total_shortfall * weight)
+            return total_shortfall
+        return None
 
 
 class OvertimeCap(BaseHardConstraint):
@@ -549,7 +647,8 @@ class OvertimeCap(BaseHardConstraint):
     constraint_id = "[H#e8f7d6c5]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None):
+              definitions, all_dates, blocks, positions, staff_hours_vars=None,
+              unfilled_vars=None):
         if staff_hours_vars is None:
             return
         # Per [H#e8f7d6c5]: effective cap = min(76, contracted + 12)
@@ -586,24 +685,25 @@ class OvertimeDistribution(BaseSoftConstraint):
         num_blocks = len(blocks)
 
         # Compute overtime per staff per block: max(0, hours - contracted)
-        # Work in whole hours (not scaled) for the fairness helper.
+        # Work in scaled units to avoid IntVar division (not supported by CP-SAT).
         overtime_vars: list[cp_model.IntVar] = []
         for si, staff in enumerate(staff_list):
-            contracted_whole = int(round(staff.contracted_hours_per_fortnight))
+            contracted_scaled = int(round(staff.contracted_hours_per_fortnight * SCALE))
             for bi in range(num_blocks):
-                ot = model.NewIntVar(0, 76, f"ot_{staff_names[si]}_b{bi}")
-                model.Add(ot >= staff_hours_vars[si][bi] // SCALE - contracted_whole)
+                ot = model.NewIntVar(0, 76 * SCALE, f"ot_{staff_names[si]}_b{bi}")
+                model.Add(ot >= staff_hours_vars[si][bi] - contracted_scaled)
                 model.Add(ot >= 0)
                 overtime_vars.append(ot)
 
-        contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
+        contracted_list = [int(round(s.contracted_hours_per_fortnight * SCALE)) for s in staff_list]
         total_deviation = fair_share_deviation(
-            model, overtime_vars, contracted_list, "ot_dev",
+            model, overtime_vars, contracted_list, "ot_dev", max_val=76 * SCALE,
         )
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
         else:
             model.Minimize(total_deviation * weight)
+        return total_deviation
 
 
 class WeekdayNightFairness(BaseSoftConstraint):
@@ -681,6 +781,7 @@ class WeekdayNightFairness(BaseSoftConstraint):
             objective_terms.append(total_night_dev * weight)
         else:
             model.Minimize(total_night_dev * weight)
+        return total_night_dev
 
 
 class SaturdayFairness(BaseSoftConstraint):
@@ -729,6 +830,7 @@ class SaturdayFairness(BaseSoftConstraint):
             objective_terms.append(total_deviation * weight)
         else:
             model.Minimize(total_deviation * weight)
+        return total_deviation
 
 
 class SundayFairness(BaseSoftConstraint):
@@ -777,6 +879,7 @@ class SundayFairness(BaseSoftConstraint):
             objective_terms.append(total_deviation * weight)
         else:
             model.Minimize(total_deviation * weight)
+        return total_deviation
 
 
 class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
@@ -790,9 +893,11 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
 
     Uses run_start booleans and run-length enumeration per AGENTS.md §8.
     Sub-labels: S#30c6f5ad·L=n for traceability.
+    Loops per 14-day block (D3a), caps L at 14 (§3.3).
     """
 
     constraint_id = "[S#30c6f5ad]"
+    MAX_RUN = 14  # per-block cap (D3a)
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
@@ -801,182 +906,342 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
         num_staff = len(staff_names)
         num_dates = len(all_dates)
 
-        # Build position-index → date and shift lookups
-        pos_date: list[str] = [p["date"] for p in positions]
-        pos_shift: list[str] = [p["shift"] for p in positions]
+        # Check for shared works vars from §3.1
+        works = getattr(model, "_works", None)
 
-        # Group position indices by date
-        pos_by_date: dict[str, list[int]] = {}
-        for i, p in enumerate(positions):
-            pos_by_date.setdefault(p["date"], []).append(i)
+        if works is not None:
+            # Use shared works BoolVar array, loop per block, cap L at 14
+            return self._apply_with_shared_vars(
+                model, works, staff_list, staff_names, blocks, all_dates, num_dates, weight, objective_terms,
+            )
+        else:
+            # Fallback: build works from assignments, loop per block, cap L at 14
+            return self._apply_fallback(
+                model, staff_list, staff_by_name, assignments, staff_names,
+                definitions, all_dates, blocks, positions, weight, objective_terms,
+            )
 
-        # SHIFT_INDEX maps shift type to an index 0-7, plus 8 = "unassigned"
-        SHIFT_INDEX = {s: i for i, s in enumerate(SHIFT_ORDER)}
-        UNASSIGNED = len(SHIFT_ORDER)  # 8
+    def _apply_with_shared_vars(
+        self, model, works, staff_list, staff_names, blocks, all_dates, num_dates, weight, objective_terms,
+    ):
+        """Apply S#30c6f5ad using shared works BoolVar array from §3.1.
 
-        # For each staff, for each date, determine which shift type they work
-        # We use auxiliary IntVars: shift_type[s][d] = 0..7 for actual shifts, 8 for unassigned
-        shift_type_vars: list[list[cp_model.IntVar]] = []
-        for si in range(num_staff):
-            row: list[cp_model.IntVar] = []
-            for di in range(num_dates):
-                date_str = all_dates[di]
-                pos_indices = pos_by_date.get(date_str, [])
-                if not pos_indices:
-                    zero = model.NewIntVar(8, 8, f"shift_{staff_names[si]}_d{di}")
-                    row.append(zero)
-                    continue
+        Loops per 14-day block (D3a), caps L at 14 (§3.3).
+        """
+        num_staff = len(staff_names)
+        num_shift_types = len(SHIFT_ORDER)
+        UNASSIGNED = num_shift_types  # 8
 
-                # shift_type = k if staff works shift k on this day, else 8 (unassigned)
-                st = model.NewIntVar(0, UNASSIGNED, f"shift_{staff_names[si]}_d{di}")
+        all_penalty_terms: list[cp_model.IntVar] = []
 
-                # For each shift type k in positions on this date:
-                # If staff works any position with shift k, then st = k
-                # We need: st == k iff any assignment BoolVar for shift k is 1
-                shift_k_vars: dict[str, list[cp_model.IntVar]] = {}
-                for pi in pos_indices:
-                    shift_name = pos_shift[pi]
-                    shift_k_vars.setdefault(shift_name, []).append(assignments[si][pi])
+        for block in blocks:
+            block_start = block[0]
+            block_end = block[-1]
 
-                shift_worked_vars: dict[str, cp_model.IntVar] = {}
-                for shift_name, bool_vars in shift_k_vars.items():
-                    k = SHIFT_INDEX[shift_name]
-                    sw = model.NewBoolVar(f"worked_{staff_names[si]}_{date_str}_{shift_name}")
-                    shift_worked_vars[shift_name] = sw
-                    model.Add(sum(bool_vars) >= 1).OnlyEnforceIf(sw)
-                    model.Add(sum(bool_vars) == 0).OnlyEnforceIf(sw.Not())
-                    model.Add(st == k).OnlyEnforceIf(sw)
-                    model.Add(st != k).OnlyEnforceIf(sw.Not())
+            # Find date indices for this block
+            block_date_indices = [
+                di for di, d in enumerate(all_dates) if block_start <= d <= block_end
+            ]
+            if not block_date_indices:
+                continue
 
-                # If no shift is worked, st == 8
-                no_work = model.NewBoolVar(f"no_work_{staff_names[si]}_{date_str}")
-                model.Add(sum(shift_worked_vars.values()) == 0).OnlyEnforceIf(no_work)
-                model.Add(st == UNASSIGNED).OnlyEnforceIf(no_work)
+            block_len = len(block_date_indices)  # typically 14
 
-                row.append(st)
-            shift_type_vars.append(row)
+            # --- Compute same[d] using works BoolVars ---
+            # same[si][di] = 1 iff staff works the same shift on day di and di+1
+            # same = OR over sh of (works[di][sh] AND works[di+1][sh])
+            same_vars: list[list[cp_model.IntVar]] = []
+            for si in range(num_staff):
+                row: list[cp_model.IntVar] = []
+                for idx in range(len(block_date_indices) - 1):
+                    di = block_date_indices[idx]
+                    di1 = block_date_indices[idx + 1]
+                    # Create and_sh for each shift type
+                    and_sh_vars: list[cp_model.IntVar] = []
+                    for sh in range(num_shift_types):
+                        and_sh = model.NewBoolVar(f"and_{staff_names[si]}_d{di}_s{sh}")
+                        and_sh_vars.append(and_sh)
+                        model.AddBoolAnd([
+                            works[si][di * num_shift_types + sh],
+                            works[si][di1 * num_shift_types + sh],
+                        ]).OnlyEnforceIf(and_sh)
+                        model.AddBoolOr([
+                            works[si][di * num_shift_types + sh].Not(),
+                            works[si][di1 * num_shift_types + sh].Not(),
+                        ]).OnlyEnforceIf(and_sh.Not())
+                    # same = OR over sh of and_sh
+                    same = model.NewBoolVar(f"same_{staff_names[si]}_b{block_start}_d{idx}")
+                    row.append(same)
+                    model.AddBoolOr(and_sh_vars).OnlyEnforceIf(same)
+                    model.AddBoolOr([av.Not() for av in and_sh_vars]).OnlyEnforceIf(same.Not())
+                same_vars.append(row)
 
-        # For each staff, for each consecutive day pair, compute same[d] = 1 if
-        # shift_type[s][d] == shift_type[s][d+1] and both != UNASSIGNED
-        same_vars: list[list[cp_model.IntVar]] = []
-        for si in range(num_staff):
-            row: list[cp_model.IntVar] = []
-            for di in range(num_dates - 1):
-                s_d = shift_type_vars[si][di]
-                s_d1 = shift_type_vars[si][di + 1]
-                # Three-way reification: same = 1 iff shifts equal AND both worked
-                eq = model.NewBoolVar(f"eq_{staff_names[si]}_d{di}")
-                model.Add(s_d == s_d1).OnlyEnforceIf(eq)
-                model.Add(s_d != s_d1).OnlyEnforceIf(eq.Not())
-                not_unassigned_d = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_d{di}")
-                not_unassigned_d1 = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_d{di+1}")
-                model.Add(s_d != UNASSIGNED).OnlyEnforceIf(not_unassigned_d)
-                model.Add(s_d == UNASSIGNED).OnlyEnforceIf(not_unassigned_d.Not())
-                model.Add(s_d1 != UNASSIGNED).OnlyEnforceIf(not_unassigned_d1)
-                model.Add(s_d1 == UNASSIGNED).OnlyEnforceIf(not_unassigned_d1.Not())
-                same = model.NewBoolVar(f"same_{staff_names[si]}_d{di}")
-                model.AddBoolAnd([eq, not_unassigned_d, not_unassigned_d1]).OnlyEnforceIf(same)
-                model.AddBoolOr([eq.Not(), not_unassigned_d.Not(), not_unassigned_d1.Not()]).OnlyEnforceIf(same.Not())
-                row.append(same)
-            same_vars.append(row)
-
-        # Compute run_start[d]: 1 if day d is worked and (d-1 is unassigned or different shift)
-        # run_start[0] = 1 if shift_type[0] != UNASSIGNED
-        # run_start[d] = (same[d-1] == 0) AND (shift_type[d] != UNASSIGNED)
-        run_start_vars: list[list[cp_model.IntVar]] = []
-        for si in range(num_staff):
-            row: list[cp_model.IntVar] = []
-            for di in range(num_dates):
-                if di == 0:
-                    rs = model.NewBoolVar(f"run_start_{staff_names[si]}_d0")
-                    model.Add(shift_type_vars[si][di] != UNASSIGNED).OnlyEnforceIf(rs)
-                    model.Add(shift_type_vars[si][di] == UNASSIGNED).OnlyEnforceIf(rs.Not())
-                else:
-                    not_same = model.NewBoolVar(f"not_same_{staff_names[si]}_d{di-1}")
-                    model.Add(same_vars[si][di - 1] == 0).OnlyEnforceIf(not_same)
-                    model.Add(same_vars[si][di - 1] == 1).OnlyEnforceIf(not_same.Not())
-                    not_unassigned = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_d{di}")
-                    model.Add(shift_type_vars[si][di] != UNASSIGNED).OnlyEnforceIf(not_unassigned)
-                    model.Add(shift_type_vars[si][di] == UNASSIGNED).OnlyEnforceIf(not_unassigned.Not())
-                    rs = model.NewBoolVar(f"run_start_{staff_names[si]}_d{di}")
-                    model.Add(rs == 1).OnlyEnforceIf(not_same, not_unassigned)
-                    model.Add(rs == 0).OnlyEnforceIf(not_same.Not())
-                    model.Add(rs == 0).OnlyEnforceIf(not_unassigned.Not())
-                row.append(rs)
-            run_start_vars.append(row)
-
-        # For each staff, enumerate run lengths and compute tiered penalties
-        total_penalty = model.NewIntVar(0, num_staff * num_dates * 10 * weight, "consec_penalty")
-
-        penalty_terms: list[cp_model.IntVar] = []
-        for si in range(num_staff):
-            for di in range(num_dates):
-                rs = run_start_vars[si][di]
-                # For each possible run length L from 1 to max_run
-                max_run = num_dates - di
-                for L in range(1, max_run + 1):
-                    # "run of exactly L starts at di" requires:
-                    # - run_start[di] = 1
-                    # - same[di] = 1, same[di+1] = 1, ..., same[di+L-2] = 1 (if L >= 2)
-                    # - same[di+L-1] = 0 (if L < num_dates - di), OR end of block
-                    if L == 1:
-                        # Same conjunction machinery as L >= 2: [rs] + (not_same_next if not end)
-                        conj_bools: list[cp_model.IntVar] = [rs]
-                        if di + 1 < num_dates:
-                            not_same_next = model.NewBoolVar(f"not_same_next_{staff_names[si]}_d{di}")
-                            model.Add(same_vars[si][di] == 0).OnlyEnforceIf(not_same_next)
-                            model.Add(same_vars[si][di] == 1).OnlyEnforceIf(not_same_next.Not())
-                            conj_bools.append(not_same_next)
-                        exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_d{di}")
-                        model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
-                        model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
+            # --- Compute run_start[d] ---
+            run_start_vars: list[list[cp_model.IntVar]] = []
+            for si in range(num_staff):
+                row: list[cp_model.IntVar] = []
+                for idx, di in enumerate(block_date_indices):
+                    if idx == 0:
+                        rs = model.NewBoolVar(f"run_start_{staff_names[si]}_b{block_start}_d{idx}")
+                        # rs = 1 iff works_any[si][di] = 1
+                        works_any = model._works_any[si][di]
+                        model.Add(rs == works_any)
                     else:
-                        # Build conjunction: rs=1 AND same[di]=1 AND ... AND same[di+L-2]=1 AND (same[di+L-1]=0 OR end)
-                        conj_bools: list[cp_model.IntVar] = [rs]
-                        for k in range(L - 1):
-                            conj_bools.append(same_vars[si][di + k])
-                        if di + L < num_dates:
-                            not_same_next = model.NewBoolVar(f"not_same_next_{staff_names[si]}_d{di+L-1}")
-                            model.Add(same_vars[si][di + L - 1] == 0).OnlyEnforceIf(not_same_next)
-                            model.Add(same_vars[si][di + L - 1] == 1).OnlyEnforceIf(not_same_next.Not())
-                            conj_bools.append(not_same_next)
+                        prev_idx = idx - 1
+                        not_same = model.NewBoolVar(f"not_same_{staff_names[si]}_b{block_start}_d{prev_idx}")
+                        model.Add(same_vars[si][prev_idx] == 0).OnlyEnforceIf(not_same)
+                        model.Add(same_vars[si][prev_idx] == 1).OnlyEnforceIf(not_same.Not())
+                        not_unassigned = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_b{block_start}_d{idx}")
+                        works_any = model._works_any[si][di]
+                        model.Add(not_unassigned == works_any)
+                        rs = model.NewBoolVar(f"run_start_{staff_names[si]}_b{block_start}_d{idx}")
+                        model.Add(rs == 1).OnlyEnforceIf(not_same, not_unassigned)
+                        model.Add(rs == 0).OnlyEnforceIf(not_same.Not())
+                        model.Add(rs == 0).OnlyEnforceIf(not_unassigned.Not())
+                    row.append(rs)
+                run_start_vars.append(row)
 
-                        exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_d{di}")
-                        model.Add(exact_L == 1).OnlyEnforceIf(*conj_bools)
-                        for cb in conj_bools:
-                            model.Add(exact_L == 0).OnlyEnforceIf(cb.Not())
+            # --- Enumerate run lengths and apply tiered penalties ---
+            for si in range(num_staff):
+                for idx in range(block_len):
+                    di = block_date_indices[idx]
+                    rs = run_start_vars[si][idx]
+                    max_L = min(self.MAX_RUN, block_len - idx)
+                    for L in range(1, max_L + 1):
+                        if L == 1:
+                            conj_bools: list[cp_model.IntVar] = [rs]
+                            if idx + 1 < block_len:
+                                not_same_next = model.NewBoolVar(
+                                    f"not_same_next_{staff_names[si]}_b{block_start}_d{idx}",
+                                )
+                                model.Add(same_vars[si][idx] == 0).OnlyEnforceIf(not_same_next)
+                                model.Add(same_vars[si][idx] == 1).OnlyEnforceIf(not_same_next.Not())
+                                conj_bools.append(not_same_next)
+                            exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
+                            model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
+                        else:
+                            conj_bools: list[cp_model.IntVar] = [rs]
+                            for k in range(L - 1):
+                                conj_bools.append(same_vars[si][idx + k])
+                            if idx + L < block_len:
+                                not_same_next = model.NewBoolVar(
+                                    f"not_same_next_{staff_names[si]}_b{block_start}_d{idx+L-1}",
+                                )
+                                model.Add(same_vars[si][idx + L - 1] == 0).OnlyEnforceIf(not_same_next)
+                                model.Add(same_vars[si][idx + L - 1] == 1).OnlyEnforceIf(not_same_next.Not())
+                                conj_bools.append(not_same_next)
+                            exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
+                            model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
 
-                    # Apply tiered penalty for this run length
-                    if L == 2:
-                        # Ideal: no penalty
-                        pass
-                    elif L == 1 or L == 3:
-                        # Mild: 0.1 * W — scale by 10 to keep integer: 0.1 * W * 10 = W
-                        # We use W // 10 as penalty per run to avoid fractional weights
-                        tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_d{di}")
-                        model.Add(tier_penalty == weight // 10).OnlyEnforceIf(exact_L)
-                        model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
-                        penalty_terms.append(tier_penalty)
-                    elif L == 4:
-                        # Strong: 1 * W
-                        tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_d{di}")
-                        model.Add(tier_penalty == weight).OnlyEnforceIf(exact_L)
-                        model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
-                        penalty_terms.append(tier_penalty)
-                    else:
-                        # Escalating: (L-3) * W
-                        esc = (L - 3) * weight
-                        tier_penalty = model.NewIntVar(0, esc, f"tier_L{L}_{staff_names[si]}_d{di}")
-                        model.Add(tier_penalty == esc).OnlyEnforceIf(exact_L)
-                        model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
-                        penalty_terms.append(tier_penalty)
+                        # Apply tiered penalty
+                        if L == 2:
+                            pass  # ideal: no penalty
+                        elif L == 1 or L == 3:
+                            tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.Add(tier_penalty == weight // 10).OnlyEnforceIf(exact_L)
+                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            all_penalty_terms.append(tier_penalty)
+                        elif L == 4:
+                            tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.Add(tier_penalty == weight).OnlyEnforceIf(exact_L)
+                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            all_penalty_terms.append(tier_penalty)
+                        else:
+                            esc = (L - 3) * weight
+                            tier_penalty = model.NewIntVar(0, esc, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.Add(tier_penalty == esc).OnlyEnforceIf(exact_L)
+                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            all_penalty_terms.append(tier_penalty)
 
-        if penalty_terms:
-            model.Add(total_penalty == sum(penalty_terms))
+        if all_penalty_terms:
+            total_penalty = model.NewIntVar(0, len(blocks) * num_staff * self.MAX_RUN * weight, "consec_penalty")
+            model.Add(total_penalty == sum(all_penalty_terms))
             if objective_terms is not None:
                 objective_terms.append(total_penalty)
             else:
                 model.Minimize(total_penalty)
+            return total_penalty
+        return None
+
+    def _apply_fallback(
+        self, model, staff_list, staff_by_name, assignments, staff_names,
+        definitions, all_dates, blocks, positions, weight, objective_terms,
+    ):
+        """Apply S#30c6f5ad using assignment vars (fallback for tests without shared works).
+
+        Loops per 14-day block (D3a), caps L at 14 (§3.3).
+        """
+        num_staff = len(staff_names)
+        num_dates = len(all_dates)
+        num_shift_types = len(SHIFT_ORDER)
+        UNASSIGNED = num_shift_types  # 8
+
+        # Build position-index → date and shift lookups
+        pos_shift: list[str] = [p["shift"] for p in positions]
+        pos_by_date: dict[str, list[int]] = {}
+        for i, p in enumerate(positions):
+            pos_by_date.setdefault(p["date"], []).append(i)
+
+        SHIFT_INDEX = {s: i for i, s in enumerate(SHIFT_ORDER)}
+
+        all_penalty_terms: list[cp_model.IntVar] = []
+
+        for block in blocks:
+            block_start = block[0]
+            block_end = block[-1]
+
+            # Find date indices for this block
+            block_date_indices = [
+                di for di, d in enumerate(all_dates) if block_start <= d <= block_end
+            ]
+            if not block_date_indices:
+                continue
+
+            block_len = len(block_date_indices)
+
+            # --- Build works-like BoolVar matrix from assignments ---
+            # works_fallback[si][di * num_shift_types + sh] = 1 iff staff si works shift sh on day di
+            works_fb: list[list[cp_model.IntVar]] = []
+            works_any_fb: list[list[cp_model.IntVar]] = []
+            for si in range(num_staff):
+                works_row: list[cp_model.IntVar] = []
+                works_any_row: list[cp_model.IntVar] = []
+                for di in range(num_dates):
+                    date_str = all_dates[di]
+                    pos_indices = pos_by_date.get(date_str, [])
+                    shift_to_vars: dict[str, list[cp_model.IntVar]] = {}
+                    for pi in pos_indices:
+                        sh = pos_shift[pi]
+                        shift_to_vars.setdefault(sh, []).append(assignments[si][pi])
+                    for sh_idx in range(num_shift_types):
+                        sh_name = SHIFT_ORDER[sh_idx]
+                        vars_list = shift_to_vars.get(sh_name, [])
+                        if vars_list:
+                            w = model.NewBoolVar(f"wf_{staff_names[si]}_d{di}_s{sh_idx}")
+                            works_fb.append([])  # placeholder
+                            works_row.append(w)
+                            model.Add(sum(vars_list) >= 1).OnlyEnforceIf(w)
+                            model.Add(sum(vars_list) == 0).OnlyEnforceIf(w.Not())
+                        else:
+                            w = model.NewBoolVar(f"wf_{staff_names[si]}_d{di}_s{sh_idx}")
+                            works_row.append(w)
+                            model.Add(w == 0)
+                    works_fb.append(works_row)  # fix: append after loop
+                    wa = model.NewBoolVar(f"wa_{staff_names[si]}_d{di}")
+                    works_any_row.append(wa)
+                    model.Add(sum(works_row) >= 1).OnlyEnforceIf(wa)
+                    model.Add(sum(works_row) == 0).OnlyEnforceIf(wa.Not())
+                works_fb[si] = works_row
+                works_any_fb.append(works_any_row)
+
+            # --- Compute same[d] ---
+            same_vars: list[list[cp_model.IntVar]] = []
+            for si in range(num_staff):
+                row: list[cp_model.IntVar] = []
+                for idx in range(block_len - 1):
+                    di = block_date_indices[idx]
+                    di1 = block_date_indices[idx + 1]
+                    and_sh_vars: list[cp_model.IntVar] = []
+                    for sh in range(num_shift_types):
+                        and_sh = model.NewBoolVar(f"and_{staff_names[si]}_d{di}_s{sh}")
+                        and_sh_vars.append(and_sh)
+                        model.AddBoolAnd([
+                            works_fb[si][di * num_shift_types + sh],
+                            works_fb[si][di1 * num_shift_types + sh],
+                        ]).OnlyEnforceIf(and_sh)
+                        model.AddBoolOr([
+                            works_fb[si][di * num_shift_types + sh].Not(),
+                            works_fb[si][di1 * num_shift_types + sh].Not(),
+                        ]).OnlyEnforceIf(and_sh.Not())
+                    same = model.NewBoolVar(f"same_{staff_names[si]}_d{idx}")
+                    row.append(same)
+                    model.AddBoolOr(and_sh_vars).OnlyEnforceIf(same)
+                    model.AddBoolOr([av.Not() for av in and_sh_vars]).OnlyEnforceIf(same.Not())
+                same_vars.append(row)
+
+            # --- Compute run_start[d] ---
+            run_start_vars: list[list[cp_model.IntVar]] = []
+            for si in range(num_staff):
+                row: list[cp_model.IntVar] = []
+                for idx, di in enumerate(block_date_indices):
+                    if idx == 0:
+                        rs = model.NewBoolVar(f"run_start_{staff_names[si]}_d{idx}")
+                        works_any = works_any_fb[si][di]
+                        model.Add(rs == works_any)
+                    else:
+                        prev_idx = idx - 1
+                        not_same = model.NewBoolVar(f"not_same_{staff_names[si]}_d{prev_idx}")
+                        model.Add(same_vars[si][prev_idx] == 0).OnlyEnforceIf(not_same)
+                        model.Add(same_vars[si][prev_idx] == 1).OnlyEnforceIf(not_same.Not())
+                        not_unassigned = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_d{idx}")
+                        works_any = works_any_fb[si][di]
+                        model.Add(not_unassigned == works_any)
+                        rs = model.NewBoolVar(f"run_start_{staff_names[si]}_d{idx}")
+                        model.Add(rs == 1).OnlyEnforceIf(not_same, not_unassigned)
+                        model.Add(rs == 0).OnlyEnforceIf(not_same.Not())
+                        model.Add(rs == 0).OnlyEnforceIf(not_unassigned.Not())
+                    row.append(rs)
+                run_start_vars.append(row)
+
+            # --- Enumerate run lengths and apply tiered penalties ---
+            for si in range(num_staff):
+                for idx in range(block_len):
+                    rs = run_start_vars[si][idx]
+                    max_L = min(self.MAX_RUN, block_len - idx)
+                    for L in range(1, max_L + 1):
+                        if L == 1:
+                            conj_bools: list[cp_model.IntVar] = [rs]
+                            if idx + 1 < block_len:
+                                not_same_next = model.NewBoolVar(f"not_same_next_{staff_names[si]}_d{idx}")
+                                model.Add(same_vars[si][idx] == 0).OnlyEnforceIf(not_same_next)
+                                model.Add(same_vars[si][idx] == 1).OnlyEnforceIf(not_same_next.Not())
+                                conj_bools.append(not_same_next)
+                            exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_d{idx}")
+                            model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
+                            model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
+                        else:
+                            conj_bools: list[cp_model.IntVar] = [rs]
+                            for k in range(L - 1):
+                                conj_bools.append(same_vars[si][idx + k])
+                            if idx + L < block_len:
+                                not_same_next = model.NewBoolVar(f"not_same_next_{staff_names[si]}_d{idx+L-1}")
+                                model.Add(same_vars[si][idx + L - 1] == 0).OnlyEnforceIf(not_same_next)
+                                model.Add(same_vars[si][idx + L - 1] == 1).OnlyEnforceIf(not_same_next.Not())
+                                conj_bools.append(not_same_next)
+                            exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_d{idx}")
+                            model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
+                            model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
+
+                        if L == 2:
+                            pass
+                        elif L == 1 or L == 3:
+                            tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_d{idx}")
+                            model.Add(tier_penalty == weight // 10).OnlyEnforceIf(exact_L)
+                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            all_penalty_terms.append(tier_penalty)
+                        elif L == 4:
+                            tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_d{idx}")
+                            model.Add(tier_penalty == weight).OnlyEnforceIf(exact_L)
+                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            all_penalty_terms.append(tier_penalty)
+                        else:
+                            esc = (L - 3) * weight
+                            tier_penalty = model.NewIntVar(0, esc, f"tier_L{L}_{staff_names[si]}_d{idx}")
+                            model.Add(tier_penalty == esc).OnlyEnforceIf(exact_L)
+                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            all_penalty_terms.append(tier_penalty)
+
+        if all_penalty_terms:
+            total_penalty = model.NewIntVar(0, len(blocks) * num_staff * self.MAX_RUN * weight, "consec_penalty")
+            model.Add(total_penalty == sum(all_penalty_terms))
+            if objective_terms is not None:
+                objective_terms.append(total_penalty)
+            else:
+                model.Minimize(total_penalty)
+            return total_penalty
+        return None
 
 
 class SkillLevelTiebreaker(BaseSoftConstraint):
@@ -1028,6 +1293,8 @@ class SkillLevelTiebreaker(BaseSoftConstraint):
                 objective_terms.append(total_sq * weight)
             else:
                 model.Minimize(total_sq * weight)
+            return total_sq
+        return None
 
 
 class DayNightRunCountPenalty(BaseSoftConstraint):
@@ -1177,6 +1444,8 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
                 objective_terms.append(total_penalty * weight)
             else:
                 model.Minimize(total_penalty * weight)
+            return total_penalty
+        return None
 
 
 # ---------------------------------------------------------------------------

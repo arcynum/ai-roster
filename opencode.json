@@ -17,7 +17,7 @@
   },
   "plugin": ["@dietrichgebert/ponytail"],
   "compaction": {
-    "auto": false
+    "auto": true
   },
   "provider": {
     "chat": {

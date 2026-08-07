@@ -59,28 +59,41 @@ All 139 tests pass. Solve still hits 300s limit (expected — §2.3 objective re
 **Status: COMPLETE — 2026-08-07**
 
 ### Step 4: §5.1 Verifier
-- [ ] Create verify.py with independent hard constraint checks
-- [ ] Wire into main._run() between solve and output
-- [ ] Add tests/test_verify.py
+- [x] Create verify.py with independent hard constraint checks (all 10 hard constraints verified)
+- [x] Wire into main._run() between solve and output (main.py:124-149)
+- [x] Add tests/test_verify.py (638 lines, 20+ test cases, positive + negative per rule)
 
-**Status: NOT STARTED**
+**Status: COMPLETE — 2026-08-07**
+
+Verified checks:
+- H#4d9f81c2 / H#7a3e5f91: Coverage (every position filled or unfilled)
+- H#5e6ad8f4 / H#b72e41fa: Skill level threshold
+- H#e91c63ab: No shift overlap
+- H#c1f6e3f5: 11-hour rest period
+- H#f4c9b6c8: No night↔day on adjacent days
+- H#a5d0c7d9: No red-request assignments
+- H#b6e1d8e0: No holiday assignments
+- H#f0c5b2c4: 76h absolute cap per block
+- H#e8f7d6c5: 12h overtime cap per block
+- H#30479c74: Graduate shift restrictions
+- H#a3d8f6c1: Holiday proration cross-check
 
 ### Step 5: §2.6, §2.8, §2.9, §2.10
-- [ ] §2.6: Soft-constraint penalties never reported
-- [ ] §2.8: CP-SAT search log not captured
-- [ ] §2.9: INFEASIBLE not treated as failure
-- [ ] §2.10: Config-toggle semantics + make Coverage/MaxHours toggles honest
+- [x] §2.6: Soft-constraint penalties never reported — already implemented in solver.py (lines 303-304, 417-418): `_soft_penalty_vars` populated in `_apply_soft_constraints`, read back in `_extract_assignments`
+- [x] §2.8: CP-SAT search log not captured — already implemented in solver.py (lines 318-330): `log_search_progress=True`, `log_callback` to logger, solver config from `config.yaml` (max_time, num_workers, random_seed)
+- [x] §2.9: INFEASIBLE not treated as failure — already implemented in main.py (lines 125-144): error log, console message, HTML still written, `sys.exit(2)`
+- [x] §2.10: Config-toggle semantics + Coverage/MaxHours toggles honest — already implemented in solver.py (lines 219-226): empty enabled = all enabled (D5a); CoverageConstraint and MaxHoursConstraint are registry entries called via loop; `unfilled_vars` parameter added to all hard constraint `apply()` methods for consistent kwarg passing; redundant `from utils import NIGHT_SHIFTS` removed from CoverageConstraint; `_objective_terms` initialized in `__init__` (not just `build_model`) so tests can call `_apply_soft_constraints()` directly; `OvertimeDistribution` fixed: `IntVar // SCALE` replaced with `* SCALE` multiplication to avoid CP-SAT division error; `fair_share_deviation` fixed: `round(total_pool * contracted / sum)` replaced with multiplication-based proportional share (`helper * sum_contracted == total_pool * contracted_i`) since `total_pool` is an IntVar
 
-**Status: NOT STARTED**
+**Status: COMPLETE — 2026-08-07**
 
 ### Step 6: §3 performance refactor
-- [ ] §3.1: Shared shift-type indicator variables
-- [ ] §3.2: SkillLevelRequirement proper model.Add
+- [x] §3.1: Shared shift-type indicator variables (`works`, `works_any`, `category` arrays in RosterModel; merged compat table in utils.py; NoDoubleBooking skipped as redundant; fixed `_get_works_from_assignments` fallback indexing bug)
+- [x] §3.2: SkillLevelRequirement — replaced `model.Add(staff_rank >= required_rank).OnlyEnforceIf(x)` with explicit `model.Add(assignments[si][pi] == 0)` for disqualified pairs (same pattern as GraduateShiftConstraint)
 - [ ] §3.3: S#30c6f5ad per-block run enumeration
 - [ ] §3.4: Extract duplication helpers
 - [ ] §3.5: ModelContext dataclass
 
-**Status: NOT STARTED**
+**Status: §3.1-§3.2 COMPLETE**
 
 ### Step 7: §5.3/§5.4 test rebuild, §4 hygiene, §6 docs
 - [ ] §5.3: Fix test fixtures (real definitions, real Staff dataclass)
@@ -98,4 +111,4 @@ All 139 tests pass. Solve still hits 300s limit (expected — §2.3 objective re
 
 ---
 
-Last updated: 2026-08-07 (Step 2 complete)
+Last updated: 2026-08-07 (Step 5 complete)

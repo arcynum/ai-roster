@@ -19,7 +19,13 @@ from ortools.sat.python import cp_model
 
 from constraints import HARD_CONSTRAINTS, SOFT_CONSTRAINTS
 from models import RosterSlot
-from utils import NIGHT_SHIFTS, SCALE, is_weekend
+from utils import (
+    NIGHT_SHIFTS,
+    REST_PERIOD_SECONDS,
+    SCALE,
+    SHIFT_ORDER,
+    build_merged_compatibility_table,
+)
 
 if TYPE_CHECKING:
     from models import Staff, RosterPosition
@@ -132,17 +138,22 @@ class RosterModel:
         self._shortfall_vars: list[list[cp_model.IntVar]] = []
         # soft_penalty_vars[cid] -> IntVar for reading back penalty values
         self._soft_penalty_vars: dict[str, cp_model.IntVar] = {}
+        # objective_terms — collected penalty terms for the combined objective
+        self._objective_terms: list[cp_model.IntVar] = []
+
+        # §3.1 Shared shift-type indicator variables
+        # works[staff_idx][date_idx][shift_idx] -> BoolVar
+        #   shift_idx 0-7 for actual shifts, 8 = "unassigned"
+        self.works: list[list[cp_model.IntVar]] = []
+        # works_any[staff_idx][date_idx] -> BoolVar
+        self.works_any: list[list[cp_model.IntVar]] = []
+        # category[staff_idx][date_idx] -> IntVar 0=day, 1=night, 2=off
+        self.category: list[list[cp_model.IntVar]] = []
 
     def build_model(self) -> None:
         """Build the full CP-SAT model: variables, constraints, objective."""
         logger.info("Building CP-SAT model: %d staff, %d positions, %d blocks",
                     len(self.staff_list), len(self.positions), len(self.blocks))
-
-        # Collect all objective penalty terms here; each constraint appends to
-        # this list instead of calling model.Minimize() directly (which would
-        # overwrite the previous objective).  The combined objective is set
-        # once at the end.
-        self._objective_terms: list[cp_model.IntVar] = []
 
         self._create_variables()
         self._apply_hard_constraints()
@@ -211,11 +222,109 @@ class RosterModel:
                     block_vars.append(zero)
             self._staff_hours_vars.append(block_vars)
 
+        # --- §3.1 Shared shift-type indicator variables ---
+        # works[si][di][shift_idx] : BoolVar, 1 iff staff si works shift shift_idx on date di
+        # shift_idx 0-7 maps to SHIFT_ORDER; 8 = "unassigned"
+        # works_any[si][di]        : BoolVar, 1 iff staff si works any shift on date di
+        # category[si][di]         : IntVar, 0=day, 1=night, 2=off
+
+        num_shift_types = len(SHIFT_ORDER)  # 8
+        UNASSIGNED = num_shift_types  # 8
+
+        for si in range(num_staff):
+            works_row: list[cp_model.IntVar] = []
+            works_any_row: list[cp_model.IntVar] = []
+            category_row: list[cp_model.IntVar] = []
+
+            for di, date_str in enumerate(self.all_dates):
+                pos_indices = self.positions_by_date.get(date_str, [])
+
+                # Create BoolVars for each shift type on this date
+                shift_bools: list[cp_model.IntVar] = []
+                for sh_idx in range(num_shift_types):
+                    # Determine which positions have this shift type on this date
+                    pos_with_shift = [
+                        pi for pi in pos_indices
+                        if self.positions[pi]["shift"] == SHIFT_ORDER[sh_idx]
+                    ]
+                    if pos_with_shift:
+                        # Shift BoolVar: 1 iff any assignment for this shift is 1
+                        sb = self.model.NewBoolVar(
+                            f"works_{self.staff_names[si]}_d{di}_s{sh_idx}"
+                        )
+                        shift_bools.append(sb)
+                        # Channel: sb=1 iff sum(assignments for this shift) >= 1
+                        assign_vars = [self._assignment_vars[si][pi] for pi in pos_with_shift]
+                        self.model.Add(sum(assign_vars) >= 1).OnlyEnforceIf(sb)
+                        self.model.Add(sum(assign_vars) == 0).OnlyEnforceIf(sb.Not())
+                    else:
+                        # No positions of this shift type on this date — always 0
+                        sb = self.model.NewBoolVar(
+                            f"works_{self.staff_names[si]}_d{di}_s{sh_idx}"
+                        )
+                        self.model.Add(sb == 0)
+                        shift_bools.append(sb)
+
+                # works_any[si][di]: 1 iff staff works any shift on this date
+                wa = self.model.NewBoolVar(f"works_any_{self.staff_names[si]}_d{di}")
+                self.model.Add(sum(shift_bools) >= 1).OnlyEnforceIf(wa)
+                self.model.Add(sum(shift_bools) == 0).OnlyEnforceIf(wa.Not())
+
+                # category[si][di]: IntVar 0=day, 1=night, 2=off
+                cat = self.model.NewIntVar(0, 2, f"cat_{self.staff_names[si]}_d{di}")
+
+                # Day shifts: indices 0-5 (D8, D12, P8, P12, L3, DISCO)
+                day_bool = self.model.NewBoolVar(f"day_{self.staff_names[si]}_d{di}")
+                day_works = shift_bools[:num_shift_types - 2]  # first 6 = day shifts
+                if day_works:
+                    self.model.Add(sum(day_works) >= 1).OnlyEnforceIf(day_bool)
+                    self.model.Add(sum(day_works) == 0).OnlyEnforceIf(day_bool.Not())
+                else:
+                    self.model.Add(day_bool == 0)
+                self.model.Add(cat == 0).OnlyEnforceIf(day_bool)
+                self.model.Add(cat != 0).OnlyEnforceIf(day_bool.Not())
+
+                # Night shifts: indices 6-7 (N8, N12)
+                night_bool = self.model.NewBoolVar(f"night_{self.staff_names[si]}_d{di}")
+                night_works = shift_bools[-2:]  # last 2 = night shifts
+                if night_works:
+                    self.model.Add(sum(night_works) >= 1).OnlyEnforceIf(night_bool)
+                    self.model.Add(sum(night_works) == 0).OnlyEnforceIf(night_bool.Not())
+                else:
+                    self.model.Add(night_bool == 0)
+                self.model.Add(cat == 1).OnlyEnforceIf(night_bool)
+                self.model.Add(cat != 1).OnlyEnforceIf(night_bool.Not())
+
+                # Off: neither day nor night
+                self.model.Add(cat == 2).OnlyEnforceIf(day_bool.Not(), night_bool.Not())
+
+                works_row.extend(shift_bools)
+                works_any_row.append(wa)
+                category_row.append(cat)
+
+            self.works.append(works_row)
+            self.works_any.append(works_any_row)
+            self.category.append(category_row)
+
+        # Store on CpModel for constraint access (same pattern as _merged_compat)
+        self.model._works = self.works
+        self.model._works_any = self.works_any
+        self.model._category = self.category
+
         logger.info("Created %d assignment BoolVars, %d staff-hour IntVars",
-                     num_staff * num_positions, num_staff * num_blocks)
+                      num_staff * num_positions, num_staff * num_blocks)
+        logger.info("Created §3.1 shared indicator vars: works (%d), works_any (%d), category (%d)",
+                      num_staff * self.num_dates * num_shift_types,
+                      num_staff * self.num_dates,
+                      num_staff * self.num_dates)
 
     def _apply_hard_constraints(self) -> None:
-        """Apply hard constraints to the model, filtered by config."""
+        """Apply hard constraints to the model, filtered by config.
+
+        §3.1: Builds the merged compatibility table (rest + night/day) once
+        at startup and attaches it to the model. NoDoubleBooking is skipped
+        when RestPeriodConstraint is enabled (redundant).
+        """
         enabled_ids: set[str] | None = None
         if self.constraint_config is not None:
             raw = self.constraint_config.get("hard", {}).get("enabled")
@@ -224,6 +333,52 @@ class RosterModel:
             # If raw is None or empty list, enabled_ids stays None → all
             # constraints enabled (empty list = section present but no entries
             # uncommented, which should behave identically to absent section).
+
+        # §3.1: Build merged compatibility table once at startup
+        # AND-ed table of RestPeriodConstraint + NightToDayRest
+        # (NoDoubleBooking is redundant with RestPeriodConstraint)
+        rest_enabled = (enabled_ids is None or "[H#c1f6e3f5]" in enabled_ids)
+        night_day_enabled = (enabled_ids is None or "[H#f4c9b6c8]" in enabled_ids)
+        if rest_enabled and night_day_enabled:
+            self.model._merged_compat = build_merged_compatibility_table(self.definitions)
+            logger.debug("Built merged compatibility table (rest + night/day) for §3.1")
+        elif rest_enabled:
+            # Only rest period — build rest-only table (8×8, missing shifts = False)
+            from datetime import datetime, timedelta
+            n = len(SHIFT_ORDER)
+            compat = [[True] * n for _ in range(n)]
+            for a_idx, shift_a in enumerate(SHIFT_ORDER):
+                for b_idx, shift_b in enumerate(SHIFT_ORDER):
+                    if shift_a not in self.definitions or shift_b not in self.definitions:
+                        compat[a_idx][b_idx] = False
+                        continue
+                    a_end_str = self.definitions[shift_a]["end"]
+                    a_crosses = self.definitions[shift_a]["crosses_midnight"]
+                    b_start_str = self.definitions[shift_b]["start"]
+                    a_end = datetime.strptime(a_end_str, "%H:%M:%S")
+                    b_start = datetime.strptime(b_start_str, "%H:%M:%S")
+                    a_end_abs = a_end + timedelta(days=1 if a_crosses else 0)
+                    b_start_abs = b_start + timedelta(days=1)
+                    gap = (b_start_abs - a_end_abs).total_seconds()
+                    compat[a_idx][b_idx] = gap >= REST_PERIOD_SECONDS
+            self.model._merged_compat = compat
+            logger.debug("Built rest-only compatibility table for §3.1")
+        elif night_day_enabled:
+            # Only night/day — build night/day-only table (8×8, missing shifts = False)
+            n = len(SHIFT_ORDER)
+            compat = [[True] * n for _ in range(n)]
+            for a_idx, shift_a in enumerate(SHIFT_ORDER):
+                for b_idx, shift_b in enumerate(SHIFT_ORDER):
+                    if shift_a not in self.definitions or shift_b not in self.definitions:
+                        compat[a_idx][b_idx] = False
+                        continue
+                    a_is_night = shift_a in NIGHT_SHIFTS
+                    b_is_night = shift_b in NIGHT_SHIFTS
+                    if a_is_night != b_is_night:
+                        compat[a_idx][b_idx] = False
+            self.model._merged_compat = compat
+            logger.debug("Built night/day-only compatibility table for §3.1")
+        # else: neither is enabled, no table needed
 
         applied = 0
         skipped = 0
@@ -235,7 +390,7 @@ class RosterModel:
                 continue
             constraint = constraint_cls()
             logger.debug("Applying hard constraint %s", cid)
-            constraint.apply(
+            result = constraint.apply(
                 model=self.model,
                 staff_list=self.staff_list,
                 staff_by_name=self.staff_by_name,
@@ -246,16 +401,12 @@ class RosterModel:
                 blocks=self.blocks,
                 positions=self.positions,
                 staff_hours_vars=self._staff_hours_vars,
+                unfilled_vars=self._unfilled_vars,
             )
+            # Collect penalty terms returned by hard constraints (e.g. Coverage)
+            if isinstance(result, list) and result:
+                self._objective_terms.extend(result)
             applied += 1
-
-        # Add coverage constraint: every position must be filled by a named staff or left unfilled
-        self._apply_coverage_constraint()
-
-        # Append unfilled penalty to the shared objective terms
-        # (the coverage constraint creates these internally)
-        if hasattr(self, "_objective_terms") and hasattr(self, "_unfilled_penalty_terms") and self._unfilled_penalty_terms:
-            self._objective_terms.extend(self._unfilled_penalty_terms)
 
         # Warn if 0 hard constraints were enabled (likely a config error)
         if applied == 0 and enabled_ids is not None:
@@ -265,68 +416,6 @@ class RosterModel:
             )
 
         logger.info("Hard constraints: %d applied, %d skipped", applied, skipped)
-
-    def _apply_coverage_constraint(self) -> None:
-        """Add coverage constraints for all positions.
-
-        Every position must be filled by exactly one named staff member or
-        left unfilled. An unfilled position incurs a tiered penalty in the
-        objective based on the position's desirability (skill criticality,
-        day of week, and shift type). Higher penalty = less likely to
-        be left unfilled. See [S#e7f3a2b1].
-
-        Tier ordering (per plan.md §1.2):
-        1. Skill-required (220000)
-        2. Sunday, any shift (210000)
-        3. Saturday, any shift (200000)
-        4. Weekday day/afternoon, General (160000)
-        5. Weekday night, General (140000) — first to go unfilled
-        """
-        from datetime import date as date_type
-
-        num_positions = len(self.positions)
-        num_staff = len(self.staff_names)
-
-        # Unfilled tier weights from weights.yaml (bracketed keys)
-        tier_skill_required = self.weights.get("[S#e7f3a2b1]", 220000)
-        tier_sunday = self.weights.get("[S#f1a2b3c4]", 210000)
-        tier_saturday = self.weights.get("[S#a2b3c4d5]", 200000)
-        tier_weekday_day = self.weights.get("[S#b3c4d5e6]", 160000)
-        tier_weekday_night = self.weights.get("[S#c4d5e6f7]", 140000)
-
-        self._unfilled_penalty_terms: list[cp_model.IntVar] = []
-        for pi in range(num_positions):
-            pos = self.positions[pi]
-            required_skill = pos.get("required_skill_level")
-            shift = pos["shift"]
-            pos_date = date_type.fromisoformat(pos["date"])
-            is_sunday = pos_date.weekday() == 6
-            is_saturday = pos_date.weekday() == 5
-            is_night = shift in NIGHT_SHIFTS
-
-            # Determine tier weight — priority: skill > Sunday > Saturday > weekday day > weekday night
-            if required_skill is not None:
-                weight = tier_skill_required
-            elif is_sunday:
-                weight = tier_sunday
-            elif is_saturday:
-                weight = tier_saturday
-            elif is_night:
-                weight = tier_weekday_night
-            else:
-                weight = tier_weekday_day
-
-            penalty = self.model.NewIntVar(0, weight, f"unfilled_penalty_{pi}")
-            self.model.Add(penalty == weight).OnlyEnforceIf(self._unfilled_vars[pi])
-            self.model.Add(penalty == 0).OnlyEnforceIf(self._unfilled_vars[pi].Not())
-            self._unfilled_penalty_terms.append(penalty)
-
-        for pi in range(num_positions):
-            staff_vars = [self._assignment_vars[si][pi] for si in range(num_staff)]
-            options = list(staff_vars) + [self._unfilled_vars[pi]]
-            self.model.Add(sum(options) == 1)
-
-        logger.info("Coverage constraints added: %d positions", num_positions)
 
     def _apply_soft_constraints(self) -> None:
         """Apply soft constraints as objective penalties, filtered by config."""
@@ -359,12 +448,15 @@ class RosterModel:
                 positions=self.positions,
                 staff_hours_vars=self._staff_hours_vars,
                 weight=weight,
-                objective_terms=getattr(self, "_objective_terms", None),
+                objective_terms=self._objective_terms,
             )
-            constraint.apply(**apply_kwargs)
+            penalty_var = constraint.apply(**apply_kwargs)
             # Capture shortfall_vars from the soft floor constraint
             if hasattr(constraint, "_shortfall_vars"):
                 self._shortfall_vars = constraint._shortfall_vars
+            # Store returned penalty var for reading back after solve
+            if penalty_var is not None:
+                self._soft_penalty_vars[cid] = penalty_var
             applied += 1
 
         logger.info("Soft constraints: %d applied, %d skipped", applied, skipped)
@@ -376,8 +468,21 @@ class RosterModel:
             SolveResult with status, objective, assignments, etc.
         """
         logger.info("Running CP-SAT solver...")
-        self.solver.parameters.max_time_in_seconds = 300.0  # 5 minute limit
-        self.solver.parameters.num_workers = 8
+
+        # Source solver parameters from config (D6), with sensible defaults
+        solver_config = (self.constraint_config or {}).get("solver", {})
+        max_time = solver_config.get("max_time_in_seconds", 300.0)
+        num_workers = solver_config.get("num_workers", 8)
+        random_seed = solver_config.get("random_seed")
+
+        self.solver.parameters.max_time_in_seconds = max_time
+        self.solver.parameters.num_workers = num_workers
+        if random_seed is not None:
+            self.solver.parameters.random_seed = random_seed
+
+        # Capture CP-SAT search log to the run log (AGENTS.md §6)
+        self.solver.parameters.log_search_progress = True
+        self.solver.log_callback = lambda line: logger.debug("cp-sat: %s", line)
 
         status_map = {
             cp_model.OPTIMAL: "OPTIMAL",
@@ -391,7 +496,7 @@ class RosterModel:
         solve_time = time.perf_counter() - solve_start
 
         status_str = status_map.get(status, f"UNKNOWN({status})")
-        obj_val = int(self.solver.ObjectiveValue())
+        obj_val = int(self.solver.ObjectiveValue()) if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else 0
 
         logger.info("Solver status: %s, objective: %d, time: %.2fs",
                     status_str, obj_val, solve_time)
@@ -400,14 +505,14 @@ class RosterModel:
             status=status_str,
             objective_value=obj_val,
             solve_time_s=solve_time,
-            hard_constraints=getattr(self, "_hard_constraints", []),
-            soft_constraints=getattr(self, "_soft_constraints", []),
+            hard_constraints=self._hard_constraints,
+            soft_constraints=self._soft_constraints,
         )
 
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             self._extract_assignments(result)
         else:
-            logger.error("Solver did not find a valid solution")
+            logger.error("Solver did not find a valid solution (status=%s)", status_str)
 
         return result
 
@@ -452,7 +557,7 @@ class RosterModel:
             )
 
         # Read back shortfall values per staff per block
-        if hasattr(self, "_shortfall_vars") and self._shortfall_vars:
+        if self._shortfall_vars:
             for si, staff in enumerate(self.staff_list):
                 staff_shortfall: dict[str, float] = {}
                 for bi in range(len(self.blocks)):
@@ -463,10 +568,9 @@ class RosterModel:
                         staff_shortfall[block_key] = val / SCALE
                 result.shortfall[staff.name] = staff_shortfall
 
-        # Read back soft-constraint penalty values
-        if hasattr(self, "_soft_penalty_vars") and self._soft_penalty_vars:
-            for cid, var in self._soft_penalty_vars.items():
-                result.soft_penalty[cid] = self.solver.Value(var) / SCALE
+        # Read back soft-constraint penalty values (no / SCALE — penalties are whole numbers after §2.3)
+        for cid, var in self._soft_penalty_vars.items():
+            result.soft_penalty[cid] = self.solver.Value(var)
 
         logger.info("Extracted %d assignments, %d unfilled positions",
                        len(result.assignments), len(result.unfilled))
