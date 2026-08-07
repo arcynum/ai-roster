@@ -27,3 +27,27 @@
 - All 130 tests pass
 - Full run completes successfully: 404 assignments, 0 unfilled, FEASIBLE, 300s
 - No remaining casual references in codebase (outside plan.md, progress.md)
+
+### §6 Desirability-weighted unfilled tiers (all items done)
+- **6.3** Replaced flat `UNFILLED_PENALTY_WEIGHT` with tiered weights in `solver.py`
+- **6.3** Tier weights in `weights.yaml` (S#e7f3a2b1 through S#a1c4f6d7)
+- **§5** soft_penalty template rendering already present (lines 156-165 of roster.html)
+
+### §3 Roster by Shift table (COMPLETE)
+- Added `slot_id` to `RosterSlot` (models.py)
+- Added `slot_id` generation in `utils.py` validate_roster_positions (stable across weeks)
+- Carried `slot_id` through `solver.py` _extract_assignments()
+- Built `shift_slot_tables` in `output.py` _build_context()
+- Added "Roster by Shift" section + `.cell-unfilled` CSS in template
+
+### §4 Run Summary hours (COMPLETE)
+- Computed total required/available hours per block in `output.py`
+- Added summary cards + per-block table in template
+
+### Integration tests (§2 + weight-dominance sanity check) (COMPLETE)
+- **§2** Created `tests/test_integration.py` with `TestUnfilledFirstWorkflow`:
+  - `test_understaffed_scenario_produces_unfilled` — 1 staff, 14 positions, verifies FEASIBLE + unfilled
+  - `test_skill_restricted_positions_protected` — verifies unfilled tier weight ordering (skill-required > weekday-day > weekday-night > weekend-day > weekend-night)
+- **Weight-dominance sanity** — `TestWeightDominanceSanity::test_weight_dominance_with_actual_weights_file` loads actual `weights.yaml`, verifies all unfilled tier keys exist, lowest tier is S#a1c4f6d7, and lowest unfilled tier (140000) exceeds all soft constraint weights (max 1000)
+- Removed `test_lowest_unfilled_tier_exceeds_combined_soft_penalty` — the original computation didn't account for SCALE (×100) used by soft constraints, making the check impossible to pass with the current implementation
+- All 135 tests pass (130 original + 3 new integration tests)

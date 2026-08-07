@@ -95,6 +95,7 @@ tr:nth-child(even) { background: #fafafa; }
 .matrix-table th:first-child { position: sticky; left: 0; z-index: 2; background: #f5f5f5; }
 .matrix-table .weekend-col td:first-child { background: #fafaff; }
 .matrix-table .weekend-col th:first-child { background: #e8eaf6; }
+.matrix-table td.cell-unfilled { background: #ffebee; color: #c5221f; font-weight: 600; }
 
 /* Block tables */
 .block-table { margin: 0.75rem 0 0.5rem 0; font-size: 0.85rem; }
@@ -141,7 +142,40 @@ tr:nth-child(even) { background: #fafafa; }
     <div class="label">Unfilled Positions</div>
     <div class="value warning">{{ unfilled|length }}</div>
   </div>
+  <div class="summary-card">
+    <div class="label">Hours Required</div>
+    <div class="value">{{ hours_summary.total_required|round(1) }}h</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Staff Hours Available</div>
+    <div class="value">{{ hours_summary.total_available|round(1) }}h</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Hours Surplus / Shortfall</div>
+    <div class="value {{ hours_summary.total_light }}">{{ hours_summary.total_label }}</div>
+  </div>
 </div>
+
+<!-- Hours Summary by Block -->
+<h2>Hours Summary by Block</h2>
+<table class="block-table">
+<tr>
+  <th>Block</th>
+  <th>Period</th>
+  <th>Required</th>
+  <th>Available</th>
+  <th>Surplus / Shortfall</th>
+</tr>
+{% for b in hours_summary.blocks %}
+<tr>
+  <td>Block {{ b.block_idx + 1 }}</td>
+  <td>{{ b.block_start }} &ndash; {{ b.block_end }}</td>
+  <td>{{ b.required|round(1) }}h</td>
+  <td>{{ b.available|round(1) }}h</td>
+  <td><span class="badge {{ b.surplus_badge }}"><span class="{{ b.surplus_light }}"></span>{{ b.surplus_label }}</span></td>
+</tr>
+{% endfor %}
+</table>
 
 <!-- Messages -->
 <h2>Messages</h2>
@@ -200,6 +234,39 @@ tr:nth-child(even) { background: #fafafa; }
 </tbody>
 </table>
 </div>
+
+<!-- Roster by Shift -->
+<h2>Roster by Shift</h2>
+{% for shift_type, slots in shift_slot_tables.items() %}
+<h3>{{ shift_type }}</h3>
+<div class="matrix-container">
+<table class="matrix-table">
+<thead>
+<tr>
+  <th>Slot</th>
+  {% for d in all_dates %}
+    <th class="{{ 'weekend-col' if d.is_weekend else '' }}" title="{{ d.day_name }}">
+      {{ d.day }}<br>{{ d.abbrev }}
+    </th>
+  {% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for slot_id, by_date in slots.items() %}
+  <tr>
+    <td>{{ slot_id }}</td>
+    {% for d in all_dates %}
+      {% set who = by_date[d.date_str] %}
+      <td class="{{ 'weekend-col' if d.is_weekend else '' }} {{ 'cell-unfilled' if who == 'UNFILLED' else '' }}">
+        {{ who or '' }}
+      </td>
+    {% endfor %}
+  </tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endfor %}
 
 <!-- Roster by Staff -->
 <h2>Roster by Staff</h2>

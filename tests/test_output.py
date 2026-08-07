@@ -242,3 +242,54 @@ class TestBuildContext:
         assert all(v is None for v in ctx["staff_matrix"]["Nobody"].values())
         assert ctx["staff_info"]["Nobody"]["total_hours"] == 0
         assert ctx["staff_info"]["Nobody"]["shifts"] == []
+
+    def test_shift_slot_tables_present(self):
+        """shift_slot_tables should be in context with correct structure."""
+        start = date(2026, 8, 3)
+        end = date(2026, 8, 16)
+        blocks = [[start + timedelta(days=i) for i in range(14)]]
+        staff = [self._make_staff("Alice")]
+        result = SolveResult(
+            status="OPTIMAL",
+            assignments=[],
+            unfilled=[{"date": "2026-08-03", "shift": "D8", "slot_id": "D8-General-1"}],
+        )
+        definitions = {s: {"paid_hours": 8.0, "crosses_midnight": False} for s in SHIFT_TYPES}
+        positions = [
+            {"shift": "D8", "slot_id": "D8-General-1", "date": "2026-08-03"},
+            {"shift": "D12", "slot_id": "D12-General-1", "date": "2026-08-03"},
+        ]
+
+        ctx = _build_context(result, staff, definitions, start, end, blocks, positions=positions)
+
+        assert "shift_slot_tables" in ctx
+        assert "D8" in ctx["shift_slot_tables"]
+        assert "D12" in ctx["shift_slot_tables"]
+        assert "D8-General-1" in ctx["shift_slot_tables"]["D8"]
+        assert ctx["shift_slot_tables"]["D8"]["D8-General-1"]["2026-08-03"] == "UNFILLED"
+
+    def test_hours_summary_present(self):
+        """hours_summary should be in context with required keys."""
+        start = date(2026, 8, 3)
+        end = date(2026, 8, 16)
+        blocks = [[start + timedelta(days=i) for i in range(14)]]
+        staff = [self._make_staff("Alice", contracted=56)]
+        result = SolveResult(status="OPTIMAL", assignments=[], unfilled=[])
+        definitions = {"D8": {"paid_hours": 8.0, "crosses_midnight": False}}
+        positions = [{"shift": "D8", "slot_id": "D8-General-1", "date": f"2026-08-{3+i:02d}"} for i in range(14)]
+
+        ctx = _build_context(result, staff, definitions, start, end, blocks, positions=positions)
+
+        assert "hours_summary" in ctx
+        hs = ctx["hours_summary"]
+        assert "total_required" in hs
+        assert "total_available" in hs
+        assert "total_surplus" in hs
+        assert "total_light" in hs
+        assert "total_badge" in hs
+        assert "total_label" in hs
+        assert "blocks" in hs
+        assert len(hs["blocks"]) == 1
+        assert "required" in hs["blocks"][0]
+        assert "available" in hs["blocks"][0]
+        assert "surplus" in hs["blocks"][0]

@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 from jinja2 import Environment, FileSystemLoader
 
-from utils import NIGHT_SHIFTS, OUTPUT_DIR, SCALE, compute_adjusted_hours, is_weekend
+from utils import NIGHT_SHIFTS, OUTPUT_DIR, SCALE, SHIFT_ORDER, compute_adjusted_hours, is_weekend
 
 if TYPE_CHECKING:
     from models import Staff, RosterSlot
@@ -99,6 +99,7 @@ def _build_context(
     roster_start: date,
     roster_end: date,
     blocks: list[list[date]],
+    positions: list[dict] | None = None,
     hard_constraints: list[dict] | None = None,
     soft_constraints: list[dict] | None = None,
 ) -> dict:
@@ -225,6 +226,87 @@ def _build_context(
 
         staff_blocks[staff.name] = block_data
 
+    # Build shift_slot_tables: shift_type → slot_id → {date_str: staff_name_or_UNFILLED}
+    all_date_str_list = sorted(all_date_strs)
+    shift_slot_tables: dict[str, dict[str, dict[str, str | None]]] = {}
+    positions = positions or []
+    for shift_type in SHIFT_ORDER:
+        slot_ids = sorted({p["slot_id"] for p in positions if p.get("shift") == shift_type})
+        if not slot_ids:
+            continue
+        if len(slot_ids) > 15:
+            logger.warning(
+                "Shift %s has %d unique slots (cap 15) — truncating for display",
+                shift_type, len(slot_ids),
+            )
+        slot_ids = slot_ids[:15]
+        table: dict[str, dict[str, str | None]] = {sid: {ds: None for ds in all_date_str_list} for sid in slot_ids}
+        shift_slot_tables[shift_type] = table
+
+    # Populate from assignments
+    for slot in result.assignments:
+        sid = getattr(slot, "slot_id", None)
+        if sid and slot.date in shift_slot_tables.get(slot.shift, {}):
+            shift_slot_tables[slot.shift][sid][slot.date] = slot.staff_name
+
+    # Populate unfilled positions
+    for pos in result.unfilled:
+        sid = pos.get("slot_id")
+        if sid and sid in shift_slot_tables.get(pos["shift"], {}):
+            shift_slot_tables[pos["shift"]][sid][pos["date"]] = "UNFILLED"
+
+    # Compute hours summary: total required vs. staff available
+    total_required_hours = sum(
+        definitions[pos["shift"]]["paid_hours"] for pos in positions
+    )
+
+    hours_summary_blocks: list[dict] = []
+    total_available_hours = 0.0
+    for bi, block in enumerate(blocks):
+        block_dates = [d.isoformat() for d in block]
+        block_required = sum(
+            definitions[pos["shift"]]["paid_hours"]
+            for pos in positions
+            if pos["date"] in block_dates
+        )
+        block_available = 0.0
+        for staff in staff_list:
+            adjusted_scaled = compute_adjusted_hours(
+                staff.contracted_hours_per_fortnight,
+                staff.holidays,
+                block_dates,
+            )
+            block_available += adjusted_scaled / SCALE
+        total_available_hours += block_available
+        block_surplus = block_available - block_required
+        block_surplus_pct = (block_surplus / block_required * 100) if block_required > 0 else 0.0
+        if block_surplus_pct >= 0:
+            surplus_light, surplus_badge, surplus_label = "light-green", "badge-green", f"+{block_surplus:.1f}h"
+        elif block_surplus_pct >= -20:
+            surplus_light, surplus_badge, surplus_label = "light-yellow", "badge-yellow", f"{block_surplus:.1f}h"
+        else:
+            surplus_light, surplus_badge, surplus_label = "light-red", "badge-red", f"{block_surplus:.1f}h"
+        hours_summary_blocks.append({
+            "block_idx": bi,
+            "block_start": block[0].isoformat(),
+            "block_end": block[-1].isoformat(),
+            "required": block_required,
+            "available": block_available,
+            "surplus": block_surplus,
+            "surplus_pct": block_surplus_pct,
+            "surplus_light": surplus_light,
+            "surplus_badge": surplus_badge,
+            "surplus_label": surplus_label,
+        })
+
+    total_surplus = total_available_hours - total_required_hours
+    if total_surplus >= 0:
+        total_light, total_badge, total_label = "light-green", "badge-green", f"+{total_surplus:.1f}h"
+    elif total_surplus >= -20:
+        total_light, total_badge, total_label = "light-yellow", "badge-yellow", f"{total_surplus:.1f}h"
+    else:
+        total_light, total_badge, total_label = "light-red", "badge-red", f"{total_surplus:.1f}h"
+
     return {
         "generate_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "roster_start": roster_start.isoformat(),
@@ -238,6 +320,16 @@ def _build_context(
         "staff_matrix": staff_matrix,
         "staff_info": staff_info,
         "staff_blocks": staff_blocks,
+        "shift_slot_tables": shift_slot_tables,
+        "hours_summary": {
+            "total_required": total_required_hours,
+            "total_available": total_available_hours,
+            "total_surplus": total_surplus,
+            "total_light": total_light,
+            "total_badge": total_badge,
+            "total_label": total_label,
+            "blocks": hours_summary_blocks,
+        },
         "soft_penalty": result.soft_penalty,
         "hard_constraints": result.hard_constraints,
         "soft_constraints": result.soft_constraints,
@@ -252,6 +344,7 @@ def generate_html(
     roster_end: date,
     blocks: list[list[date]],
     run_id: str,
+    positions: list[dict] | None = None,
     hard_constraints: list[dict] | None = None,
     soft_constraints: list[dict] | None = None,
 ) -> Path:
@@ -269,9 +362,10 @@ def generate_html(
     template = env.get_template("roster.html")
 
     context = _build_context(result, staff_list, definitions,
-                              roster_start, roster_end, blocks,
-                              hard_constraints=hard_constraints,
-                              soft_constraints=soft_constraints)
+                               roster_start, roster_end, blocks,
+                               positions=positions,
+                               hard_constraints=hard_constraints,
+                               soft_constraints=soft_constraints)
     html = template.render(**context)
 
     output_path.write_text(html, encoding="utf-8")

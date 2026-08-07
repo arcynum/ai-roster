@@ -118,6 +118,7 @@ def _run(run_id: str) -> None:
     from output import generate_html
     generate_html(result, staff_list, definitions,
                   roster_start, roster_end, blocks, run_id,
+                  positions=positions,
                   hard_constraints=hard_constraints,
                   soft_constraints=soft_constraints)
 

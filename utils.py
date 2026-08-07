@@ -412,7 +412,7 @@ def validate_roster_positions(roster_data: dict, definitions: dict,
     """Validate every roster position entry.
 
     Returns a flat list of position dicts, each with its resolved date,
-    day-of-week name, shift type, and required skill level.
+    day-of-week name, shift type, required skill level, and slot_id.
     """
     positions: list[dict] = []
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
@@ -420,7 +420,12 @@ def validate_roster_positions(roster_data: dict, definitions: dict,
 
     roster_positions = roster_data.get("roster_positions", {})
 
+    # Track slot counters per (week_offset, day_name, shift, skill_label) so
+    # the same slot_id is assigned identically every week of the roster period.
+    slot_counters: dict[tuple[int, str, str, str | None], int] = {}
+
     current = start_date
+    week_offset = 0
     while current <= end_date:
         day_name = day_names[current.weekday()]
         day_entries = roster_positions.get(day_name, [])
@@ -442,13 +447,22 @@ def validate_roster_positions(roster_data: dict, definitions: dict,
                     f"'{required_skill}'"
                 )
 
+            skill_label = required_skill if required_skill is not None else "General"
+            counter_key = (week_offset, day_name, shift, skill_label)
+            slot_counters[counter_key] = slot_counters.get(counter_key, 0) + 1
+            n = slot_counters[counter_key]
+            slot_id = f"{shift}-{skill_label}-{n}"
+
             positions.append({
                 "date": current.isoformat(),
                 "day_name": day_name,
                 "shift": shift,
                 "required_skill_level": required_skill,
+                "slot_id": slot_id,
             })
 
+        if (current - start_date).days % 14 == 13:
+            week_offset += 1
         current += timedelta(days=1)
 
     return positions

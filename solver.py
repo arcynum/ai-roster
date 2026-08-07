@@ -414,6 +414,7 @@ class RosterModel:
                         date=pos["date"],
                         shift=pos["shift"],
                         required_skill_level=pos.get("required_skill_level"),
+                        slot_id=pos.get("slot_id"),
                     ))
                     unfilled_set.discard(pi)
 
@@ -424,6 +425,7 @@ class RosterModel:
                 "date": pos["date"],
                 "shift": pos["shift"],
                 "required_skill_level": pos.get("required_skill_level"),
+                "slot_id": pos.get("slot_id"),
             })
 
         # Compute staff hours from assignments

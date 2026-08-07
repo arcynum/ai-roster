@@ -160,3 +160,4 @@ class RosterSlot:
     date: str
     shift: str
     required_skill_level: Optional[str] = None
+    slot_id: Optional[str] = None
