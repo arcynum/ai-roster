@@ -15,11 +15,11 @@ from typing import TYPE_CHECKING
 
 from utils import (
     DAY_SHIFTS,
-    NIGHT_HOURS,
     NIGHT_SHIFTS,
     REST_PERIOD_SECONDS,
     SCALE,
     SHIFT_ORDER,
+    fair_share_deviation,
 )
 
 if TYPE_CHECKING:
@@ -586,31 +586,20 @@ class OvertimeDistribution(BaseSoftConstraint):
         num_blocks = len(blocks)
 
         # Compute overtime per staff per block: max(0, hours - contracted)
+        # Work in whole hours (not scaled) for the fairness helper.
         overtime_vars: list[cp_model.IntVar] = []
         for si, staff in enumerate(staff_list):
-            contracted_scaled = int(round(staff.contracted_hours_per_fortnight * SCALE))
+            contracted_whole = int(round(staff.contracted_hours_per_fortnight))
             for bi in range(num_blocks):
-                ot = model.NewIntVar(0, 76 * SCALE, f"ot_{staff_names[si]}_b{bi}")
-                model.Add(ot >= staff_hours_vars[si][bi] - contracted_scaled)
+                ot = model.NewIntVar(0, 76, f"ot_{staff_names[si]}_b{bi}")
+                model.Add(ot >= staff_hours_vars[si][bi] // SCALE - contracted_whole)
                 model.Add(ot >= 0)
                 overtime_vars.append(ot)
 
-        # Total overtime across all staff and blocks
-        total_ot = model.NewIntVar(0, num_staff * num_blocks * 76 * SCALE, "total_overtime_dist")
-        model.Add(total_ot == sum(overtime_vars))
-
-        # Deviation from mean (scaled by n to avoid division):
-        # dev[s] = |overtime[s] * n - total_overtime|
-        n = num_staff * num_blocks
-        deviation_vars: list[cp_model.IntVar] = []
-        for ot_var in overtime_vars:
-            deviation = model.NewIntVar(0, 76 * SCALE * n, "ot_dev")
-            model.Add(deviation >= ot_var * n - total_ot)
-            model.Add(deviation >= total_ot - ot_var * n)
-            deviation_vars.append(deviation)
-
-        total_deviation = model.NewIntVar(0, 76 * SCALE * n * n, "total_ot_dev")
-        model.Add(total_deviation == sum(deviation_vars))
+        contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
+        total_deviation = fair_share_deviation(
+            model, overtime_vars, contracted_list, "ot_dev",
+        )
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
         else:
@@ -646,59 +635,48 @@ class WeekdayNightFairness(BaseSoftConstraint):
         # Build position-index → date and shift lookups
         pos_date: list[str] = [p["date"] for p in positions]
 
-        night_dev_vars: list[cp_model.IntVar] = []
+        total_night_dev = model.NewIntVar(0, num_staff * num_blocks * 76, "total_night_dev")
 
         for bi, block in enumerate(blocks):
             block_set = set(block)
 
-            # Night position indices and their scaled paid hours for this block
+            # Night position indices and their paid hours for this block
             # EXCLUDE weekend nights (Saturday/Sunday) per plan.md §1.3a
             night_pos_indices: list[int] = []
-            night_scaled_hours: list[int] = []
+            night_hours: list[int] = []
             for pi, pos in enumerate(positions):
                 if pos["date"] in block_set and pos["shift"] in NIGHT_SHIFTS:
                     pos_dt = date_type.fromisoformat(pos["date"])
                     if pos_dt.weekday() not in (5, 6):  # exclude Saturday/Sunday
                         night_pos_indices.append(pi)
-                        paid = NIGHT_HOURS[pos["shift"]]
-                        night_scaled_hours.append(int(round(paid * SCALE)))
+                        paid = definitions[pos["shift"]]["paid_hours"]
+                        night_hours.append(int(paid))
 
             if not night_pos_indices:
                 continue
 
-            # Per-staff night hours for this block (scaled)
+            # Per-staff night hours for this block (whole hours)
             staff_night_hours_block: list[cp_model.IntVar] = []
             for si in range(num_staff):
                 terms = [
-                    night_scaled_hours[j] * assignments[si][night_pos_indices[j]]
+                    night_hours[j] * assignments[si][night_pos_indices[j]]
                     for j in range(len(night_pos_indices))
                 ]
-                nh = model.NewIntVar(0, 76 * SCALE, f"night_h_{staff_names[si]}_b{bi}")
+                nh = model.NewIntVar(0, 76, f"night_h_{staff_names[si]}_b{bi}")
                 model.Add(nh == sum(terms))
                 staff_night_hours_block.append(nh)
 
             # Compute proportional expected night hours per staff per block
-            total_night_hours_scaled = sum(night_scaled_hours)
-            block_positions = [p for p in positions if p["date"] in block_set]
-            total_positions = len(block_positions)
+            # target_i = round(total_pool * contracted_i / sum(contracted))
+            contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
+            night_dev_block = fair_share_deviation(
+                model, staff_night_hours_block, contracted_list,
+                prefix=f"night_dev_b{bi}",
+            )
+            total_night_dev += night_dev_block
 
-            for si, staff in enumerate(staff_list):
-                contracted_scaled = int(round(staff.contracted_hours_per_fortnight * SCALE))
-                if total_positions > 0:
-                    expected_night = contracted_scaled * len(night_pos_indices) // total_positions
-                else:
-                    expected_night = 0
-
-                dev = model.NewIntVar(0, 76 * SCALE, f"night_dev_{staff_names[si]}_b{bi}")
-                model.Add(dev >= staff_night_hours_block[si] - expected_night)
-                model.Add(dev >= expected_night - staff_night_hours_block[si])
-                night_dev_vars.append(dev)
-
-        if not night_dev_vars:
-            return
-
-        total_night_dev = model.NewIntVar(0, num_staff * num_blocks * 76 * SCALE, "total_night_dev")
-        model.Add(total_night_dev == sum(night_dev_vars))
+        if num_blocks > 0:
+            model.Add(total_night_dev >= 0)
         if objective_terms is not None:
             objective_terms.append(total_night_dev * weight)
         else:
@@ -720,47 +698,33 @@ class SaturdayFairness(BaseSoftConstraint):
               definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
               objective_terms=None):
 
-        num_staff = len(staff_names)
-        num_positions = len(positions)
-
-        # Identify Saturday position indices and their scaled paid hours
+        # Identify Saturday position indices and their paid hours (whole hours)
         sat_pos_indices: list[int] = []
-        sat_scaled_hours: list[int] = []
+        sat_hours: list[int] = []
         for pi, pos in enumerate(positions):
             if pos["day_name"] == "Saturday":
                 sat_pos_indices.append(pi)
                 paid = definitions[pos["shift"]]["paid_hours"]
-                sat_scaled_hours.append(int(round(paid * SCALE)))
+                sat_hours.append(int(paid))
 
         if not sat_pos_indices:
             return
 
-        # Per-staff Saturday hours (scaled)
+        # Per-staff Saturday hours (whole hours)
         staff_sat_hours: list[cp_model.IntVar] = []
-        for si in range(num_staff):
+        for si in range(len(staff_names)):
             terms = [
-                sat_scaled_hours[j] * assignments[si][sat_pos_indices[j]]
+                sat_hours[j] * assignments[si][sat_pos_indices[j]]
                 for j in range(len(sat_pos_indices))
             ]
-            sh = model.NewIntVar(0, 76 * SCALE, f"sat_h_{staff_names[si]}")
+            sh = model.NewIntVar(0, 76, f"sat_h_{staff_names[si]}")
             model.Add(sh == sum(terms))
             staff_sat_hours.append(sh)
 
-        # Total Saturday hours
-        total_sat = model.NewIntVar(0, num_staff * 76 * SCALE, "total_sat")
-        model.Add(total_sat == sum(staff_sat_hours))
-
-        # Deviation from mean (scaled by n to avoid division)
-        n = num_staff
-        deviation_vars: list[cp_model.IntVar] = []
-        for si in range(num_staff):
-            deviation = model.NewIntVar(0, 76 * SCALE * n, f"dev_sat_{staff_names[si]}")
-            model.Add(deviation >= staff_sat_hours[si] * n - total_sat)
-            model.Add(deviation >= total_sat - staff_sat_hours[si] * n)
-            deviation_vars.append(deviation)
-
-        total_deviation = model.NewIntVar(0, 76 * SCALE * n * n, "total_sat_dev")
-        model.Add(total_deviation == sum(deviation_vars))
+        contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
+        total_deviation = fair_share_deviation(
+            model, staff_sat_hours, contracted_list, "sat_dev",
+        )
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
         else:
@@ -782,47 +746,33 @@ class SundayFairness(BaseSoftConstraint):
               definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
               objective_terms=None):
 
-        num_staff = len(staff_names)
-        num_positions = len(positions)
-
-        # Identify Sunday position indices and their scaled paid hours
+        # Identify Sunday position indices and their paid hours (whole hours)
         sun_pos_indices: list[int] = []
-        sun_scaled_hours: list[int] = []
+        sun_hours: list[int] = []
         for pi, pos in enumerate(positions):
             if pos["day_name"] == "Sunday":
                 sun_pos_indices.append(pi)
                 paid = definitions[pos["shift"]]["paid_hours"]
-                sun_scaled_hours.append(int(round(paid * SCALE)))
+                sun_hours.append(int(paid))
 
         if not sun_pos_indices:
             return
 
-        # Per-staff Sunday hours (scaled)
+        # Per-staff Sunday hours (whole hours)
         staff_sun_hours: list[cp_model.IntVar] = []
-        for si in range(num_staff):
+        for si in range(len(staff_names)):
             terms = [
-                sun_scaled_hours[j] * assignments[si][sun_pos_indices[j]]
+                sun_hours[j] * assignments[si][sun_pos_indices[j]]
                 for j in range(len(sun_pos_indices))
             ]
-            sh = model.NewIntVar(0, 76 * SCALE, f"sun_h_{staff_names[si]}")
+            sh = model.NewIntVar(0, 76, f"sun_h_{staff_names[si]}")
             model.Add(sh == sum(terms))
             staff_sun_hours.append(sh)
 
-        # Total Sunday hours
-        total_sun = model.NewIntVar(0, num_staff * 76 * SCALE, "total_sun")
-        model.Add(total_sun == sum(staff_sun_hours))
-
-        # Deviation from mean (scaled by n to avoid division)
-        n = num_staff
-        deviation_vars: list[cp_model.IntVar] = []
-        for si in range(num_staff):
-            deviation = model.NewIntVar(0, 76 * SCALE * n, f"dev_sun_{staff_names[si]}")
-            model.Add(deviation >= staff_sun_hours[si] * n - total_sun)
-            model.Add(deviation >= total_sun - staff_sun_hours[si] * n)
-            deviation_vars.append(deviation)
-
-        total_deviation = model.NewIntVar(0, 76 * SCALE * n * n, "total_sun_dev")
-        model.Add(total_deviation == sum(deviation_vars))
+        contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
+        total_deviation = fair_share_deviation(
+            model, staff_sun_hours, contracted_list, "sun_dev",
+        )
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
         else:
@@ -914,18 +864,19 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
             for di in range(num_dates - 1):
                 s_d = shift_type_vars[si][di]
                 s_d1 = shift_type_vars[si][di + 1]
-                same = model.NewBoolVar(f"same_{staff_names[si]}_d{di}")
-                model.Add(s_d == s_d1).OnlyEnforceIf(same)
-                model.Add(s_d != s_d1).OnlyEnforceIf(same.Not())
-                # Also require both != UNASSIGNED
+                # Three-way reification: same = 1 iff shifts equal AND both worked
+                eq = model.NewBoolVar(f"eq_{staff_names[si]}_d{di}")
+                model.Add(s_d == s_d1).OnlyEnforceIf(eq)
+                model.Add(s_d != s_d1).OnlyEnforceIf(eq.Not())
                 not_unassigned_d = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_d{di}")
                 not_unassigned_d1 = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_d{di+1}")
                 model.Add(s_d != UNASSIGNED).OnlyEnforceIf(not_unassigned_d)
                 model.Add(s_d == UNASSIGNED).OnlyEnforceIf(not_unassigned_d.Not())
                 model.Add(s_d1 != UNASSIGNED).OnlyEnforceIf(not_unassigned_d1)
                 model.Add(s_d1 == UNASSIGNED).OnlyEnforceIf(not_unassigned_d1.Not())
-                # same = same AND not_unassigned_d AND not_unassigned_d1
-                model.Add(same == 1).OnlyEnforceIf(not_unassigned_d, not_unassigned_d1)
+                same = model.NewBoolVar(f"same_{staff_names[si]}_d{di}")
+                model.AddBoolAnd([eq, not_unassigned_d, not_unassigned_d1]).OnlyEnforceIf(same)
+                model.AddBoolOr([eq.Not(), not_unassigned_d.Not(), not_unassigned_d1.Not()]).OnlyEnforceIf(same.Not())
                 row.append(same)
             same_vars.append(row)
 
@@ -969,14 +920,16 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                     # - same[di] = 1, same[di+1] = 1, ..., same[di+L-2] = 1 (if L >= 2)
                     # - same[di+L-1] = 0 (if L < num_dates - di), OR end of block
                     if L == 1:
-                        exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_d{di}")
-                        model.Add(rs == 1).OnlyEnforceIf(exact_L)
-                        # same must be 0 (or end of dates)
+                        # Same conjunction machinery as L >= 2: [rs] + (not_same_next if not end)
+                        conj_bools: list[cp_model.IntVar] = [rs]
                         if di + 1 < num_dates:
                             not_same_next = model.NewBoolVar(f"not_same_next_{staff_names[si]}_d{di}")
                             model.Add(same_vars[si][di] == 0).OnlyEnforceIf(not_same_next)
                             model.Add(same_vars[si][di] == 1).OnlyEnforceIf(not_same_next.Not())
-                            model.Add(exact_L == 0).OnlyEnforceIf(not_same_next.Not())
+                            conj_bools.append(not_same_next)
+                        exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_d{di}")
+                        model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
+                        model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
                     else:
                         # Build conjunction: rs=1 AND same[di]=1 AND ... AND same[di+L-2]=1 AND (same[di+L-1]=0 OR end)
                         conj_bools: list[cp_model.IntVar] = [rs]
@@ -1021,9 +974,9 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
         if penalty_terms:
             model.Add(total_penalty == sum(penalty_terms))
             if objective_terms is not None:
-                objective_terms.append(total_penalty * 1)
+                objective_terms.append(total_penalty)
             else:
-                model.Minimize(total_penalty * 1)
+                model.Minimize(total_penalty)
 
 
 class SkillLevelTiebreaker(BaseSoftConstraint):

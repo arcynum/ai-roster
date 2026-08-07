@@ -19,7 +19,6 @@ constraints:
       # - "[H#a5d0c7d9]"  # No rostering on red-request dates
       # - "[H#b6e1d8e0]"  # No rostering on holidays
       # - "[H#f0c5b2c4]"  # 76h absolute paid-hour cap per block
-      # - "[H#d9a8b7c6]"  # Contracted hours floor (adjusted for holidays)
       # - "[H#e8f7d6c5]"  # 12h overtime cap above raw contracted
   soft:
     enabled:

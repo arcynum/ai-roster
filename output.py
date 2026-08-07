@@ -143,8 +143,10 @@ def _build_context(
 
         weekend_pct = (weekend_hours / total_hours * 100) if total_hours > 0 else 0.0
         night_pct = (night_hours / total_hours * 100) if total_hours > 0 else 0.0
+        # Per D7/§2.7: compare against contracted × number of blocks, not just one block
+        contracted_for_period = staff.contracted_hours_per_fortnight * len(blocks)
         over_pct, light, badge, label = _overtime_info(
-            total_hours, staff.contracted_hours_per_fortnight
+            total_hours, contracted_for_period
         )
 
         staff_info[staff.name] = {
@@ -263,13 +265,6 @@ def _build_context(
         return (shift_idx, sid, num)
 
     slot_ids_sorted = sorted(slot_ids_set, key=slot_sort_key)
-
-    if len(slot_ids_sorted) > 15:
-        logger.warning(
-            "Total slots across all shift types is %d (cap 15) — truncating for display",
-            len(slot_ids_sorted),
-        )
-        slot_ids_sorted = slot_ids_sorted[:15]
 
     # Build the flat table: slot_id -> {date_str: staff_name_or_UNFILLED_or_None}
     shift_slot_table: dict[str, dict[str, str | None]] = {
@@ -420,6 +415,7 @@ def _build_context(
         "soft_penalty": result.soft_penalty,
         "hard_constraints": result.hard_constraints,
         "soft_constraints": result.soft_constraints,
+        "violations": getattr(result, "violations", []),
     }
 
 

@@ -43,6 +43,7 @@ class SolveResult:
         soft_penalty: Dict of constraint_id -> total penalty incurred.
         hard_constraints: List of hard constraint records (for HTML output).
         soft_constraints: List of soft constraint records (for HTML output).
+        violations: List of hard-constraint violations from the verifier.
     """
     status: str = ""
     objective_value: int = 0
@@ -54,6 +55,7 @@ class SolveResult:
     soft_penalty: dict[str, float] = field(default_factory=dict)
     hard_constraints: list[dict] = field(default_factory=list)
     soft_constraints: list[dict] = field(default_factory=list)
+    violations: list[dict] = field(default_factory=list)
 
 
 class RosterModel:

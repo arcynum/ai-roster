@@ -32,7 +32,7 @@ The project's history has left three different names for the same underlying con
 
 Do not introduce a fourth synonym ("training level", "skill tag" in prose, etc.) — if you see one in an old doc, treat it as meaning "skill level" and consider updating the doc.
 
-### Classification vs. Skill Level (previously conflated — now resolved)
+### Classification vs. Skill Level
 
 These are two **independent** attributes on a staff member, not one hierarchy:
 
@@ -65,7 +65,7 @@ These are two **independent** attributes on a staff member, not one hierarchy:
 - **`classification` must be exactly one of `RN`, `CN`, `Graduate`.** Any other value is a data error.
 - **`skill_tags` must be a contiguous prefix of the hierarchy** `Acute < Resus < Triage < Shift Coordinator` — i.e. a staff member can hold `[Acute]`, `[Acute, Resus]`, `[Acute, Resus, Triage]`, or all four, but never a level without every level below it (e.g. `[Resus]` alone, or `[Acute, Triage]` skipping `Resus`, is invalid). This matches every existing entry in `staff.yaml` and is required for the threshold-based skill check in §2/§8 to mean anything. **List order within `skill_tags` is not semantically meaningful** — determine a staff member's actual rank by looking up each tag against the hierarchy, don't rely on list position or count.
 - **`contracted_hours_per_fortnight`** is a `paid_hours`-basis figure (see §5) and must be a positive number.
-- **`red_requests`** is a list of `YYYY-MM-DD` date strings (may be empty). Does not reduce the contracted-hours floor (see §7 / `H#d9a8b7c6` / `H#a3d8f6c1`).
+- **`red_requests`** is a list of `YYYY-MM-DD` date strings (may be empty). Does not reduce the contracted-hours floor (see §7 / `[S#d9a8b7c6]` / `[H#a3d8f6c1]`).
 - **`holidays`** is a list of `{start, end}` date-range objects, both `YYYY-MM-DD` strings (may be empty). A single-day holiday is represented as `start == end` — there is no separate scalar shorthand for a one-day holiday. `start` must not be after `end`. Holidays proportionally reduce the contracted-hours floor for the affected block.
 
 ## 5. Shift Definitions & the Day/Night Split
@@ -86,7 +86,7 @@ Any shift that crosses midnight (DISCO, N8, N12) counts entirely toward the date
 Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour shifts) includes a **30-minute unpaid break**. `definitions.yaml` gives you both figures explicitly — never derive one from the other via a hardcoded "minus 30 minutes," always read the field:
 
 - **`span_hours`** — wall-clock start-to-end duration, unpaid break included. Use for anything about physical presence/timing: the 11-hour rest-period gap ([H#c1f6e3f5]), the no-double-booking/overlap check ([H#e91c63ab]).
-- **`paid_hours`** — `span_hours` minus the break. Use for anything measured against contracted hours: the contracted-hours floor ([H#d9a8b7c6]), the 76h absolute cap ([H#f0c5b2c4]), the 12h overtime cap ([H#e8f7d6c5]), and every hour total / weekend % / night % figure.
+- **`paid_hours`** — `span_hours` minus the break. Use for anything measured against contracted hours: the contracted-hours floor ([S#d9a8b7c6]), the 76h absolute cap ([H#f0c5b2c4]), the 12h overtime cap ([H#e8f7d6c5]), and every hour total / weekend % / night % figure.
 
 **These are not interchangeable.** Using `span_hours` anywhere the constraint files say "hours" (contracted, cap, overtime) overcounts every shift by 30 minutes — across a 14-day block with ~10 shifts that's up to 5 hours of drift per staff member, easily enough to push someone over or under a hard cap incorrectly. If you find code computing hours-worked totals from `span_hours` (or from raw start/end time deltas) for anything contracted-hours-related, that's a bug — fix it to use `paid_hours`.
 
@@ -104,9 +104,9 @@ Every shift's stated duration (8.5h for the 8-hour shifts, 12.5h for the 12-hour
 The HTML file has three sections, in this order:
 
 1. **Run summary** — generated timestamp, roster period (`dates.start`–`dates.end` from `roster.yaml`), CP-SAT solver status (e.g. `OPTIMAL`/`FEASIBLE`/`INFEASIBLE`), objective value, solve time, assignments count, and unfilled positions count. Displayed as summary cards in a responsive grid.
-2. **Messages** — everything that used to live in `result.violations.md`, plus general solver messages: any `UNFILLED` shifts (date, shift type, required skill/classification), any hard constraint that couldn't be satisfied (should never happen in a correct solve, but report it if it does — don't fail silently), which soft constraints incurred a penalty and roughly how much, overtime allocation notes. Explicitly says "No violations or unfilled shifts" when there's nothing to report.
-3. **Roster** — everything that used to live in `result.staff.md` and `result.roster.md`, as two views:
-   - **By date (staff×days matrix)**: one row per staff member, one column per day. Shifts shown as color-coded badges (D8=#E3F2FD, D12=#BBDEFB, P8=#F3E5F5, P12=#E1BEE7, L3=#FFF3E0, DISCO=#FFE0B2, N8=#E8F5E9, N12=#C8E6C9). Weekend columns highlighted with a light indigo background. First column (staff name) is sticky on scroll. Empty cells are blank; unfilled shifts show a red "UNFILLED" marker.
+2. **Messages** — any `UNFILLED` shifts (date, shift type, required skill/classification), any hard constraint that couldn't be satisfied (should never happen in a correct solve, but report it if it does — don't fail silently), which soft constraints incurred a penalty and roughly how much, overtime allocation notes. Explicitly says "No violations or unfilled shifts" when there's nothing to report.
+3. **Roster** — two views:
+    - **By date (staff×days matrix)**: one row per staff member, one column per day. Shifts shown as color-coded badges (D8=#E3F2FD, D12=#BBDEFB, P8=#F3E5F5, P12=#E1BEE7, L3=#FFF3E0, DISCO=#FFE0B2, N8=#E8F5E9, N12=#C8E6C9). Weekend columns highlighted with a light indigo background. First column (staff name) is sticky on scroll. Empty cells are blank. (UNFILLED markers in the matrix are planned but not yet implemented.)
    - **By staff member**: classification, skill tags, contracted hours, total assigned hours, weekend/night hours and %, plus an **overtime traffic light** indicator (green = on or under contracted, yellow = 0–15% over, red = >15% over). Below that, a **block-by-block table** (per 14-day block) showing hours, contracted, overtime %, weekend %, night %, and shift count — each with its own traffic light. Ends with the full shift list as color-coded badges with date tooltips.
 
 ### Logging
@@ -133,7 +133,7 @@ If hard constraints make it impossible to produce **any** valid roster at all (e
 
 **Which hours cap actually binds for named staff:** two separate caps exist and the *lower* one always governs —
 - Absolute ceiling: never exceed 76 hours per staff member per 14-day block ([H#f0c5b2c4]). **This never changes regardless of the overtime cap below** — overtime headroom and this ceiling are independent, and the ceiling always wins if they conflict.
-- Relative ceiling: never more than 12 **paid** hours of overtime above that person's **raw `contracted_hours_per_fortnight`** in the block ([H#e8f7d6c5] — a named-staff wellbeing limit in its own right, not because something else was going to absorb the rest of the gap). Casual staff still exist operationally, but sourcing them is now entirely outside this system — the roster builder reviews `UNFILLED` positions in the output and arranges casual cover manually. The 12h ceiling stays because it's a named-staff wellbeing limit in its own right.
+- Relative ceiling: never more than 12 **paid** hours of overtime above that person's **raw `contracted_hours_per_fortnight`** in the block ([H#e8f7d6c5] — a named-staff wellbeing limit).
 
 Note the ceiling and the floor use **different bases on purpose**: the floor ([H#d9a8b7c6]) is measured against `adjusted_hours` (holiday-prorated, per [H#a3d8f6c1]), while this ceiling is measured against the **unadjusted** `contracted_hours_per_fortnight` — a staff member's overtime headroom doesn't shrink just because they had a holiday in the block.
 
@@ -156,7 +156,7 @@ Google OR-Tools CP-SAT. When implementing or modifying constraints:
    - Step 2 — Constraints: apply logic via `model.Add(...)` / `model.AddForbiddenAssignments(...)`
    - Step 3 — Penalties (soft only): create an integer "violation amount" variable, add to the objective multiplied by its `weights.yaml` weight. **Not every soft constraint is a flat `violation × weight`** — e.g. `S#30c6f5ad` defines its own internal tiers (0 / 0.1×W / 1×W / escalating) on top of the single `weights.yaml` value, which acts as the base unit `W` rather than a flat multiplier. Read the constraint's full text in `soft_constraints.md` before assuming a simple linear penalty is correct.
    - Step 4 — Objective: make sure all new penalty variables are included in `model.Minimize(...)`.
-4. **Linkage via IDs**: every hard/soft constraint in code must be tagged with its corresponding ID from the markdown files (e.g. `# [H#a7f2c9d1]`). **IDs must be unique** — if you're adding a new constraint, generate a fresh ID rather than reusing or copy-pasting an existing tag (a duplicate ID was found and fixed during this cleanup; don't reintroduce that pattern).
+4. **Linkage via IDs**: every hard/soft constraint in code must be tagged with its corresponding ID from the markdown files (e.g. `# [H#a7f2c9d1]`). **IDs must be unique** — if you're adding a new constraint, generate a fresh ID rather than reusing or copy-pasting an existing tag.
 
 ### CP-SAT Modeling Notes
 
@@ -186,7 +186,7 @@ Concrete patterns for the trickier constraints, so they don't each get reinvente
 - Tests should cover both a positive and a negative case per function.
 - After the roster is produced, scan it and compare against `hard_constraints.md`/`soft_constraints.md` to confirm compliance.
 - The "one runnable check" convention is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
-- **Weight-dominance sanity check:** the lowest unfilled tier weight (currently 140000 for weekday night General shifts, `S#c4d5e6f7` in `weights.yaml`) must exceed the worst-case combined soft-constraint penalty. This ensures the solver never leaves a shift unfilled just to save a soft-constraint penalty. Verify this by summing every constraint's weight × its maximum possible per-instance penalty × instance count; the total must be below the lowest unfilled tier.
+- **Weight-dominance sanity check:** No unfilled tier weight may be less than the maximum soft-constraint penalty reduction obtainable by removing a single assignment (the *marginal* bound). This ensures the solver never leaves a shift unfilled just to save a soft-constraint penalty. After normalisation (§2.3), the marginal bound is ≈ 20,000 (shortfall 12h×1000 = 12,000; run-length ≤ 5,500; fairness pools ≤ 600 each; day/night ≤ 600), comfortably under the 140,000 floor tier. Log both the marginal bound and an informational total worst case on every run.
 
 
 ## 10. Constraint Toggles (config.yaml)
@@ -196,7 +196,8 @@ During development, constraints can be selectively disabled via `config.yaml` to
 ### How it works
 
 - If `config.yaml` doesn't exist or has no `constraints` section → **all constraints enabled** (normal operation).
-- If `constraints` exists → only constraint IDs listed under `enabled` are active. Everything else is skipped.
+- If `constraints` exists and `enabled:` is **present but empty** (`enabled: []`) → **all constraints enabled** (normal operation). This is a convenience for development: commenting out all IDs produces the same effect.
+- If `constraints` exists and `enabled:` contains IDs → only those constraint IDs are active. Everything else is skipped.
 - Both `hard:` and `soft:` sections are supported. They're independent — you can toggle hard constraints on and soft constraints off.
 
 ### Adding a new constraint

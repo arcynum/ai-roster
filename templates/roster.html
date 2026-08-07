@@ -209,9 +209,17 @@ tr:nth-child(even) { background: #fafafa; }
 {% endfor %}
 </ul>
 {% endif %}
+{% if violations %}
+<h3>Hard Constraint Violations</h3>
+<ul class="messages-list">
+{% for v in violations %}
+  <li style="color:#c5221f; font-weight:600;">[{{ v.constraint_id }}] {% if v.staff_name %}{{ v.staff_name }}{% else %}(system){% endif %}: {{ v.message }}</li>
+{% endfor %}
+</ul>
+{% endif %}
 {% if assignments|length == 0 %}
 <p>No assignments or unfilled shifts.</p>
-{% elif not unfilled and not soft_penalty %}
+{% elif not unfilled and not soft_penalty and not violations %}
 <p>No violations or unfilled shifts.</p>
 {% endif %}
 

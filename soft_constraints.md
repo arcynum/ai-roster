@@ -7,7 +7,6 @@ Everything in this file is a preference and should be followed if possible. The 
 
 ## Fairness & Distribution
 - [S#d2a7f4a6] All staff need to have an equal distributed number of night shifts based on their contracted hours. This is applied on a per-block basis to ensure fairness across the entire roster period. There are more day shifts than night shifts, so the balance of nights and days will not be exactly the same - but the distribution should be fair.
-- [S#a1d6c3d5] Saturday and Sunday hours have extra penalty loading pay. Saturday and Sunday hours should be shared amongst different staff to keep it fair.
 
 ## Scheduling Preferences
 - [S#30c6f5ad] For each staff member, look at their maximal runs of consecutive days working the same shift type. Penalise by run length, using this constraint's `weights.yaml` value as the base unit (`W`). Each tier below has a sub-label (`S#30c6f5ad·L=n`) for use in code comments, log messages, and the HTML output's "Messages" section — these are traceability tags only, not separate constraint IDs; there is one weight (`W`) for the whole constraint, not one per tier.
