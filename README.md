@@ -147,7 +147,7 @@ constraints:
       - "[H#e91c63ab]"  # No double booking
   soft:
     enabled:
-      - "[S#a1d6c3d5]"  # Weekend fairness
+      - "[S#s1a2t3u4]"  # Saturday hours fairness
 ```
 
 If `config.yaml` doesn't exist, all constraints are enabled (normal operation). Every constraint added to `constraints.py` must have a corresponding toggle entry in `config.yaml` (commented out by default). See `AGENTS.md` §10 for details.

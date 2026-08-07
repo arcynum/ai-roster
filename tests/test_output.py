@@ -262,11 +262,15 @@ class TestBuildContext:
 
         ctx = _build_context(result, staff, definitions, start, end, blocks, positions=positions)
 
-        assert "shift_slot_tables" in ctx
-        assert "D8" in ctx["shift_slot_tables"]
-        assert "D12" in ctx["shift_slot_tables"]
-        assert "D8-General-1" in ctx["shift_slot_tables"]["D8"]
-        assert ctx["shift_slot_tables"]["D8"]["D8-General-1"]["2026-08-03"] == "UNFILLED"
+        assert "shift_slot_table" in ctx
+        assert "slot_meta_list" in ctx
+        assert "D8-General-1" in ctx["shift_slot_table"]
+        assert "D12-General-1" in ctx["shift_slot_table"]
+        assert ctx["shift_slot_table"]["D8-General-1"]["2026-08-03"] == "UNFILLED"
+        # slot_meta_list should contain metadata for each slot
+        meta_ids = {m["slot_id"] for m in ctx["slot_meta_list"]}
+        assert "D8-General-1" in meta_ids
+        assert "D12-General-1" in meta_ids
 
     def test_hours_summary_present(self):
         """hours_summary should be in context with required keys."""
@@ -283,13 +287,19 @@ class TestBuildContext:
         assert "hours_summary" in ctx
         hs = ctx["hours_summary"]
         assert "total_required" in hs
-        assert "total_available" in hs
-        assert "total_surplus" in hs
-        assert "total_light" in hs
-        assert "total_badge" in hs
-        assert "total_label" in hs
+        assert "total_available_no_overtime" in hs
+        assert "total_available_with_overtime" in hs
+        assert "total_surplus_no_overtime" in hs
+        assert "total_surplus_with_overtime" in hs
+        assert "total_no_ot_light" in hs
+        assert "total_with_ot_light" in hs
         assert "blocks" in hs
         assert len(hs["blocks"]) == 1
-        assert "required" in hs["blocks"][0]
-        assert "available" in hs["blocks"][0]
-        assert "surplus" in hs["blocks"][0]
+        b = hs["blocks"][0]
+        assert "required" in b
+        assert "available_no_overtime" in b
+        assert "available_with_overtime" in b
+        assert "surplus_no_overtime" in b
+        assert "surplus_with_overtime" in b
+        assert "surplus_no_ot_badge" in b
+        assert "surplus_with_ot_badge" in b

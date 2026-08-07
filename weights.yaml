@@ -5,20 +5,29 @@
 # weights. See soft_constraints.md for what each ID refers to, and
 # AGENTS.md's file map for the full explanation.
 
-"S#d9a8b7c6": 1000  # soft contracted-hours floor — reclassified from hard constraint; minimizes shortfall fairly across staff. Above fairness weights (50-500)
-"S#d2a7f4a6": 50   # night shift fairness
-"S#a1d6c3d5": 50   # weekend hours fairness
-"S#e9b4a1b3": 20   # overtime distributed fairly
-"S#30c6f5ad": 500  # consecutive-same-shift run length; base unit W for the tiered penalty defined in soft_constraints.md (0 at run=2, 0.1*W at run=1/3, 1*W at run=4, (run-3)*W beyond that) — not a flat weight, see the constraint text
-"S#7b4e19fc": 5    # low-priority tiebreaker: minimise assigning above-minimum skill level
-"S#6c1e9a4d": 300  # day/night category run-count fatigue penalty; only fires beyond 2 runs per category per block. Set below S#30c6f5ad's base (500) but above the fairness constraints (50) — a real fatigue concern, but this system has no clinical basis to weight it higher than the same-shift-type run preference; treat as an initial estimate to recalibrate once real rosters are reviewed
+"[S#d9a8b7c6]": 1000  # soft contracted-hours floor — reclassified from hard constraint; minimizes shortfall fairly across staff. Above fairness weights (50-500)
+"[S#d2a7f4a6]": 50   # night shift fairness (weekday nights only, per §1.3a)
+"[S#s1a2t3u4]": 50   # Saturday hours fairness (replaces blended WeekendFairness)
+"[S#s2u3n4d5]": 50   # Sunday hours fairness (replaces blended WeekendFairness)
+"[S#e9b4a1b3]": 20   # overtime distributed fairly
+"[S#30c6f5ad]": 500  # consecutive-same-shift run length; base unit W for the tiered penalty defined in soft_constraints.md (0 at run=2, 0.1*W at run=1/3, 1*W at run=4, (run-3)*W beyond that) — not a flat weight, see the constraint text
+"[S#7b4e19fc]": 5    # low-priority tiebreaker: minimise assigning above-minimum skill level
+"[S#6c1e9a4d]": 300  # day/night category run-count fatigue penalty; only fires beyond 2 runs per category per block. Set below S#30c6f5ad's base (500) but above the fairness constraints (50) — a real fatigue concern, but this system has no clinical basis to weight it higher than the same-shift-type run preference; treat as an initial estimate to recalibrate once real rosters are reviewed
 
 # Unfilled position penalty tiers — used by solver.py coverage constraint.
 # Every tier must individually exceed the worst-case combined soft-constraint
 # penalty, so the solver never leaves a position unfilled just to dodge a
 # soft-constraint penalty. See soft_constraints.md [S#e7f3a2b1].
-"S#e7f3a2b1": 220000  # unfilled penalty tier for skill-required positions (Coordinator/Triage/Resus) — highest, clinical coverage must be protected
-"S#d8f2c3a4": 200000  # unfilled penalty tier for General (wildcard) weekday day-shifts
-"S#c9e1d4b5": 170000  # unfilled penalty tier for General weekday night-shifts
-"S#b0d3e5c6": 160000  # unfilled penalty tier for General weekend day-shifts
-"S#a1c4f6d7": 140000  # unfilled penalty tier for General weekend night-shifts — first to go unfilled
+# Reordered per plan.md §1.2: Sunday > Saturday > weekday day > weekday night.
+# Weekend day/night fall under Saturday/Sunday tiers (higher protection).
+"[S#e7f3a2b1]": 220000  # unfilled penalty tier for skill-required positions (Coordinator/Triage/Resus) — highest, clinical coverage must be protected
+"[S#f1a2b3c4]": 210000  # unfilled penalty tier for Sunday, General — most desirable shift (200% loading)
+"[S#a2b3c4d5]": 200000  # unfilled penalty tier for Saturday, General — desirable shift (150% loading)
+"[S#b3c4d5e6]": 160000  # unfilled penalty tier for weekday day/afternoon, General
+"[S#c4d5e6f7]": 140000  # unfilled penalty tier for weekday night, General — least desirable, first to go unfilled
+
+# Retired unfilled tier IDs (from plan.md §1.2 — old ordering was inverted):
+#   S#d8f2c3a4  was: General weekday day-shift (replaced by S#b3c4d5e6)
+#   S#c9e1d4b5  was: General weekday night-shift (replaced by S#c4d5e6f7)
+#   S#b0d3e5c6  was: General weekend day-shift (retired — weekend now covered by Sat/Sun tiers)
+#   S#a1c4f6d7  was: General weekend night-shift (retired — weekend now covered by Sat/Sun tiers)

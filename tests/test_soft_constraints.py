@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests for the 5 new soft constraints:
-S#e9b4a1b3 (overtime distribution), S#d2a7f4a6 (night shift fairness),
+S#e9b4a1b3 (overtime distribution), S#d2a7f4a6 (weekday night fairness),
 S#30c6f5ad (consecutive shift run penalty), S#7b4e19fc (skill tiebreaker),
 S#6c1e9a4d (day/night run-count penalty).
 """
@@ -10,7 +10,7 @@ from ortools.sat.python import cp_model
 
 from constraints import (
     OvertimeDistribution,
-    NightShiftFairness,
+    WeekdayNightFairness,
     ConsecutiveShiftDiscouraged,
     SkillLevelTiebreaker,
     DayNightRunCountPenalty,
@@ -168,7 +168,7 @@ class TestOvertimeDistribution:
         assert equal_penalty <= uneven_penalty
 
 
-class TestNightShiftFairness:
+class TestWeekdayNightFairness:
     """[S#d2a7f4a6] Penalize unequal night shift hours among staff."""
 
     def test_model_has_objective(self):
@@ -178,7 +178,7 @@ class TestNightShiftFairness:
             _make_position("2026-01-02", "N8"),
         ]
         model = _make_model(staff, positions)
-        constraint = NightShiftFairness()
+        constraint = WeekdayNightFairness()
         constraint.apply(
             model=model.model,
             staff_list=staff,
@@ -204,7 +204,7 @@ class TestNightShiftFairness:
             _make_position("2026-01-02", "N8"),
         ]
         model = _make_model(staff, positions)
-        constraint = NightShiftFairness()
+        constraint = WeekdayNightFairness()
         constraint.apply(
             model=model.model,
             staff_list=staff,
@@ -228,7 +228,7 @@ class TestNightShiftFairness:
         uneven_penalty = solver.ObjectiveValue()
 
         model2 = _make_model(staff, positions)
-        constraint2 = NightShiftFairness()
+        constraint2 = WeekdayNightFairness()
         constraint2.apply(
             model=model2.model,
             staff_list=staff,

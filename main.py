@@ -66,11 +66,20 @@ def _run(run_id: str) -> None:
     definitions = load_definitions()
     staff_records = load_staff()
     roster_data = load_roster()
-    weights = load_weights()
     hard_constraints = load_hard_constraints()
     soft_constraints = load_soft_constraints()
+    registered_hard = len(get_hard_constraint_ids())
+    logger.info(
+        "Hard constraints: %d documented in hard_constraints.md, %d registered as classes",
+        len(hard_constraints), registered_hard,
+    )
     known_hard_ids = set(get_hard_constraint_ids())
     known_soft_ids = set(get_soft_constraint_ids())
+    known_unfilled_tier_ids = set(RosterModel.UNFILLED_TIER_IDS)
+    weights = load_weights(
+        known_soft_ids=known_soft_ids,
+        known_unfilled_tier_ids=known_unfilled_tier_ids,
+    )
     config = load_config(known_hard_ids=known_hard_ids, known_soft_ids=known_soft_ids)
 
     # Step 2: Validate data

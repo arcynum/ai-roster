@@ -146,13 +146,21 @@ tr:nth-child(even) { background: #fafafa; }
     <div class="label">Hours Required</div>
     <div class="value">{{ hours_summary.total_required|round(1) }}h</div>
   </div>
-  <div class="summary-card">
-    <div class="label">Staff Hours Available</div>
-    <div class="value">{{ hours_summary.total_available|round(1) }}h</div>
+  <div class="summary-card" title="Holiday-prorated contracted hours (no overtime)">
+    <div class="label">Available (contracted)</div>
+    <div class="value {{ hours_summary.total_no_ot_light }}">{{ hours_summary.total_available_no_overtime|round(1) }}h</div>
+  </div>
+  <div class="summary-card" title="Theoretical ceiling: min(76, contracted+12) per staff — may not be fully achievable if on leave">
+    <div class="label">Available (with overtime)</div>
+    <div class="value {{ hours_summary.total_with_ot_light }}">{{ hours_summary.total_available_with_overtime|round(1) }}h</div>
   </div>
   <div class="summary-card">
-    <div class="label">Hours Surplus / Shortfall</div>
-    <div class="value {{ hours_summary.total_light }}">{{ hours_summary.total_label }}</div>
+    <div class="label">Surplus (no overtime)</div>
+    <div class="value {{ hours_summary.total_no_ot_light }}">{{ hours_summary.total_surplus_no_ot_label }}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Surplus (with overtime)</div>
+    <div class="value {{ hours_summary.total_with_ot_light }}">{{ hours_summary.total_surplus_with_ot_label }}</div>
   </div>
 </div>
 
@@ -163,16 +171,20 @@ tr:nth-child(even) { background: #fafafa; }
   <th>Block</th>
   <th>Period</th>
   <th>Required</th>
-  <th>Available</th>
-  <th>Surplus / Shortfall</th>
+  <th>Available (contracted)</th>
+  <th>Available (with overtime)</th>
+  <th>Surplus (no OT)</th>
+  <th>Surplus (with OT)</th>
 </tr>
 {% for b in hours_summary.blocks %}
 <tr>
   <td>Block {{ b.block_idx + 1 }}</td>
   <td>{{ b.block_start }} &ndash; {{ b.block_end }}</td>
   <td>{{ b.required|round(1) }}h</td>
-  <td>{{ b.available|round(1) }}h</td>
-  <td><span class="badge {{ b.surplus_badge }}"><span class="{{ b.surplus_light }}"></span>{{ b.surplus_label }}</span></td>
+  <td>{{ b.available_no_overtime|round(1) }}h</td>
+  <td>{{ b.available_with_overtime|round(1) }}h</td>
+  <td><span class="badge {{ b.surplus_no_ot_badge }}"><span class="{{ b.surplus_no_ot_light }}"></span>{{ b.surplus_no_ot_label }}</span></td>
+  <td><span class="badge {{ b.surplus_with_ot_badge }}"><span class="{{ b.surplus_with_ot_light }}"></span>{{ b.surplus_with_ot_label }}</span></td>
 </tr>
 {% endfor %}
 </table>
@@ -237,8 +249,6 @@ tr:nth-child(even) { background: #fafafa; }
 
 <!-- Roster by Shift -->
 <h2>Roster by Shift</h2>
-{% for shift_type, slots in shift_slot_tables.items() %}
-<h3>{{ shift_type }}</h3>
 <div class="matrix-container">
 <table class="matrix-table">
 <thead>
@@ -252,21 +262,27 @@ tr:nth-child(even) { background: #fafafa; }
 </tr>
 </thead>
 <tbody>
-{% for slot_id, by_date in slots.items() %}
+{% for meta in slot_meta_list %}
+  {% set slot = shift_slot_table[meta.slot_id] %}
   <tr>
-    <td>{{ slot_id }}</td>
+    <td>{{ meta.slot_id }}</td>
     {% for d in all_dates %}
-      {% set who = by_date[d.date_str] %}
-      <td class="{{ 'weekend-col' if d.is_weekend else '' }} {{ 'cell-unfilled' if who == 'UNFILLED' else '' }}">
-        {{ who or '' }}
-      </td>
+      {% if meta.day_validity.get(d.day_name, True) %}
+        {% set who = slot[d.date_str] %}
+        <td class="{{ 'weekend-col' if d.is_weekend else '' }} {{ 'cell-unfilled' if who == 'UNFILLED' else '' }}">
+          {{ who or '' }}
+        </td>
+      {% else %}
+        <td class="{{ 'weekend-col' if d.is_weekend else '' }}" style="background:#f5f5f5;color:#bbb;" title="Not required on {{ d.day_name }}">
+          &mdash;
+        </td>
+      {% endif %}
     {% endfor %}
   </tr>
 {% endfor %}
 </tbody>
 </table>
 </div>
-{% endfor %}
 
 <!-- Roster by Staff -->
 <h2>Roster by Staff</h2>

@@ -617,12 +617,17 @@ class OvertimeDistribution(BaseSoftConstraint):
             model.Minimize(total_deviation * weight)
 
 
-class NightShiftFairness(BaseSoftConstraint):
-    """[S#d2a7f4a6] Equal distribution of night shifts by contracted hours.
+class WeekdayNightFairness(BaseSoftConstraint):
+    """[S#d2a7f4a6] Equal distribution of weekday night shifts by contracted hours.
 
-    Penalises deviation of each staff's night hours from their proportional
+    Penalises deviation of each staff's weekday night hours from their proportional
     share based on contracted hours, per 14-day block. Uses NIGHT_SHIFTS
     from utils (N8, N12 only — DISCO is a day shift per AGENTS.md §5).
+
+    Weekend nights (Saturday/Sunday N8/N12) are excluded because they fall under
+    weekend penalty loading (which replaces night loading per EB12 rules) and are
+    tracked separately by SaturdayFairness/SundayFairness. Only Monday–Friday nights
+    count here — the true "most hated shift" pool that needs fair distribution.
     """
 
     constraint_id = "[S#d2a7f4a6]"
@@ -630,6 +635,8 @@ class NightShiftFairness(BaseSoftConstraint):
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
               objective_terms=None):
+        from datetime import date as date_type
+
         if staff_hours_vars is None:
             return
 
@@ -645,13 +652,16 @@ class NightShiftFairness(BaseSoftConstraint):
             block_set = set(block)
 
             # Night position indices and their scaled paid hours for this block
+            # EXCLUDE weekend nights (Saturday/Sunday) per plan.md §1.3a
             night_pos_indices: list[int] = []
             night_scaled_hours: list[int] = []
             for pi, pos in enumerate(positions):
                 if pos["date"] in block_set and pos["shift"] in NIGHT_SHIFTS:
-                    night_pos_indices.append(pi)
-                    paid = NIGHT_HOURS[pos["shift"]]
-                    night_scaled_hours.append(int(round(paid * SCALE)))
+                    pos_dt = date_type.fromisoformat(pos["date"])
+                    if pos_dt.weekday() not in (5, 6):  # exclude Saturday/Sunday
+                        night_pos_indices.append(pi)
+                        paid = NIGHT_HOURS[pos["shift"]]
+                        night_scaled_hours.append(int(round(paid * SCALE)))
 
             if not night_pos_indices:
                 continue
@@ -695,14 +705,16 @@ class NightShiftFairness(BaseSoftConstraint):
             model.Minimize(total_night_dev * weight)
 
 
-class WeekendFairness(BaseSoftConstraint):
-    """[S#a1d6c3d5] Share weekend hours across staff.
+class SaturdayFairness(BaseSoftConstraint):
+    """[S#s1a2t3u4] Share Saturday hours across staff.
 
-    Minimizes the sum of absolute deviations of each staff member's weekend
-    hours from the mean, using a scaled formulation that avoids division.
+    Minimizes the sum of absolute deviations of each staff member's Saturday
+    hours from the mean. Saturday is the most valuable weekend day (150% loading)
+    and should be distributed fairly. Replaces the blended WeekendFairness
+    ([S#a1d6c3d5]) with a Saturday-specific fairness pool per plan.md §1.3b.
     """
 
-    constraint_id = "[S#a1d6c3d5]"
+    constraint_id = "[S#s1a2t3u4]"
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
@@ -711,47 +723,105 @@ class WeekendFairness(BaseSoftConstraint):
         num_staff = len(staff_names)
         num_positions = len(positions)
 
-        # Identify weekend position indices and their scaled paid hours
-        weekend_pos_indices: list[int] = []
-        weekend_scaled_hours: list[int] = []
+        # Identify Saturday position indices and their scaled paid hours
+        sat_pos_indices: list[int] = []
+        sat_scaled_hours: list[int] = []
         for pi, pos in enumerate(positions):
-            day_name = pos["day_name"]
-            if day_name in ("Saturday", "Sunday"):
-                weekend_pos_indices.append(pi)
+            if pos["day_name"] == "Saturday":
+                sat_pos_indices.append(pi)
                 paid = definitions[pos["shift"]]["paid_hours"]
-                weekend_scaled_hours.append(int(round(paid * SCALE)))
+                sat_scaled_hours.append(int(round(paid * SCALE)))
 
-        if not weekend_pos_indices:
+        if not sat_pos_indices:
             return
 
-        # Per-staff weekend hours (scaled)
-        staff_weekend_hours: list[cp_model.IntVar] = []
+        # Per-staff Saturday hours (scaled)
+        staff_sat_hours: list[cp_model.IntVar] = []
         for si in range(num_staff):
             terms = [
-                weekend_scaled_hours[j] * assignments[si][weekend_pos_indices[j]]
-                for j in range(len(weekend_pos_indices))
+                sat_scaled_hours[j] * assignments[si][sat_pos_indices[j]]
+                for j in range(len(sat_pos_indices))
             ]
-            wh = model.NewIntVar(0, 76 * SCALE, f"weekend_h_{staff_names[si]}")
-            model.Add(wh == sum(terms))
-            staff_weekend_hours.append(wh)
+            sh = model.NewIntVar(0, 76 * SCALE, f"sat_h_{staff_names[si]}")
+            model.Add(sh == sum(terms))
+            staff_sat_hours.append(sh)
 
-        # Total weekend hours
-        total_weekend = model.NewIntVar(0, num_staff * 76 * SCALE, "total_weekend")
-        model.Add(total_weekend == sum(staff_weekend_hours))
+        # Total Saturday hours
+        total_sat = model.NewIntVar(0, num_staff * 76 * SCALE, "total_sat")
+        model.Add(total_sat == sum(staff_sat_hours))
 
-        # Mean = total_weekend / num_staff (scaled: mean * n = total)
-        # Deviation from mean (scaled by n to avoid division):
-        # dev[s] = |weekend_hours[s] * n - total_weekend|
+        # Deviation from mean (scaled by n to avoid division)
         n = num_staff
         deviation_vars: list[cp_model.IntVar] = []
         for si in range(num_staff):
-            deviation = model.NewIntVar(0, 76 * SCALE * n, f"dev_wk_{staff_names[si]}")
-            model.Add(deviation >= staff_weekend_hours[si] * n - total_weekend)
-            model.Add(deviation >= total_weekend - staff_weekend_hours[si] * n)
+            deviation = model.NewIntVar(0, 76 * SCALE * n, f"dev_sat_{staff_names[si]}")
+            model.Add(deviation >= staff_sat_hours[si] * n - total_sat)
+            model.Add(deviation >= total_sat - staff_sat_hours[si] * n)
             deviation_vars.append(deviation)
 
-        # Minimize sum of deviations
-        total_deviation = model.NewIntVar(0, 76 * SCALE * n * n, "total_weekend_dev")
+        total_deviation = model.NewIntVar(0, 76 * SCALE * n * n, "total_sat_dev")
+        model.Add(total_deviation == sum(deviation_vars))
+        if objective_terms is not None:
+            objective_terms.append(total_deviation * weight)
+        else:
+            model.Minimize(total_deviation * weight)
+
+
+class SundayFairness(BaseSoftConstraint):
+    """[S#s2u3n4d5] Share Sunday hours across staff.
+
+    Minimizes the sum of absolute deviations of each staff member's Sunday
+    hours from the mean. Sunday is the most valuable shift day (200% loading)
+    and should be distributed fairly. Replaces the blended WeekendFairness
+    ([S#a1d6c3d5]) with a Sunday-specific fairness pool per plan.md §1.3b.
+    """
+
+    constraint_id = "[S#s2u3n4d5]"
+
+    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
+              definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
+              objective_terms=None):
+
+        num_staff = len(staff_names)
+        num_positions = len(positions)
+
+        # Identify Sunday position indices and their scaled paid hours
+        sun_pos_indices: list[int] = []
+        sun_scaled_hours: list[int] = []
+        for pi, pos in enumerate(positions):
+            if pos["day_name"] == "Sunday":
+                sun_pos_indices.append(pi)
+                paid = definitions[pos["shift"]]["paid_hours"]
+                sun_scaled_hours.append(int(round(paid * SCALE)))
+
+        if not sun_pos_indices:
+            return
+
+        # Per-staff Sunday hours (scaled)
+        staff_sun_hours: list[cp_model.IntVar] = []
+        for si in range(num_staff):
+            terms = [
+                sun_scaled_hours[j] * assignments[si][sun_pos_indices[j]]
+                for j in range(len(sun_pos_indices))
+            ]
+            sh = model.NewIntVar(0, 76 * SCALE, f"sun_h_{staff_names[si]}")
+            model.Add(sh == sum(terms))
+            staff_sun_hours.append(sh)
+
+        # Total Sunday hours
+        total_sun = model.NewIntVar(0, num_staff * 76 * SCALE, "total_sun")
+        model.Add(total_sun == sum(staff_sun_hours))
+
+        # Deviation from mean (scaled by n to avoid division)
+        n = num_staff
+        deviation_vars: list[cp_model.IntVar] = []
+        for si in range(num_staff):
+            deviation = model.NewIntVar(0, 76 * SCALE * n, f"dev_sun_{staff_names[si]}")
+            model.Add(deviation >= staff_sun_hours[si] * n - total_sun)
+            model.Add(deviation >= total_sun - staff_sun_hours[si] * n)
+            deviation_vars.append(deviation)
+
+        total_deviation = model.NewIntVar(0, 76 * SCALE * n * n, "total_sun_dev")
         model.Add(total_deviation == sum(deviation_vars))
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
@@ -1177,8 +1247,9 @@ HARD_CONSTRAINTS = [
 SOFT_CONSTRAINTS = [
     ContractedHoursFloorSoft,
     OvertimeDistribution,
-    NightShiftFairness,
-    WeekendFairness,
+    WeekdayNightFairness,
+    SaturdayFairness,
+    SundayFairness,
     ConsecutiveShiftDiscouraged,
     DayNightRunCountPenalty,
     SkillLevelTiebreaker,

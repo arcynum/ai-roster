@@ -148,24 +148,24 @@ class TestUnfilledFirstWorkflow:
         General positions. Verify the tier weights encode this ordering."""
         # Tier weights from weights.yaml (S#e7f3a2b1 family) — the defaults
         # used when weights.yaml is missing.  These must preserve the ordering:
-        # skill-required > weekday-day > weekday-night > weekend-day > weekend-night.
+        # skill-required > Sunday > Saturday > weekday-day > weekday-night.
         tier_skill_required = 220000
-        tier_general_weekday_day = 200000
-        tier_general_weekday_night = 170000
-        tier_general_weekend_day = 160000
-        tier_general_weekend_night = 140000
+        tier_sunday = 210000
+        tier_saturday = 200000
+        tier_weekday_day = 160000
+        tier_weekday_night = 140000
 
-        assert tier_skill_required > tier_general_weekday_day, (
-            "Skill-required unfilled penalty must exceed General weekday day-shift"
+        assert tier_skill_required > tier_sunday, (
+            "Skill-required unfilled penalty must exceed Sunday General"
         )
-        assert tier_general_weekday_day > tier_general_weekday_night, (
+        assert tier_sunday > tier_saturday, (
+            "Sunday General must exceed Saturday General"
+        )
+        assert tier_saturday > tier_weekday_day, (
+            "Saturday General must exceed weekday day-shift"
+        )
+        assert tier_weekday_day > tier_weekday_night, (
             "Weekday day-shift must exceed weekday night-shift"
-        )
-        assert tier_general_weekday_night > tier_general_weekend_day, (
-            "Weekday night-shift must exceed weekend day-shift"
-        )
-        assert tier_general_weekend_day > tier_general_weekend_night, (
-            "Weekend day-shift must exceed weekend night-shift"
         )
 
 
@@ -175,28 +175,42 @@ class TestWeightDominanceSanity:
     constraint penalties."""
 
     def test_weight_dominance_with_actual_weights_file(self):
-        """Load actual weights.yaml and verify the invariant holds."""
+        """Load actual weights.yaml and verify the invariant holds.
+
+        Uses the real runtime lookup path (bracketed constraint IDs) so this
+        test would have caught the silent weight=1 bug where key mismatches
+        caused all weights to collapse to the default of 1.
+        """
         import yaml
         from pathlib import Path
+
+        from constraints import get_soft_constraint_ids
+        from solver import RosterModel
 
         weights_path = Path(__file__).resolve().parent.parent / "weights.yaml"
         with open(weights_path) as f:
             actual_weights = yaml.safe_load(f)
 
-        # Verify all expected unfilled tier keys exist
-        unfilled_keys = ["S#e7f3a2b1", "S#d8f2c3a4", "S#c9e1d4b5", "S#b0d3e5c6", "S#a1c4f6d7"]
-        for key in unfilled_keys:
+        # Use the actual runtime IDs — bracketed, matching constraint_id class attributes
+        known_soft_ids = set(get_soft_constraint_ids())
+        known_unfilled_tier_ids = set(RosterModel.UNFILLED_TIER_IDS)
+
+        # Verify all expected unfilled tier keys exist (with brackets, as used at runtime)
+        for key in known_unfilled_tier_ids:
             assert key in actual_weights, f"Missing unfilled tier key: {key}"
 
-        # Lowest tier must be the weekend-night General tier
-        lowest = min(actual_weights[k] for k in unfilled_keys)
-        assert actual_weights["S#a1c4f6d7"] == lowest, (
-            f"Expected S#a1c4f6d7 to be the lowest unfilled tier, "
-            f"got {actual_weights['S#a1c4f6d7']} vs lowest {lowest}"
+        # Verify all soft constraint IDs have weight entries
+        for key in known_soft_ids:
+            assert key in actual_weights, f"Missing soft constraint weight: {key}"
+
+        # Lowest unfilled tier must be weekday night (S#c4d5e6f7 = 140000)
+        lowest = min(actual_weights[k] for k in known_unfilled_tier_ids)
+        assert lowest == actual_weights["[S#c4d5e6f7]"], (
+            f"Expected weekday night tier to be lowest, got {lowest}"
         )
 
         # The lowest unfilled tier must exceed all soft constraint weights
-        soft_keys = [k for k in actual_weights if k not in unfilled_keys]
+        soft_keys = [k for k in actual_weights if k not in known_unfilled_tier_ids]
         max_soft_weight = max(actual_weights[k] for k in soft_keys)
         assert lowest > max_soft_weight, (
             f"Lowest unfilled tier ({lowest}) must exceed max soft weight ({max_soft_weight})"

@@ -69,6 +69,17 @@ class RosterModel:
         blocks: 14-day date blocks.
     """
 
+    # Unfilled tier weight IDs — used by _apply_coverage_constraint.
+    # These must have entries in weights.yaml (validated at startup).
+    # Bracketed to match the convention used for all constraint_id attributes.
+    UNFILLED_TIER_IDS: tuple[str, ...] = (
+        "[S#e7f3a2b1]",  # skill-required
+        "[S#f1a2b3c4]",  # Sunday, General
+        "[S#a2b3c4d5]",  # Saturday, General
+        "[S#b3c4d5e6]",  # weekday day, General
+        "[S#c4d5e6f7]",  # weekday night, General
+    )
+
     def __init__(
         self,
         staff_list: list["Staff"],
@@ -259,25 +270,27 @@ class RosterModel:
         Every position must be filled by exactly one named staff member or
         left unfilled. An unfilled position incurs a tiered penalty in the
         objective based on the position's desirability (skill criticality,
-        shift type, and weekend status). Higher penalty = less likely to
+        day of week, and shift type). Higher penalty = less likely to
         be left unfilled. See [S#e7f3a2b1].
+
+        Tier ordering (per plan.md §1.2):
+        1. Skill-required (220000)
+        2. Sunday, any shift (210000)
+        3. Saturday, any shift (200000)
+        4. Weekday day/afternoon, General (160000)
+        5. Weekday night, General (140000) — first to go unfilled
         """
         from datetime import date as date_type
 
         num_positions = len(self.positions)
         num_staff = len(self.staff_names)
 
-        # Unfilled tier weights from weights.yaml (S#e7f3a2b1)
-        # Tier 1: skill-required (Coordinator/Triage/Resus)
-        # Tier 2: General weekday day-shift
-        # Tier 3: General weekday night-shift
-        # Tier 4: General weekend day-shift
-        # Tier 5: General weekend night-shift
-        tier_skill_required = self.weights.get("S#e7f3a2b1", 220000)
-        tier_general_weekday_day = self.weights.get("S#d8f2c3a4", 200000)
-        tier_general_weekday_night = self.weights.get("S#c9e1d4b5", 170000)
-        tier_general_weekend_day = self.weights.get("S#b0d3e5c6", 160000)
-        tier_general_weekend_night = self.weights.get("S#a1c4f6d7", 140000)
+        # Unfilled tier weights from weights.yaml (bracketed keys)
+        tier_skill_required = self.weights.get("[S#e7f3a2b1]", 220000)
+        tier_sunday = self.weights.get("[S#f1a2b3c4]", 210000)
+        tier_saturday = self.weights.get("[S#a2b3c4d5]", 200000)
+        tier_weekday_day = self.weights.get("[S#b3c4d5e6]", 160000)
+        tier_weekday_night = self.weights.get("[S#c4d5e6f7]", 140000)
 
         self._unfilled_penalty_terms: list[cp_model.IntVar] = []
         for pi in range(num_positions):
@@ -285,20 +298,21 @@ class RosterModel:
             required_skill = pos.get("required_skill_level")
             shift = pos["shift"]
             pos_date = date_type.fromisoformat(pos["date"])
-            is_wknd = is_weekend(pos_date)
+            is_sunday = pos_date.weekday() == 6
+            is_saturday = pos_date.weekday() == 5
             is_night = shift in NIGHT_SHIFTS
 
-            # Determine tier weight
+            # Determine tier weight — priority: skill > Sunday > Saturday > weekday day > weekday night
             if required_skill is not None:
                 weight = tier_skill_required
-            elif is_wknd and is_night:
-                weight = tier_general_weekend_night
-            elif is_wknd:
-                weight = tier_general_weekend_day
+            elif is_sunday:
+                weight = tier_sunday
+            elif is_saturday:
+                weight = tier_saturday
             elif is_night:
-                weight = tier_general_weekday_night
+                weight = tier_weekday_night
             else:
-                weight = tier_general_weekday_day
+                weight = tier_weekday_day
 
             penalty = self.model.NewIntVar(0, weight, f"unfilled_penalty_{pi}")
             self.model.Add(penalty == weight).OnlyEnforceIf(self._unfilled_vars[pi])

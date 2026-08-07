@@ -25,8 +25,9 @@ constraints:
     enabled:
       # - "[S#d9a8b7c6]"  # Soft contracted-hours floor (reclassified from hard)
       # - "[S#e9b4a1b3]"  # Even overtime distribution
-      # - "[S#d2a7f4a6]"  # Night shift fairness by contracted hours
-      # - "[S#a1d6c3d5]"  # Weekend hours fairness
+      # - "[S#d2a7f4a6]"  # Night shift fairness (weekday nights only)
+      # - "[S#s1a2t3u4]"  # Saturday hours fairness
+      # - "[S#s2u3n4d5]"  # Sunday hours fairness
       # - "[S#30c6f5ad]"  # Consecutive same-shift run length penalty (tiered)
       # - "[S#6c1e9a4d]"  # Day/night category run-count penalty
       # - "[S#7b4e19fc]"  # Skill level tiebreaker (minimize over-qualification)

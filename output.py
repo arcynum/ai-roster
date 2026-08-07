@@ -226,42 +226,105 @@ def _build_context(
 
         staff_blocks[staff.name] = block_data
 
-    # Build shift_slot_tables: shift_type → slot_id → {date_str: staff_name_or_UNFILLED}
+    # Build unified shift_slot_table: flat list of 15 slot_ids, each mapped
+    # to {date_str: staff_name_or_UNFILLED_or_None}.
+    # None = slot doesn't exist on that day-of-week (e.g. L3-General-2 on Tue-Fri).
+    # "UNFILLED" = slot exists but no staff assigned.
+    # staff_name = assigned.
     all_date_str_list = sorted(all_date_strs)
-    shift_slot_tables: dict[str, dict[str, dict[str, str | None]]] = {}
     positions = positions or []
-    for shift_type in SHIFT_ORDER:
-        slot_ids = sorted({p["slot_id"] for p in positions if p.get("shift") == shift_type})
-        if not slot_ids:
-            continue
-        if len(slot_ids) > 15:
-            logger.warning(
-                "Shift %s has %d unique slots (cap 15) — truncating for display",
-                shift_type, len(slot_ids),
-            )
-        slot_ids = slot_ids[:15]
-        table: dict[str, dict[str, str | None]] = {sid: {ds: None for ds in all_date_str_list} for sid in slot_ids}
-        shift_slot_tables[shift_type] = table
+
+    # Determine which slot_ids exist on which days-of-week.
+    # A slot_id like "L3-General-2" only exists on days where roster_positions
+    # has a second L3 entry. We derive this from the positions data.
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+                 "Saturday", "Sunday"]
+    slot_day_validity: dict[str, dict[str, bool]] = {}  # slot_id -> {day_name: bool}
+    slot_ids_set: set[str] = set()
+
+    for pos in positions:
+        sid = pos.get("slot_id", "")
+        day_name = pos.get("day_name", "")
+        slot_ids_set.add(sid)
+        if sid not in slot_day_validity:
+            slot_day_validity[sid] = {dn: False for dn in day_names}
+        slot_day_validity[sid][day_name] = True
+
+    # Sort slot_ids in a fixed, readable order (shift order, then by skill, then by number)
+    def slot_sort_key(sid: str) -> tuple:
+        parts = sid.rsplit("-", 1)
+        shift_part = parts[0]
+        num_part = parts[1] if len(parts) > 1 else "0"
+        try:
+            num = int(num_part)
+        except ValueError:
+            num = 0
+        shift_idx = SHIFT_ORDER.index(shift_part) if shift_part in SHIFT_ORDER else 99
+        return (shift_idx, sid, num)
+
+    slot_ids_sorted = sorted(slot_ids_set, key=slot_sort_key)
+
+    if len(slot_ids_sorted) > 15:
+        logger.warning(
+            "Total slots across all shift types is %d (cap 15) — truncating for display",
+            len(slot_ids_sorted),
+        )
+        slot_ids_sorted = slot_ids_sorted[:15]
+
+    # Build the flat table: slot_id -> {date_str: staff_name_or_UNFILLED_or_None}
+    shift_slot_table: dict[str, dict[str, str | None]] = {
+        sid: {ds: None for ds in all_date_str_list} for sid in slot_ids_sorted
+    }
 
     # Populate from assignments
     for slot in result.assignments:
         sid = getattr(slot, "slot_id", None)
-        if sid and slot.date in shift_slot_tables.get(slot.shift, {}):
-            shift_slot_tables[slot.shift][sid][slot.date] = slot.staff_name
+        if sid and sid in shift_slot_table:
+            shift_slot_table[sid][slot.date] = slot.staff_name
 
     # Populate unfilled positions
     for pos in result.unfilled:
         sid = pos.get("slot_id")
-        if sid and sid in shift_slot_tables.get(pos["shift"], {}):
-            shift_slot_tables[pos["shift"]][sid][pos["date"]] = "UNFILLED"
+        if sid and sid in shift_slot_table:
+            shift_slot_table[sid][pos["date"]] = "UNFILLED"
 
-    # Compute hours summary: total required vs. staff available
+    # Build slot metadata for the template: list of dicts with slot_id, shift, skill, day_validity
+    slot_meta_list: list[dict] = []
+    for sid in slot_ids_sorted:
+        parts = sid.rsplit("-", 1)
+        shift = parts[0]
+        skill_or_num = parts[1] if len(parts) > 1 else "General"
+        # Determine the skill label (everything between first dash and last dash)
+        dash_parts = sid.split("-")
+        if len(dash_parts) >= 3:
+            skill_label = "-".join(dash_parts[1:-1])
+        else:
+            skill_label = "General"
+        slot_meta_list.append({
+            "slot_id": sid,
+            "shift": shift,
+            "skill_label": skill_label,
+            "day_validity": slot_day_validity.get(sid, {}),
+        })
+
+    # Compute hours summary: total required vs. staff available (two figures).
+    # available_no_overtime: holiday-prorated contracted hours (the soft-floor base).
+    # available_with_overtime: min(76, raw_contracted + 12) per staff — the theoretical ceiling.
     total_required_hours = sum(
         definitions[pos["shift"]]["paid_hours"] for pos in positions
     )
 
+    def _surplus_style(pct):
+        if pct >= 0:
+            return "light-green", "badge-green", f"+{pct:+.1f}%"
+        elif pct >= -20:
+            return "light-yellow", "badge-yellow", f"{pct:.1f}%"
+        else:
+            return "light-red", "badge-red", f"{pct:.1f}%"
+
     hours_summary_blocks: list[dict] = []
-    total_available_hours = 0.0
+    total_available_no_ot = 0.0
+    total_available_with_ot = 0.0
     for bi, block in enumerate(blocks):
         block_dates = [d.isoformat() for d in block]
         block_required = sum(
@@ -269,43 +332,59 @@ def _build_context(
             for pos in positions
             if pos["date"] in block_dates
         )
-        block_available = 0.0
+
+        # Available without overtime (holiday-prorated contracted hours)
+        block_available_no_ot = 0.0
+        block_available_with_ot = 0.0
         for staff in staff_list:
             adjusted_scaled = compute_adjusted_hours(
                 staff.contracted_hours_per_fortnight,
                 staff.holidays,
                 block_dates,
             )
-            block_available += adjusted_scaled / SCALE
-        total_available_hours += block_available
-        block_surplus = block_available - block_required
-        block_surplus_pct = (block_surplus / block_required * 100) if block_required > 0 else 0.0
-        if block_surplus_pct >= 0:
-            surplus_light, surplus_badge, surplus_label = "light-green", "badge-green", f"+{block_surplus:.1f}h"
-        elif block_surplus_pct >= -20:
-            surplus_light, surplus_badge, surplus_label = "light-yellow", "badge-yellow", f"{block_surplus:.1f}h"
-        else:
-            surplus_light, surplus_badge, surplus_label = "light-red", "badge-red", f"{block_surplus:.1f}h"
+            block_available_no_ot += adjusted_scaled / SCALE
+            # Overtime ceiling: min(76, raw_contracted + 12) per person
+            ot_ceiling = min(76.0, staff.contracted_hours_per_fortnight + 12.0)
+            block_available_with_ot += ot_ceiling
+
+        total_available_no_ot += block_available_no_ot
+        total_available_with_ot += block_available_with_ot
+
+        # Surplus for both figures
+        surplus_no_ot = block_available_no_ot - block_required
+        surplus_with_ot = block_available_with_ot - block_required
+        surplus_no_ot_pct = (surplus_no_ot / block_required * 100) if block_required > 0 else 0.0
+        surplus_with_ot_pct = (surplus_with_ot / block_required * 100) if block_required > 0 else 0.0
+
+        no_ot_light, no_ot_badge, no_ot_label = _surplus_style(surplus_no_ot_pct)
+        with_ot_light, with_ot_badge, with_ot_label = _surplus_style(surplus_with_ot_pct)
+
         hours_summary_blocks.append({
             "block_idx": bi,
             "block_start": block[0].isoformat(),
             "block_end": block[-1].isoformat(),
             "required": block_required,
-            "available": block_available,
-            "surplus": block_surplus,
-            "surplus_pct": block_surplus_pct,
-            "surplus_light": surplus_light,
-            "surplus_badge": surplus_badge,
-            "surplus_label": surplus_label,
+            "available_no_overtime": block_available_no_ot,
+            "available_with_overtime": block_available_with_ot,
+            "surplus_no_overtime": surplus_no_ot,
+            "surplus_with_overtime": surplus_with_ot,
+            "surplus_no_ot_pct": surplus_no_ot_pct,
+            "surplus_with_ot_pct": surplus_with_ot_pct,
+            "surplus_no_ot_light": no_ot_light,
+            "surplus_no_ot_badge": no_ot_badge,
+            "surplus_no_ot_label": no_ot_label,
+            "surplus_with_ot_light": with_ot_light,
+            "surplus_with_ot_badge": with_ot_badge,
+            "surplus_with_ot_label": with_ot_label,
         })
 
-    total_surplus = total_available_hours - total_required_hours
-    if total_surplus >= 0:
-        total_light, total_badge, total_label = "light-green", "badge-green", f"+{total_surplus:.1f}h"
-    elif total_surplus >= -20:
-        total_light, total_badge, total_label = "light-yellow", "badge-yellow", f"{total_surplus:.1f}h"
-    else:
-        total_light, total_badge, total_label = "light-red", "badge-red", f"{total_surplus:.1f}h"
+    total_surplus_no_ot = total_available_no_ot - total_required_hours
+    total_surplus_with_ot = total_available_with_ot - total_required_hours
+    total_surplus_no_ot_pct = (total_surplus_no_ot / total_required_hours * 100) if total_required_hours > 0 else 0.0
+    total_surplus_with_ot_pct = (total_surplus_with_ot / total_required_hours * 100) if total_required_hours > 0 else 0.0
+
+    total_no_ot_light, total_no_ot_badge, total_no_ot_label = _surplus_style(total_surplus_no_ot_pct)
+    total_with_ot_light, total_with_ot_badge, total_with_ot_label = _surplus_style(total_surplus_with_ot_pct)
 
     return {
         "generate_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -320,14 +399,22 @@ def _build_context(
         "staff_matrix": staff_matrix,
         "staff_info": staff_info,
         "staff_blocks": staff_blocks,
-        "shift_slot_tables": shift_slot_tables,
+        "shift_slot_table": shift_slot_table,
+        "slot_meta_list": slot_meta_list,
         "hours_summary": {
             "total_required": total_required_hours,
-            "total_available": total_available_hours,
-            "total_surplus": total_surplus,
-            "total_light": total_light,
-            "total_badge": total_badge,
-            "total_label": total_label,
+            "total_available_no_overtime": total_available_no_ot,
+            "total_available_with_overtime": total_available_with_ot,
+            "total_surplus_no_overtime": total_surplus_no_ot,
+            "total_surplus_with_overtime": total_surplus_with_ot,
+            "total_surplus_no_ot_pct": total_surplus_no_ot_pct,
+            "total_surplus_with_ot_pct": total_surplus_with_ot_pct,
+            "total_no_ot_light": total_no_ot_light,
+            "total_no_ot_badge": total_no_ot_badge,
+            "total_no_ot_label": total_no_ot_label,
+            "total_with_ot_light": total_with_ot_light,
+            "total_with_ot_badge": total_with_ot_badge,
+            "total_with_ot_label": total_with_ot_label,
             "blocks": hours_summary_blocks,
         },
         "soft_penalty": result.soft_penalty,

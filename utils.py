@@ -130,12 +130,46 @@ def load_soft_constraints(path: Path | None = None) -> list[dict]:
     return _parse_constraint_file(path, "soft")
 
 
-def load_weights(path: Path | None = None) -> dict[str, int]:
-    """Load soft-constraint weights from weights.yaml."""
+def load_weights(
+    path: Path | None = None,
+    known_soft_ids: set[str] | None = None,
+    known_unfilled_tier_ids: set[str] | None = None,
+) -> dict[str, int]:
+    """Load soft-constraint weights from weights.yaml.
+
+    Validates that every registered constraint ID has a corresponding entry.
+    Raises ValueError if any are missing — this prevents the silent weight=1
+    fallback bug where a key mismatch caused all weights to collapse to 1.
+
+    Parameters
+    ----------
+    known_soft_ids
+        Set of all soft constraint IDs (from ``constraints.get_soft_constraint_ids()``).
+    known_unfilled_tier_ids
+        Set of all unfilled-tier IDs (from ``solver.RosterModel.UNFILLED_TIER_IDS``).
+    """
     path = path or PROJECT_ROOT / "weights.yaml"
     data = load_yaml(path)
     logger = logging.getLogger("ai-roster")
     logger.info("Loaded %d weights from %s", len(data), path.name)
+
+    # Validate: every registered constraint ID must have a weight entry.
+    missing: list[str] = []
+    if known_soft_ids is not None:
+        for cid in known_soft_ids:
+            if cid not in data:
+                missing.append(cid)
+    if known_unfilled_tier_ids is not None:
+        for cid in known_unfilled_tier_ids:
+            if cid not in data:
+                missing.append(cid)
+    if missing:
+        raise ValueError(
+            f"weights.yaml is missing entries for {len(missing)} constraint ID(s): "
+            f"{', '.join(sorted(missing))}. "
+            f"Every registered constraint must have a corresponding weight entry."
+        )
+
     return data
 
 
