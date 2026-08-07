@@ -35,18 +35,18 @@ files, not the existing code or tests (AGENTS.md §0).
 <!-- USER: fill in below. e.g. "D1: a  D2: a  D3: b ..." -->
 
 ```
-D1:
-D2:
-D3:
-D4:
-D5:
-D6:
-D7:
-D8:
-D9:
-D10:
-D11:
-D12:
+D1: (a) — (b) alone leaves the objective numerically ugly and slow
+D2: (a)
+D3: (a)
+D4: (a) for consistency
+D5: (a) — least churn, and "all commented out" should mean "normal operation"
+D6: (a)
+D7: (a)
+D8: (b) for Coverage + MaxHours (cheap, makes toggles truthful); (a) for the other two
+D9: (a)
+D10: (a)
+D11: (a)
+D12: (a) — sortable, and the doc already says so
 Other notes:
 ```
 
