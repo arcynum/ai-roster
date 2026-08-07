@@ -21,6 +21,18 @@ Everything in this file is a preference and should be followed if possible. The 
 
   Mechanically: over a 14-day block, count each staff member's separate **runs** of day-category and night-category shifts — a run being a maximal stretch of consecutive worked days all in the same category. (Runs are always naturally separated by the mandatory day-off at every category transition, [H#f4c9b6c8] — this constraint is about *how many* such runs occur, not the transition itself.) There is no target below the cap: 1 day-run and 0 night-runs (all days), or 1 clean day-run plus 1 clean night-run, both have zero penalty. Only counts **exceeding 2** for either category are penalised: penalty = `(max(0, day_run_count − 2) + max(0, night_run_count − 2)) × W`, using this constraint's `weights.yaml` value as `W` — so the "flapping" example above (3 day-runs, 3 night-runs) would incur `(1 + 1) × W`. This is distinct from `S#30c6f5ad`: that constraint tracks runs of one exact shift type (e.g. D8 specifically); this one tracks runs of the broader day/night category regardless of which specific day-shift type is worked on any given day within the run.
 
+## Unfilled Position Desirability
+- [S#e7f3a2b1] **Unfilled positions, when unavoidable, should be concentrated on the least clinically-critical and least desirable shifts** — protecting skill-required coverage first, then weekday/day shifts, leaving weekend-night General shifts as the first to go unfilled. Since casual staff are now sourced entirely outside this system, `UNFILLED` is the expected, routine way this system reports a structural staffing gap. Rather than treating every unfilled position equally, the model uses a tiered penalty system where each tier corresponds to a position's "undesirability" (combining skill criticality and shift timing). Every tier's weight exceeds the worst-case combined soft-constraint penalty, preserving the safety guarantee that the solver never leaves a position unfilled just to save a soft-constraint penalty.
+
+  The tier weights are defined in `weights.yaml` under this constraint ID, keyed by position characteristics:
+  - **Tier 1 (skill-required)** — any position with a non-null `required_skill_level` (Coordinator/Triage/Resus). Weight: 220000. Clinical coverage is paramount.
+  - **Tier 2 (General, weekday, day-shift)** — wildcard positions on weekday day-shifts (D8/D12/P8/P12/L3/DISCO). Weight: 200000.
+  - **Tier 3 (General, weekday, night-shift)** — wildcard positions on weekday night-shifts (N8/N12). Weight: 170000.
+  - **Tier 4 (General, weekend, day-shift)** — wildcard positions on weekend day-shifts. Weight: 160000.
+  - **Tier 5 (General, weekend, night-shift)** — wildcard positions on weekend night-shifts. Weight: 140000. First to go unfilled.
+
+  The solver uses the tier weight as the unfilled penalty for each position. Higher penalty = less likely to be left unfilled. This means the solver will preferentially leave weekend-night General shifts open when total capacity is short, while protecting skill-required positions and weekday day-shifts.
+
 ## Skill Level Matching
 - [S#7b4e19fc] When multiple valid roster solutions exist, prefer solutions that minimise assigning staff to roster positions below their highest held skill level (e.g. avoid rostering a Triage-qualified nurse into a wildcard slot if an Acute-only nurse could fill it instead, all else equal). This is a low-priority tiebreaker — it must never override the fairness or overtime-distribution constraints above.
 

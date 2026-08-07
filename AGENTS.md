@@ -127,13 +127,13 @@ Use Python's standard `logging` module — no new dependency. Each run:
 
 1. **Named staff within their contracted-hours floor.** Optimise this tier for named-staff wellbeing first — well-distributed hours, fair night/weekend load ([S#d2a7f4a6]/[S#a1d6c3d5]), the consecutive-shift preference ([S#30c6f5ad]) — since this is what "the nicest possible roster" for named staff actually means in practice.
 2. **Named staff using the overtime flex**, up to 12 additional paid hours above their raw contracted hours ([H#e8f7d6c5]), distributed **as evenly as possible** across all eligible staff ([S#e9b4a1b3]) — don't stack it onto the same few people. All other hard constraints still apply on top of this (max hours, red requests, holidays, skill level requirements) — overtime never overrides a hard constraint, and **never** overrides the 76h absolute ceiling ([H#f0c5b2c4]) either.
-3. **`UNFILLED`** — reachable when no eligible named staff can cover a position. Record it in the output and note which classification/skill level was required but unavailable.
+3. **`UNFILLED`** — reachable when no eligible named staff can cover a position. The solver uses tiered unfilled penalties ([S#e7f3a2b1]) to prefer leaving the least desirable positions open first: skill-required positions are protected, then weekend-night General shifts go unfilled before weekday-day General shifts. Record `UNFILLED` in the output and note which classification/skill level was required but unavailable. Casual staff still exist operationally, but sourcing them is entirely outside this system — the roster builder reviews `UNFILLED` positions in the output and arranges casual cover manually. This means `UNFILLED` is an expected, routine output whenever named-staff capacity falls short of total demand.
 
 If hard constraints make it impossible to produce **any** valid roster at all (e.g. a required Shift Coordinator role has zero qualified staff in the entire roster, on a day where the shortfall can't be resolved even via `UNFILLED`), stop and tell the user why — never produce a broken or partial file silently.
 
 **Which hours cap actually binds for named staff:** two separate caps exist and the *lower* one always governs —
 - Absolute ceiling: never exceed 76 hours per staff member per 14-day block ([H#f0c5b2c4]). **This never changes regardless of the overtime cap below** — overtime headroom and this ceiling are independent, and the ceiling always wins if they conflict.
-- Relative ceiling: never more than 12 **paid** hours of overtime above that person's **raw `contracted_hours_per_fortnight`** in the block ([H#e8f7d6c5] — a named-staff wellbeing limit in its own right, not because something else was going to absorb the rest of the gap).
+- Relative ceiling: never more than 12 **paid** hours of overtime above that person's **raw `contracted_hours_per_fortnight`** in the block ([H#e8f7d6c5] — a named-staff wellbeing limit in its own right, not because something else was going to absorb the rest of the gap). Casual staff still exist operationally, but sourcing them is now entirely outside this system — the roster builder reviews `UNFILLED` positions in the output and arranges casual cover manually. The 12h ceiling stays because it's a named-staff wellbeing limit in its own right.
 
 Note the ceiling and the floor use **different bases on purpose**: the floor ([H#d9a8b7c6]) is measured against `adjusted_hours` (holiday-prorated, per [H#a3d8f6c1]), while this ceiling is measured against the **unadjusted** `contracted_hours_per_fortnight` — a staff member's overtime headroom doesn't shrink just because they had a holiday in the block.
 
@@ -186,6 +186,7 @@ Concrete patterns for the trickier constraints, so they don't each get reinvente
 - Tests should cover both a positive and a negative case per function.
 - After the roster is produced, scan it and compare against `hard_constraints.md`/`soft_constraints.md` to confirm compliance.
 - The "one runnable check" convention is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
+- **Weight-dominance sanity check:** the lowest unfilled tier weight (currently 140000 for weekend-night General shifts, `S#a1c4f6d7` in `weights.yaml`) must exceed the worst-case combined soft-constraint penalty. This ensures the solver never leaves a shift unfilled just to save a soft-constraint penalty. Verify this by summing every constraint's weight × its maximum possible per-instance penalty × instance count; the total must be below the lowest unfilled tier.
 
 
 ## 10. Constraint Toggles (config.yaml)

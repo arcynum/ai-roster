@@ -152,9 +152,20 @@ tr:nth-child(even) { background: #fafafa; }
   <li>{{ pos.date }}: {{ pos.shift }} (skill: {{ pos.required_skill_level or 'any' }})</li>
 {% endfor %}
 </ul>
-{% elif assignments|length == 0 %}
+{% endif %}
+{% if soft_penalty %}
+<h3>Soft Constraint Penalties</h3>
+<ul class="messages-list">
+{% for cid, penalty in soft_penalty.items() %}
+  {% if penalty > 0 %}
+  <li>{{ cid }}: penalty {{ penalty|round(2) }}</li>
+  {% endif %}
+{% endfor %}
+</ul>
+{% endif %}
+{% if assignments|length == 0 %}
 <p>No assignments or unfilled shifts.</p>
-{% else %}
+{% elif not unfilled and not soft_penalty %}
 <p>No violations or unfilled shifts.</p>
 {% endif %}
 

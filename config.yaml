@@ -30,3 +30,4 @@ constraints:
       # - "[S#30c6f5ad]"  # Consecutive same-shift run length penalty (tiered)
       # - "[S#6c1e9a4d]"  # Day/night category run-count penalty
       # - "[S#7b4e19fc]"  # Skill level tiebreaker (minimize over-qualification)
+      # - "[S#e7f3a2b1]"  # Unfilled position desirability tiering (implemented in solver coverage constraint)

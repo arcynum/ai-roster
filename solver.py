@@ -19,7 +19,7 @@ from ortools.sat.python import cp_model
 
 from constraints import HARD_CONSTRAINTS, SOFT_CONSTRAINTS
 from models import RosterSlot
-from utils import SCALE
+from utils import NIGHT_SHIFTS, SCALE, is_weekend
 
 if TYPE_CHECKING:
     from models import Staff, RosterPosition
@@ -257,18 +257,51 @@ class RosterModel:
         """Add coverage constraints for all positions.
 
         Every position must be filled by exactly one named staff member or
-        left unfilled. An unfilled position incurs a high penalty in the
-        objective, ensuring the solver fills positions whenever possible.
+        left unfilled. An unfilled position incurs a tiered penalty in the
+        objective based on the position's desirability (skill criticality,
+        shift type, and weekend status). Higher penalty = less likely to
+        be left unfilled. See [S#e7f3a2b1].
         """
+        from datetime import date as date_type
+
         num_positions = len(self.positions)
         num_staff = len(self.staff_names)
 
-        # Unfilled penalty: high weight so solver fills positions whenever possible
-        UNFILLED_PENALTY_WEIGHT = 200000
+        # Unfilled tier weights from weights.yaml (S#e7f3a2b1)
+        # Tier 1: skill-required (Coordinator/Triage/Resus)
+        # Tier 2: General weekday day-shift
+        # Tier 3: General weekday night-shift
+        # Tier 4: General weekend day-shift
+        # Tier 5: General weekend night-shift
+        tier_skill_required = self.weights.get("S#e7f3a2b1", 220000)
+        tier_general_weekday_day = self.weights.get("S#d8f2c3a4", 200000)
+        tier_general_weekday_night = self.weights.get("S#c9e1d4b5", 170000)
+        tier_general_weekend_day = self.weights.get("S#b0d3e5c6", 160000)
+        tier_general_weekend_night = self.weights.get("S#a1c4f6d7", 140000)
+
         self._unfilled_penalty_terms: list[cp_model.IntVar] = []
         for pi in range(num_positions):
-            penalty = self.model.NewIntVar(0, UNFILLED_PENALTY_WEIGHT, f"unfilled_penalty_{pi}")
-            self.model.Add(penalty == UNFILLED_PENALTY_WEIGHT).OnlyEnforceIf(self._unfilled_vars[pi])
+            pos = self.positions[pi]
+            required_skill = pos.get("required_skill_level")
+            shift = pos["shift"]
+            pos_date = date_type.fromisoformat(pos["date"])
+            is_wknd = is_weekend(pos_date)
+            is_night = shift in NIGHT_SHIFTS
+
+            # Determine tier weight
+            if required_skill is not None:
+                weight = tier_skill_required
+            elif is_wknd and is_night:
+                weight = tier_general_weekend_night
+            elif is_wknd:
+                weight = tier_general_weekend_day
+            elif is_night:
+                weight = tier_general_weekday_night
+            else:
+                weight = tier_general_weekday_day
+
+            penalty = self.model.NewIntVar(0, weight, f"unfilled_penalty_{pi}")
+            self.model.Add(penalty == weight).OnlyEnforceIf(self._unfilled_vars[pi])
             self.model.Add(penalty == 0).OnlyEnforceIf(self._unfilled_vars[pi].Not())
             self._unfilled_penalty_terms.append(penalty)
 

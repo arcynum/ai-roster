@@ -12,3 +12,13 @@
 "S#30c6f5ad": 500  # consecutive-same-shift run length; base unit W for the tiered penalty defined in soft_constraints.md (0 at run=2, 0.1*W at run=1/3, 1*W at run=4, (run-3)*W beyond that) — not a flat weight, see the constraint text
 "S#7b4e19fc": 5    # low-priority tiebreaker: minimise assigning above-minimum skill level
 "S#6c1e9a4d": 300  # day/night category run-count fatigue penalty; only fires beyond 2 runs per category per block. Set below S#30c6f5ad's base (500) but above the fairness constraints (50) — a real fatigue concern, but this system has no clinical basis to weight it higher than the same-shift-type run preference; treat as an initial estimate to recalibrate once real rosters are reviewed
+
+# Unfilled position penalty tiers — used by solver.py coverage constraint.
+# Every tier must individually exceed the worst-case combined soft-constraint
+# penalty, so the solver never leaves a position unfilled just to dodge a
+# soft-constraint penalty. See soft_constraints.md [S#e7f3a2b1].
+"S#e7f3a2b1": 220000  # unfilled penalty tier for skill-required positions (Coordinator/Triage/Resus) — highest, clinical coverage must be protected
+"S#d8f2c3a4": 200000  # unfilled penalty tier for General (wildcard) weekday day-shifts
+"S#c9e1d4b5": 170000  # unfilled penalty tier for General weekday night-shifts
+"S#b0d3e5c6": 160000  # unfilled penalty tier for General weekend day-shifts
+"S#a1c4f6d7": 140000  # unfilled penalty tier for General weekend night-shifts — first to go unfilled
