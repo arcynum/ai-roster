@@ -85,8 +85,6 @@ def _make_model(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
-@pytest.mark.skip(reason="Pre-existing bug in fair_share_deviation (utils.py:639): contracted list shorter than per_staff list")
 class TestE2ESmoke:
     """End-to-end smoke test with real data files.
 

@@ -640,20 +640,24 @@ class OvertimeDistribution(BaseSoftConstraint):
         num_staff = len(staff_names)
         num_blocks = len(blocks)
 
-        # Compute overtime per staff per block: max(0, hours - contracted)
-        # Work in scaled units to avoid IntVar division (not supported by CP-SAT).
+        # Compute overtime per staff member (summed across all blocks):
+        # max(0, total_hours - contracted). Work in scaled units.
         overtime_vars: list[cp_model.IntVar] = []
+        contracted_list: list[int] = []
         for si, staff in enumerate(staff_list):
             contracted_scaled = int(round(staff.contracted_hours_per_fortnight * SCALE))
-            for bi in range(num_blocks):
-                ot = model.new_int_var(0, 76 * SCALE, f"ot_{staff_names[si]}_b{bi}")
-                model.Add(ot >= staff_hours_vars[si][bi] - contracted_scaled)
-                model.Add(ot >= 0)
-                overtime_vars.append(ot)
+            contracted_list.append(contracted_scaled)
+            total_hours = model.new_int_var(0, num_blocks * 76 * SCALE,
+                                            f"ot_total_{staff_names[si]}")
+            model.Add(total_hours == sum(staff_hours_vars[si]))
+            ot = model.new_int_var(0, num_blocks * 76 * SCALE, f"ot_{staff_names[si]}")
+            model.Add(ot >= total_hours - contracted_scaled)
+            model.Add(ot >= 0)
+            overtime_vars.append(ot)
 
-        contracted_list = [int(round(s.contracted_hours_per_fortnight * SCALE)) for s in staff_list]
         total_deviation = fair_share_deviation(
-            model, overtime_vars, contracted_list, "ot_dev", max_val=76 * SCALE,
+            model, overtime_vars, contracted_list, "ot_dev",
+            max_val=num_blocks * 76 * SCALE,
         )
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
@@ -741,8 +745,8 @@ class _DayOfWeekFairness(BaseSoftConstraint):
     """[S#s1a2t3u4]/[S#s2u3n4d5] Share hours of a specific weekday across staff.
 
     Minimizes the sum of absolute deviations of each staff member's hours on
-    the target day from the proportional mean. Subclasses set DAY_NAME,
-    constraint_id, and var_prefix.
+    the target day from the proportional mean, per 14-day block.
+    Subclasses set DAY_NAME, constraint_id, and var_prefix.
     """
 
     DAY_NAME: str = ""       # subclass responsibility
@@ -754,34 +758,44 @@ class _DayOfWeekFairness(BaseSoftConstraint):
 
         day_name = self.DAY_NAME
         prefix = self.VAR_PREFIX
+        num_staff = len(staff_names)
 
-        # Identify day-of-week position indices and their paid hours (whole hours)
-        day_pos_indices: list[int] = []
-        day_hours: list[int] = []
-        for pi, pos in enumerate(positions):
-            if pos["day_name"] == day_name:
-                day_pos_indices.append(pi)
-                paid = definitions[pos["shift"]]["paid_hours"]
-                day_hours.append(int(paid))
+        total_deviation = model.new_int_var(0, num_staff * len(blocks) * 76,
+                                            f"{prefix}_total_dev")
 
-        if not day_pos_indices:
-            return
+        for bi, block in enumerate(blocks):
+            block_set = set(block)
 
-        # Per-staff day-of-week hours (whole hours)
-        staff_day_hours: list[cp_model.IntVar] = []
-        for si in range(len(staff_names)):
-            terms = [
-                day_hours[j] * assignments[si][day_pos_indices[j]]
-                for j in range(len(day_pos_indices))
-            ]
-            sh = model.new_int_var(0, 76, f"{prefix}_h_{staff_names[si]}")
-            model.Add(sh == sum(terms))
-            staff_day_hours.append(sh)
+            # Day-of-week position indices and their paid hours for this block
+            day_pos_indices: list[int] = []
+            day_hours: list[int] = []
+            for pi, pos in enumerate(positions):
+                if pos["date"] in block_set and pos["day_name"] == day_name:
+                    day_pos_indices.append(pi)
+                    paid = definitions[pos["shift"]]["paid_hours"]
+                    day_hours.append(int(paid))
 
-        contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
-        total_deviation = fair_share_deviation(
-            model, staff_day_hours, contracted_list, f"{prefix}_dev",
-        )
+            if not day_pos_indices:
+                continue
+
+            # Per-staff day-of-week hours for this block
+            staff_day_hours_block: list[cp_model.IntVar] = []
+            for si in range(num_staff):
+                terms = [
+                    day_hours[j] * assignments[si][day_pos_indices[j]]
+                    for j in range(len(day_pos_indices))
+                ]
+                sh = model.new_int_var(0, 76, f"{prefix}_h_{staff_names[si]}_b{bi}")
+                model.Add(sh == sum(terms))
+                staff_day_hours_block.append(sh)
+
+            contracted_list = [int(round(s.contracted_hours_per_fortnight)) for s in staff_list]
+            dev_block = fair_share_deviation(
+                model, staff_day_hours_block, contracted_list,
+                prefix=f"{prefix}_dev_b{bi}",
+            )
+            total_deviation += dev_block
+
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
         else:
@@ -904,7 +918,7 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                     same = model.new_bool_var(f"same_{staff_names[si]}_b{block_start}_d{idx}")
                     row.append(same)
                     model.add_bool_or(and_sh_vars).only_enforce_if(same)
-                    model.add_bool_or([av.Not() for av in and_sh_vars]).only_enforce_if(same.Not())
+                    model.Add(sum(and_sh_vars) == 0).only_enforce_if(same.Not())
                 same_vars.append(row)
 
             # --- Compute run_start[d] ---
@@ -1089,7 +1103,7 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                     same = model.new_bool_var(f"same_{staff_names[si]}_d{idx}")
                     row.append(same)
                     model.add_bool_or(and_sh_vars).only_enforce_if(same)
-                    model.add_bool_or([av.Not() for av in and_sh_vars]).only_enforce_if(same.Not())
+                    model.Add(sum(and_sh_vars) == 0).only_enforce_if(same.Not())
                 same_vars.append(row)
 
             # --- Compute run_start[d] ---

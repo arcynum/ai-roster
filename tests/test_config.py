@@ -47,7 +47,10 @@ class TestLoadConfig:
         path = tmp_path / "config.yaml"
         path.write_text("constraints:\n")
         result = load_config(path=path)
-        assert result == {"hard": {"enabled": []}, "soft": {"enabled": []}}
+        assert result is not None
+        assert result["hard"]["enabled"] == []
+        assert result["soft"]["enabled"] == []
+        assert "solver" in result
 
     def test_config_with_hard_enabled_ids(self, tmp_path):
         """Enabled IDs are parsed into lists."""

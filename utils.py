@@ -226,9 +226,10 @@ def load_config(path: Path | None = None,
     Returns
     -------
     dict or None
-        ``{"hard": {"enabled": [str]}, "soft": {"enabled": [str]}}`` when
-        the config is present.  Each ``enabled`` list contains the constraint
-        IDs that should be active; everything else is skipped.
+        ``{"hard": {"enabled": [str]}, "soft": {"enabled": [str]}, "solver": {...}}``
+        when the config is present.  Each ``enabled`` list contains the constraint
+        IDs that should be active; everything else is skipped.  The ``solver``
+        key (D6) carries OR-Tools CP-SAT parameters with sensible defaults.
 
     Parameters
     ----------
@@ -256,6 +257,16 @@ def load_config(path: Path | None = None,
         return None
 
     result: dict = {"hard": {"enabled": []}, "soft": {"enabled": []}}
+
+    # D6: Extract solver parameters from top-level config
+    if "solver" in data:
+        result["solver"] = data["solver"]
+    else:
+        result["solver"] = {
+            "max_time_in_seconds": 300.0,
+            "num_workers": 8,
+            "random_seed": None,
+        }
 
     for kind in ("hard", "soft"):
         kind_data = constraints.get(kind, {}) or {}

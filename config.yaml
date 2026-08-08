@@ -6,6 +6,13 @@
 # Every constraint added to constraints.py MUST have a corresponding toggle here.
 # See AGENTS.md §10 and README.md "Constraint Toggles" for details.
 
+# Solver parameters (D6) — OR-Tools CP-SAT settings.
+# See AGENTS.md §10 for constraint toggle docs.
+solver:
+  max_time_in_seconds: 300
+  num_workers: 8
+  random_seed: 42
+
 constraints:
   hard:
     enabled:
