@@ -55,8 +55,8 @@
             "output": 24576
           }
         },
-        "Qwen3.6-35B-A3B": {
-          "name": "Qwen3.6-35B-A3B",
+        "Qwen36-35B-Q4": {
+          "name": "Qwen36-35B-Q4",
           "cost": {
             "input": 4.27,
             "output": 21.35,
@@ -65,7 +65,20 @@
           },
           "limit": {
             "context": 99000,
-            "output": 9800
+            "output": 12800
+          }
+        },
+        "Qwen36-35B-Q5": {
+          "name": "Qwen36-35B-Q5",
+          "cost": {
+            "input": 4.27,
+            "output": 21.35,
+            "cache_read": 0.43,
+            "cache_write": 5.34
+          },
+          "limit": {
+            "context": 99000,
+            "output": 12800
           }
         }
       }

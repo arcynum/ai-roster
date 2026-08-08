@@ -9,42 +9,17 @@ import pytest
 from ortools.sat.python import cp_model
 
 from constraints import (
-    OvertimeDistribution,
-    WeekdayNightFairness,
     ConsecutiveShiftDiscouraged,
-    SkillLevelTiebreaker,
     DayNightRunCountPenalty,
+    OvertimeDistribution,
+    SkillLevelTiebreaker,
+    WeekdayNightFairness,
 )
+from models import Classification, Staff
 
 
-def _make_staff(name: str, contracted_hours: float = 40.0, skill_tags: list[str] | None = None):
-    return type("Staff", (), {
-        "name": name,
-        "classification": "RN",
-        "skill_tags": skill_tags or [],
-        "contracted_hours_per_fortnight": contracted_hours,
-        "red_requests": [],
-        "holidays": [],
-        "is_graduate": False,
-        "highest_skill_rank": max((0 if not skill_tags else 0) for _ in [1]) or 0,
-    })()
-
-
-def _make_high_skill_staff(name: str, skill_rank: int):
-    """Create a mock staff with a specific highest_skill_rank."""
-    return type("Staff", (), {
-        "name": name,
-        "classification": "RN",
-        "skill_tags": [],
-        "contracted_hours_per_fortnight": 40.0,
-        "red_requests": [],
-        "holidays": [],
-        "is_graduate": False,
-        "highest_skill_rank": skill_rank,
-    })()
-
-
-def _make_position(date: str, shift: str, day_name: str = "Monday", required_skill_level=None, required_skill_rank: int = -1):
+def _make_position(date: str, shift: str, day_name: str = "Monday",
+                   required_skill_level=None, required_skill_rank: int = -1):
     return {
         "date": date,
         "day_name": day_name,
@@ -54,28 +29,12 @@ def _make_position(date: str, shift: str, day_name: str = "Monday", required_ski
     }
 
 
-def _make_model(staff_list, positions):
+def _make_model(staff_list, positions, definitions, constraint_config=None):
     """Build a minimal RosterModel for testing a soft constraint."""
     from solver import RosterModel
 
-    definitions = {
-        "D8": {"start": "07:30:00", "end": "16:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-        "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-        "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-        "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-        "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-        "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-        "N8": {"start": "19:30:00", "end": "04:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-        "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-    }
     weights = {}
     blocks = [[p["date"] for p in positions]]
-
-    # Disable hard constraints that need full shift definitions
-    constraint_config = {
-        "hard": {"enabled": []},
-        "soft": {"enabled": []},
-    }
 
     model = RosterModel(staff_list, positions, definitions, weights, blocks,
                         constraint_config=constraint_config)
@@ -86,13 +45,16 @@ def _make_model(staff_list, positions):
 class TestOvertimeDistribution:
     """[S#e9b4a1b3] Penalize uneven overtime distribution among staff."""
 
-    def test_model_has_objective(self):
-        staff = [_make_staff("Alice"), _make_staff("Bob")]
+    def test_model_has_objective(self, definitions):
+        staff = [
+            Staff("Alice", Classification.RN, ["Acute"], 40.0),
+            Staff("Bob", Classification.RN, ["Acute"], 40.0),
+        ]
         positions = [
             _make_position("2026-01-01", "D8"),
             _make_position("2026-01-02", "D8"),
         ]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = OvertimeDistribution()
         constraint.apply(
             model=model.model,
@@ -112,14 +74,17 @@ class TestOvertimeDistribution:
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
         assert solver.ObjectiveValue() >= 0
 
-    def test_equal_hours_lower_penalty(self):
+    def test_equal_hours_lower_penalty(self, definitions):
         """Two staff each getting 1 shift should have lower penalty than one getting both."""
-        staff = [_make_staff("Alice"), _make_staff("Bob")]
+        staff = [
+            Staff("Alice", Classification.RN, ["Acute"], 40.0),
+            Staff("Bob", Classification.RN, ["Acute"], 40.0),
+        ]
         positions = [
             _make_position("2026-01-01", "D8"),
             _make_position("2026-01-02", "D8"),
         ]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = OvertimeDistribution()
         constraint.apply(
             model=model.model,
@@ -143,7 +108,7 @@ class TestOvertimeDistribution:
         solver.Solve(model.model)
         uneven_penalty = solver.ObjectiveValue()
 
-        model2 = _make_model(staff, positions)
+        model2 = _make_model(staff, positions, definitions)
         constraint2 = OvertimeDistribution()
         constraint2.apply(
             model=model2.model,
@@ -171,13 +136,16 @@ class TestOvertimeDistribution:
 class TestWeekdayNightFairness:
     """[S#d2a7f4a6] Penalize unequal night shift hours among staff."""
 
-    def test_model_has_objective(self):
-        staff = [_make_staff("Alice"), _make_staff("Bob")]
+    def test_model_has_objective(self, definitions):
+        staff = [
+            Staff("Alice", Classification.RN, ["Acute"], 40.0),
+            Staff("Bob", Classification.RN, ["Acute"], 40.0),
+        ]
         positions = [
             _make_position("2026-01-01", "N8"),
             _make_position("2026-01-02", "N8"),
         ]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = WeekdayNightFairness()
         constraint.apply(
             model=model.model,
@@ -196,14 +164,17 @@ class TestWeekdayNightFairness:
         status = solver.Solve(model.model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_equal_night_hours_lower_penalty(self):
+    def test_equal_night_hours_lower_penalty(self, definitions):
         """Equal night distribution should have lower penalty than uneven."""
-        staff = [_make_staff("Alice"), _make_staff("Bob")]
+        staff = [
+            Staff("Alice", Classification.RN, ["Acute"], 40.0),
+            Staff("Bob", Classification.RN, ["Acute"], 40.0),
+        ]
         positions = [
             _make_position("2026-01-01", "N8"),
             _make_position("2026-01-02", "N8"),
         ]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = WeekdayNightFairness()
         constraint.apply(
             model=model.model,
@@ -227,7 +198,7 @@ class TestWeekdayNightFairness:
         solver.Solve(model.model)
         uneven_penalty = solver.ObjectiveValue()
 
-        model2 = _make_model(staff, positions)
+        model2 = _make_model(staff, positions, definitions)
         constraint2 = WeekdayNightFairness()
         constraint2.apply(
             model=model2.model,
@@ -255,13 +226,13 @@ class TestWeekdayNightFairness:
 class TestConsecutiveShiftDiscouraged:
     """[S#30c6f5ad] Tiered penalty for consecutive shift runs."""
 
-    def test_model_has_objective(self):
-        staff = [_make_staff("Alice")]
+    def test_model_has_objective(self, definitions):
+        staff = [Staff("Alice", Classification.RN, ["Acute"], 40.0)]
         positions = [
             _make_position("2026-01-01", "D8"),
             _make_position("2026-01-02", "D8"),
         ]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = ConsecutiveShiftDiscouraged()
         constraint.apply(
             model=model.model,
@@ -279,16 +250,16 @@ class TestConsecutiveShiftDiscouraged:
         status = solver.Solve(model.model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_longer_runs_incur_penalty(self):
+    def test_longer_runs_incur_penalty(self, definitions):
         """A 4-day run should incur higher penalty than a 1-day run."""
-        staff = [_make_staff("Alice")]
+        staff = [Staff("Alice", Classification.RN, ["Acute"], 40.0)]
         positions = [
             _make_position("2026-01-01", "D8"),
             _make_position("2026-01-02", "D8"),
             _make_position("2026-01-03", "D8"),
             _make_position("2026-01-04", "D8"),
         ]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = ConsecutiveShiftDiscouraged()
         constraint.apply(
             model=model.model,
@@ -309,7 +280,7 @@ class TestConsecutiveShiftDiscouraged:
         solver.Solve(model.model)
         long_penalty = solver.ObjectiveValue()
 
-        model2 = _make_model(staff, positions)
+        model2 = _make_model(staff, positions, definitions)
         constraint2 = ConsecutiveShiftDiscouraged()
         constraint2.apply(
             model=model2.model,
@@ -337,11 +308,11 @@ class TestConsecutiveShiftDiscouraged:
 class TestSkillLevelTiebreaker:
     """[S#7b4e19fc] Penalize over-qualification."""
 
-    def test_exact_match_no_penalty(self):
+    def test_exact_match_no_penalty(self, definitions):
         """Staff at exact skill level should incur zero penalty."""
-        staff = [_make_high_skill_staff("Alice", skill_rank=0)]
+        staff = [Staff("Alice", Classification.RN, ["Acute"], 40.0)]
         positions = [_make_position("2026-01-01", "D8", required_skill_rank=0)]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = SkillLevelTiebreaker()
         constraint.apply(
             model=model.model,
@@ -360,11 +331,11 @@ class TestSkillLevelTiebreaker:
         solver.Solve(model.model)
         assert solver.ObjectiveValue() >= 0
 
-    def test_over_qualification_increases_penalty(self):
+    def test_over_qualification_increases_penalty(self, definitions):
         """Higher-rank staff on a lower slot should incur positive penalty."""
-        staff = [_make_high_skill_staff("Alice", skill_rank=2)]
+        staff = [Staff("Alice", Classification.RN, ["Acute", "Resus", "Triage"], 40.0)]
         positions = [_make_position("2026-01-01", "D8", required_skill_rank=0)]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = SkillLevelTiebreaker()
         constraint.apply(
             model=model.model,
@@ -383,11 +354,11 @@ class TestSkillLevelTiebreaker:
         solver.Solve(model.model)
         assert solver.ObjectiveValue() >= 10
 
-    def test_no_over_qualification_on_null_position(self):
+    def test_no_over_qualification_on_null_position(self, definitions):
         """Null skill requirement positions should not trigger penalty."""
-        staff = [_make_high_skill_staff("Alice", skill_rank=3)]
+        staff = [Staff("Alice", Classification.RN, ["Acute", "Resus", "Triage", "Shift Coordinator"], 40.0)]
         positions = [_make_position("2026-01-01", "D8", required_skill_level=None, required_skill_rank=-1)]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = SkillLevelTiebreaker()
         constraint.apply(
             model=model.model,
@@ -410,13 +381,13 @@ class TestSkillLevelTiebreaker:
 class TestDayNightRunCountPenalty:
     """[S#6c1e9a4d] Penalize excessive day/night category run counts."""
 
-    def test_model_has_objective(self):
-        staff = [_make_staff("Alice")]
+    def test_model_has_objective(self, definitions):
+        staff = [Staff("Alice", Classification.RN, ["Acute"], 40.0)]
         positions = [
             _make_position("2026-01-01", "D8"),
             _make_position("2026-01-02", "N8"),
         ]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = DayNightRunCountPenalty()
         constraint.apply(
             model=model.model,
@@ -434,9 +405,9 @@ class TestDayNightRunCountPenalty:
         status = solver.Solve(model.model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_fewer_runs_lower_penalty(self):
+    def test_fewer_runs_lower_penalty(self, definitions):
         """1 day run + 1 night run should be lower penalty than 3+ runs."""
-        staff = [_make_staff("Alice")]
+        staff = [Staff("Alice", Classification.RN, ["Acute"], 40.0)]
         positions = [
             _make_position("2026-01-01", "D8"),
             _make_position("2026-01-02", "D8"),
@@ -445,7 +416,7 @@ class TestDayNightRunCountPenalty:
             _make_position("2026-01-05", "D8"),
             _make_position("2026-01-06", "D8"),
         ]
-        model = _make_model(staff, positions)
+        model = _make_model(staff, positions, definitions)
         constraint = DayNightRunCountPenalty()
         constraint.apply(
             model=model.model,
@@ -466,7 +437,7 @@ class TestDayNightRunCountPenalty:
         solver.Solve(model.model)
         few_runs_penalty = solver.ObjectiveValue()
 
-        model2 = _make_model(staff, positions)
+        model2 = _make_model(staff, positions, definitions)
         constraint2 = DayNightRunCountPenalty()
         constraint2.apply(
             model=model2.model,

@@ -20,68 +20,28 @@ class TestCompatibilityTable:
         idx_b = shifts.index(shift_b)
         return 1 if compat[idx_a][idx_b] else 0
 
-    def test_same_shift_compatible(self):
+    def test_same_shift_compatible(self, definitions):
         """Same shift on consecutive days should be compatible."""
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "D8", "D8") == 1
         assert self._get_compat(compat, "N8", "N8") == 1
 
-    def test_night_to_day_rest(self):
+    def test_night_to_day_rest(self, definitions):
         """Night shift followed by early day shift should be incompatible (rest period)."""
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
         compat = self._build_compatibility(definitions)
         # N8 ends 07:15, D8 starts 08:00 next day - 0.75h gap, should be incompatible
         assert self._get_compat(compat, "N8", "D8") == 0
 
-    def test_disco_crosses_midnight(self):
+    def test_disco_crosses_midnight(self, definitions):
         """DISCO crosses midnight but is classified as day shift."""
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
         compat = self._build_compatibility(definitions)
         # DISCO ends 02:00, D8 starts 08:00 next day - 6h gap, should be compatible
         assert self._get_compat(compat, "DISCO", "D8") == 1
         # D8 ends 16:30, DISCO starts 17:30 next day - 25h gap, should be compatible
         assert self._get_compat(compat, "D8", "DISCO") == 1
 
-    def test_all_shift_pairs_defined(self):
+    def test_all_shift_pairs_defined(self, definitions):
         """All shift pairs should have a compatibility value."""
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
         compat = self._build_compatibility(definitions)
         shifts = NoDoubleBooking.SHIFT_TYPES
         for s1 in shifts:
@@ -93,21 +53,11 @@ class TestCompatibilityTable:
 class TestNoDoubleBookingApply:
     """Test the apply method of NoDoubleBooking constraint."""
 
-    def test_model_has_constraints(self):
+    def test_model_has_constraints(self, definitions):
         """The apply method should add constraints to the model."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
         constraint = NoDoubleBooking()
         compat = constraint._build_compatibility_table(definitions)
         # Verify the table is built correctly (8x8 matrix)
@@ -133,137 +83,125 @@ class TestRestPeriodConstraintCompatibilityTable:
         idx_b = shifts.index(shift_b)
         return 1 if compat[idx_a][idx_b] else 0
 
-    def _make_definitions(self):
-        """Return definitions matching definitions.yaml."""
-        return {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
-    def test_same_shift_compatible(self):
+    def test_same_shift_compatible(self, definitions):
         """Same shift on consecutive days should be compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "D8", "D8") == 1
         assert self._get_compat(compat, "N8", "N8") == 1
 
-    def test_n8_to_d8_incompatible(self):
+    def test_n8_to_d8_incompatible(self, definitions):
         """N8 ends 07:15, D8 starts 08:00 next day - 0.75h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N8", "D8") == 0
 
-    def test_n8_to_d12_incompatible(self):
+    def test_n8_to_d12_incompatible(self, definitions):
         """N8 ends 07:15, D12 starts 07:00 next day - 0.75h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N8", "D12") == 0
 
-    def test_n8_to_p8_incompatible(self):
+    def test_n8_to_p8_incompatible(self, definitions):
         """N8 ends 07:15, P8 starts 09:30 next day - 2.25h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N8", "P8") == 0
 
-    def test_n8_to_disco_incompatible(self):
+    def test_n8_to_disco_incompatible(self, definitions):
         """N8 ends 07:15, DISCO starts 17:30 next day - 10.25h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N8", "DISCO") == 0
 
-    def test_n8_to_n8_compatible(self):
+    def test_n8_to_n8_compatible(self, definitions):
         """N8 ends 07:15, N8 starts 22:45 next day - 15.5h gap, compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N8", "N8") == 1
 
-    def test_n8_to_n12_compatible(self):
+    def test_n8_to_n12_compatible(self, definitions):
         """N8 ends 07:15, N12 starts 19:00 next day - 11.75h gap, compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N8", "N12") == 1
 
-    def test_n12_to_d8_incompatible(self):
+    def test_n12_to_d8_incompatible(self, definitions):
         """N12 ends 07:30, D8 starts 07:00 next day - -0.5h overlap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N12", "D8") == 0
 
-    def test_n12_to_disco_incompatible(self):
+    def test_n12_to_disco_incompatible(self, definitions):
         """N12 ends 07:30, DISCO starts 17:30 next day - 10h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N12", "DISCO") == 0
 
-    def test_n12_to_n8_compatible(self):
+    def test_n12_to_n8_compatible(self, definitions):
         """N12 ends 07:30, N8 starts 22:45 next day - 15.25h gap, compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N12", "N8") == 1
 
-    def test_disco_to_d8_incompatible(self):
+    def test_disco_to_d8_incompatible(self, definitions):
         """DISCO ends 02:00, D8 starts 07:00 next day - 5h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "DISCO", "D8") == 0
 
-    def test_disco_to_l3_compatible(self):
+    def test_disco_to_l3_compatible(self, definitions):
         """DISCO ends 02:00, L3 starts 14:30 next day - 12.5h gap, compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "DISCO", "L3") == 1
 
-    def test_p12_to_d8_incompatible(self):
+    def test_p12_to_d8_incompatible(self, definitions):
         """P12 ends 22:00, D8 starts 07:00 next day - 9h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "P12", "D8") == 0
 
-    def test_p12_to_p8_compatible(self):
+    def test_p12_to_p8_compatible(self, definitions):
         """P12 ends 22:00, P8 starts 09:30 next day - 11.5h gap, compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "P12", "P8") == 1
 
-    def test_l3_to_d8_incompatible(self):
+    def test_l3_to_d8_incompatible(self, definitions):
         """L3 ends 23:00, D8 starts 07:00 next day - 8h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "L3", "D8") == 0
 
-    def test_l3_to_p8_incompatible(self):
+    def test_l3_to_p8_incompatible(self, definitions):
         """L3 ends 23:00, P8 starts 09:30 next day - 10.5h gap, incompatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "L3", "P8") == 0
 
-    def test_l3_to_l3_compatible(self):
+    def test_l3_to_l3_compatible(self, definitions):
         """L3 ends 23:00, L3 starts 14:30 next day - 15.5h gap, compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "L3", "L3") == 1
 
-    def test_day_to_night_compatible(self):
+    def test_day_to_night_compatible(self, definitions):
         """D8 ends 15:30, N8 starts 22:45 next day - 31.25h gap, compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "D8", "N8") == 1
 
-    def test_d12_to_d8_compatible(self):
+    def test_d12_to_d8_compatible(self, definitions):
         """D12 ends 19:30, D8 starts 07:00 next day - 11.5h gap, compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "D12", "D8") == 1
 
-    def test_all_shift_pairs_defined(self):
+    def test_all_shift_pairs_defined(self, definitions):
         """All 64 shift pairs should have a compatibility value."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         from constraints import RestPeriodConstraint as RPC
         shifts = RPC.SHIFT_TYPES
@@ -272,9 +210,9 @@ class TestRestPeriodConstraintCompatibilityTable:
                 val = self._get_compat(compat, s1, s2)
                 assert val in (0, 1)
 
-    def test_night_to_night_compatible(self):
+    def test_night_to_night_compatible(self, definitions):
         """Night-to-night transitions should generally be compatible."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N8", "N8") == 1
         assert self._get_compat(compat, "N8", "N12") == 1
@@ -285,21 +223,11 @@ class TestRestPeriodConstraintCompatibilityTable:
 class TestRestPeriodConstraintApply:
     """Test the apply method of RestPeriodConstraint."""
 
-    def test_model_has_constraints(self):
+    def test_model_has_constraints(self, definitions):
         """The apply method should add constraints to the model."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
         from constraints import RestPeriodConstraint
 
         constraint = RestPeriodConstraint()
@@ -308,23 +236,13 @@ class TestRestPeriodConstraintApply:
         for row in compat:
             assert len(row) == 8
 
-    def test_solver_respects_rest_period(self):
+    def test_solver_respects_rest_period(self, definitions):
         """Solver should reject N8→D8 assignment (overlap, <11h gap)."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_names = ["Alice", "Bob"]
         all_dates = ["2026-08-03", "2026-08-04"]
@@ -368,23 +286,13 @@ class TestRestPeriodConstraintApply:
         for si in range(len(staff_names)):
             assert solver.Value(assignments[si][0]) + solver.Value(assignments[si][1]) <= 1
 
-    def test_solver_allows_compatible_pair(self):
+    def test_solver_allows_compatible_pair(self, definitions):
         """Solver should allow N8→N8 assignment (15.5h gap, compatible)."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_names = ["Alice", "Bob"]
         all_dates = ["2026-08-03", "2026-08-04"]
@@ -447,48 +355,37 @@ class TestNightToDayRestCompatibilityTable:
         idx_b = shifts.index(shift_b)
         return 1 if compat[idx_a][idx_b] else 0
 
-    def _make_definitions(self):
-        return {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
-    def test_night_to_day_all_incompatible(self):
+    def test_night_to_day_all_incompatible(self, definitions):
         """Any night shift on day d forbids any day shift on day d+1."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         for night_shift in ("N8", "N12"):
             for day_shift in ("D8", "D12", "P8", "P12", "L3", "DISCO"):
                 assert self._get_compat(compat, night_shift, day_shift) == 0, \
                     f"{night_shift}→{day_shift} should be incompatible"
 
-    def test_day_to_night_all_incompatible(self):
+    def test_day_to_night_all_incompatible(self, definitions):
         """Any day shift on day d forbids any night shift on day d+1."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         for day_shift in ("D8", "D12", "P8", "P12", "L3", "DISCO"):
             for night_shift in ("N8", "N12"):
                 assert self._get_compat(compat, day_shift, night_shift) == 0, \
                     f"{day_shift}→{night_shift} should be incompatible"
 
-    def test_night_to_night_compatible(self):
+    def test_night_to_night_compatible(self, definitions):
         """Night-to-night transitions are compatible (same category)."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "N8", "N8") == 1
         assert self._get_compat(compat, "N8", "N12") == 1
         assert self._get_compat(compat, "N12", "N8") == 1
         assert self._get_compat(compat, "N12", "N12") == 1
 
-    def test_day_to_day_compatible(self):
+    def test_day_to_day_compatible(self, definitions):
         """Day-to-day transitions are compatible (same category)."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert self._get_compat(compat, "D8", "D8") == 1
         assert self._get_compat(compat, "D8", "DISCO") == 1
@@ -497,9 +394,9 @@ class TestNightToDayRestCompatibilityTable:
         assert self._get_compat(compat, "P8", "L3") == 1
         assert self._get_compat(compat, "L3", "P12") == 1
 
-    def test_all_64_pairs_defined(self):
+    def test_all_64_pairs_defined(self, definitions):
         """All 64 shift-pair combinations must have a boolean value."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         from constraints import NightToDayRest as NDR
         shifts = NDR.SHIFT_TYPES
@@ -508,9 +405,9 @@ class TestNightToDayRestCompatibilityTable:
                 val = self._get_compat(compat, s1, s2)
                 assert val in (0, 1), f"({s1}, {s2}) must be 0 or 1"
 
-    def test_table_dimensions(self):
+    def test_table_dimensions(self, definitions):
         """Compatibility table must be 8×8."""
-        definitions = self._make_definitions()
+        definitions
         compat = self._build_compatibility(definitions)
         assert len(compat) == 8
         for row in compat:
@@ -520,45 +417,25 @@ class TestNightToDayRestCompatibilityTable:
 class TestNightToDayRestApply:
     """Test the apply method of NightToDayRest constraint."""
 
-    def test_model_has_constraints(self):
+    def test_model_has_constraints(self, definitions):
         """The apply method should add constraints to the model."""
         from ortools.sat.python import cp_model
         from constraints import NightToDayRest
 
         model = cp_model.CpModel()
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
         constraint = NightToDayRest()
         compat = constraint._build_night_day_compatibility_table(definitions)
         assert len(compat) == 8
         for row in compat:
             assert len(row) == 8
 
-    def test_solver_rejects_night_to_day(self):
+    def test_solver_rejects_night_to_day(self, definitions):
         """Solver must reject assigning N8 on day d and D8 on day d+1 to same staff."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_names = ["Alice", "Bob"]
         all_dates = ["2026-08-03", "2026-08-04"]
@@ -599,23 +476,13 @@ class TestNightToDayRestApply:
         for si in range(len(staff_names)):
             assert solver.Value(assignments[si][0]) + solver.Value(assignments[si][1]) <= 1
 
-    def test_solver_rejects_day_to_night(self):
+    def test_solver_rejects_day_to_night(self, definitions):
         """Solver must reject assigning D8 on day d and N8 on day d+1 to same staff."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_names = ["Alice", "Bob"]
         all_dates = ["2026-08-03", "2026-08-04"]
@@ -656,23 +523,13 @@ class TestNightToDayRestApply:
         for si in range(len(staff_names)):
             assert solver.Value(assignments[si][0]) + solver.Value(assignments[si][1]) <= 1
 
-    def test_solver_allows_night_to_night(self):
+    def test_solver_allows_night_to_night(self, definitions):
         """Solver should allow N8→N8 (same category, compatible)."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_names = ["Alice", "Bob"]
         all_dates = ["2026-08-03", "2026-08-04"]
@@ -719,23 +576,13 @@ class TestNightToDayRestApply:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_solver_allows_day_to_day(self):
+    def test_solver_allows_day_to_day(self, definitions):
         """Solver should allow D8→DISCO (same category, compatible)."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_names = ["Alice", "Bob"]
         all_dates = ["2026-08-03", "2026-08-04"]
@@ -782,23 +629,13 @@ class TestNightToDayRestApply:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_n12_to_disco_incompatible(self):
+    def test_n12_to_disco_incompatible(self, definitions):
         """N12 on day d forbids DISCO on day d+1 (night→day)."""
         from ortools.sat.python import cp_model
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_names = ["Alice", "Bob"]
         all_dates = ["2026-08-03", "2026-08-04"]
@@ -849,7 +686,7 @@ class TestNightToDayRestApply:
 class TestContractedHoursFloor:
     """Test the ContractedHoursFloor hard constraint."""
 
-    def test_apply_adds_constraints(self):
+    def test_apply_adds_constraints(self, definitions):
         """The apply method should add constraints to the model for staff-hours."""
         from ortools.sat.python import cp_model
         from constraints import ContractedHoursFloor
@@ -857,16 +694,6 @@ class TestContractedHoursFloor:
 
         model = cp_model.CpModel()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         from models import Staff, Classification
         staff_list = [
@@ -911,7 +738,7 @@ class TestContractedHoursFloor:
         expected_adj = compute_adjusted_hours(40.0, [], all_dates)
         assert expected_adj == 40.0 * SCALE
 
-    def test_soft_floor_allows_shortfall(self):
+    def test_soft_floor_allows_shortfall(self, definitions):
         """Soft floor should allow infeasible floors but penalise shortfall."""
         from ortools.sat.python import cp_model
         from constraints import ContractedHoursFloorSoft
@@ -920,16 +747,6 @@ class TestContractedHoursFloor:
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_list = [
             Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
@@ -1001,7 +818,7 @@ class TestContractedHoursFloor:
 class TestOvertimeCap:
     """Test the OvertimeCap hard constraint [H#e8f7d6c5]."""
 
-    def test_apply_adds_constraints(self):
+    def test_apply_adds_constraints(self, definitions):
         """The apply method should add constraints to the model for staff-hours."""
         from ortools.sat.python import cp_model
         from constraints import OvertimeCap
@@ -1009,16 +826,6 @@ class TestOvertimeCap:
 
         model = cp_model.CpModel()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         staff_list = [
             Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
@@ -1069,7 +876,7 @@ class TestOvertimeCap:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)  # 8h < 52h cap
 
-    def test_solver_enforces_cap(self):
+    def test_solver_enforces_cap(self, definitions):
         """Solver should reject solutions where staff hours exceed overtime cap."""
         from ortools.sat.python import cp_model
         from constraints import OvertimeCap
@@ -1079,16 +886,6 @@ class TestOvertimeCap:
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         # Alice: 40h contracted, overtime cap = 52h
         # Assign 5 D8 shifts = 40h, 2 D12 shifts = 24h → total 64h > 52h cap
@@ -1167,7 +964,7 @@ class TestOvertimeCap:
         status = solver.Solve(model)
         assert status == cp_model.INFEASIBLE  # 64h > 52h overtime cap
 
-    def test_solver_allows_within_cap(self):
+    def test_solver_allows_within_cap(self, definitions):
         """Solver should allow solutions within the overtime cap."""
         from ortools.sat.python import cp_model
         from constraints import OvertimeCap
@@ -1177,16 +974,6 @@ class TestOvertimeCap:
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         # Alice: 40h contracted, overtime cap = 52h
         # Assign 5 D8 shifts = 40h, 1 D12 shift = 12h → total 52h = cap
@@ -1263,7 +1050,7 @@ class TestOvertimeCap:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)  # 52h = cap, should be feasible
 
-    def test_cap_uses_raw_contracted_not_adjusted(self):
+    def test_cap_uses_raw_contracted_not_adjusted(self, definitions):
         """Overtime cap uses raw contracted_hours_per_fortnight, not holiday-adjusted."""
         from ortools.sat.python import cp_model
         from constraints import OvertimeCap
@@ -1273,16 +1060,6 @@ class TestOvertimeCap:
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
         # Alice: 40h contracted, 7 days holiday → adjusted = floor(40 * 7 / 14) = 20h
         # But overtime cap should still be min(76, 40 + 12) = 52h (uses raw, not adjusted)
@@ -1365,17 +1142,6 @@ class TestOvertimeCap:
 class TestSkillLevelRequirement:
     """Test the SkillLevelRequirement hard constraint [H#5e6ad8f4]."""
 
-    def _make_definitions(self):
-        return {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
     def _make_positions(self, date, shift, required_skill_level=None):
         rank = -1
@@ -1402,7 +1168,7 @@ class TestSkillLevelRequirement:
         for si in range(len(staff_names)):
             model.Add(sum(assignments[si][pi] for pi in range(len(positions))) <= 1)
 
-    def test_staff_with_higher_skill_can_fill_lower_position(self):
+    def test_staff_with_higher_skill_can_fill_lower_position(self, definitions):
         """Triage-qualified staff (rank 2) should be assignable to Acute position (rank 0)."""
         from ortools.sat.python import cp_model
         from constraints import SkillLevelRequirement
@@ -1410,7 +1176,7 @@ class TestSkillLevelRequirement:
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
-        definitions = self._make_definitions()
+        definitions
 
         staff_list = [
             Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute", "Resus", "Triage"],
@@ -1444,7 +1210,7 @@ class TestSkillLevelRequirement:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_staff_with_lower_skill_cannot_fill_higher_position(self):
+    def test_staff_with_lower_skill_cannot_fill_higher_position(self, definitions):
         """Acute-qualified staff (rank 0) should NOT be assignable to Resus position (rank 1)."""
         from ortools.sat.python import cp_model
         from constraints import SkillLevelRequirement
@@ -1452,7 +1218,7 @@ class TestSkillLevelRequirement:
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
-        definitions = self._make_definitions()
+        definitions
 
         staff_list = [
             Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"],
@@ -1486,7 +1252,7 @@ class TestSkillLevelRequirement:
         status = solver.Solve(model)
         assert status == cp_model.INFEASIBLE
 
-    def test_null_skill_level_allows_any_staff(self):
+    def test_null_skill_level_allows_any_staff(self, definitions):
         """Position with null required_skill_level should accept staff of any skill rank."""
         from ortools.sat.python import cp_model
         from constraints import SkillLevelRequirement
@@ -1494,7 +1260,7 @@ class TestSkillLevelRequirement:
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
-        definitions = self._make_definitions()
+        definitions
 
         staff_list = [
             Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"],
@@ -1528,7 +1294,7 @@ class TestSkillLevelRequirement:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_exact_skill_match_allowed(self):
+    def test_exact_skill_match_allowed(self, definitions):
         """Resus-qualified staff should be assignable to Resus position (exact rank match)."""
         from ortools.sat.python import cp_model
         from constraints import SkillLevelRequirement
@@ -1536,7 +1302,7 @@ class TestSkillLevelRequirement:
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
-        definitions = self._make_definitions()
+        definitions
 
         staff_list = [
             Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute", "Resus"],
@@ -1569,7 +1335,7 @@ class TestSkillLevelRequirement:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_shift_coordinator_can_fill_any_position(self):
+    def test_shift_coordinator_can_fill_any_position(self, definitions):
         """Shift Coordinator (rank 3) should fill Acute, Resus, Triage, or Shift Coordinator positions."""
         from ortools.sat.python import cp_model
         from constraints import SkillLevelRequirement
@@ -1577,7 +1343,7 @@ class TestSkillLevelRequirement:
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
-        definitions = self._make_definitions()
+        definitions
 
         staff_list = [
             Staff(name="Alice", classification=Classification.RN,
@@ -1610,7 +1376,7 @@ class TestSkillLevelRequirement:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_multiple_staff_different_skills(self):
+    def test_multiple_staff_different_skills(self, definitions):
         """With 2 staff (Acute+Resus and Triage) and 1 Resus position, only Triage can fill it."""
         from ortools.sat.python import cp_model
         from constraints import SkillLevelRequirement
@@ -1618,7 +1384,7 @@ class TestSkillLevelRequirement:
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
-        definitions = self._make_definitions()
+        definitions
 
         staff_list = [
             Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute", "Resus"],
@@ -1677,19 +1443,8 @@ class TestSkillLevelRequirement:
 class TestMaxHoursConstraint:
     """Test the MaxHoursConstraint hard constraint [H#f0c5b2c4]."""
 
-    def _make_definitions(self):
-        return {
-            "D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "D12": {"start": "07:00:00", "end": "19:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "P8": {"start": "09:30:00", "end": "18:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "P12": {"start": "09:30:00", "end": "22:00:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": False},
-            "L3": {"start": "14:30:00", "end": "23:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False},
-            "DISCO": {"start": "17:30:00", "end": "02:00:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N8": {"start": "22:45:00", "end": "07:15:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": True},
-            "N12": {"start": "19:00:00", "end": "07:30:00", "span_hours": 12.5, "paid_hours": 12.0, "crosses_midnight": True},
-        }
 
-    def test_variable_bound_enforces_76h_cap(self):
+    def test_variable_bound_enforces_76h_cap(self, definitions):
         """The IntVar upper bound of 76*SCALE enforces the 76h cap at variable creation."""
         from ortools.sat.python import cp_model
         from utils import SCALE
@@ -1697,7 +1452,7 @@ class TestMaxHoursConstraint:
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = self._make_definitions()
+        definitions
         all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
         blocks = [all_dates]
 
@@ -1740,7 +1495,7 @@ class TestMaxHoursConstraint:
         status = solver.Solve(model)
         assert status == cp_model.INFEASIBLE  # 88h > 76h cap via IntVar bound
 
-    def test_at_cap_is_feasible(self):
+    def test_at_cap_is_feasible(self, definitions):
         """Exactly 76h should be feasible (boundary case)."""
         from ortools.sat.python import cp_model
         from utils import SCALE
@@ -1748,7 +1503,7 @@ class TestMaxHoursConstraint:
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
 
-        definitions = self._make_definitions()
+        definitions
         all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
         blocks = [all_dates]
 
@@ -1794,7 +1549,7 @@ class TestMaxHoursConstraint:
         status = solver.Solve(model)
         assert status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
 
-    def test_apply_is_noop(self):
+    def test_apply_is_noop(self, definitions):
         """The apply method should be a no-op (bound is in _create_variables)."""
         from ortools.sat.python import cp_model
         from constraints import MaxHoursConstraint

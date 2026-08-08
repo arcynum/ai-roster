@@ -23,6 +23,7 @@ class TestUnfilledFirstWorkflow:
         contracted_hours: float,
         roster_start: date,
         roster_end: date,
+        definitions: dict,
         constraint_config: dict | None = None,
     ) -> RosterModel:
         """Build a minimal RosterModel with the given staff and dates."""
@@ -52,64 +53,6 @@ class TestUnfilledFirstWorkflow:
                 "slot_id": "D8-General-1",
             })
 
-        definitions = {
-            "D8": {
-                "start": "07:00:00",
-                "end": "15:30:00",
-                "span_hours": 8.5,
-                "paid_hours": 8.0,
-                "crosses_midnight": False,
-            },
-            "D12": {
-                "start": "07:00:00",
-                "end": "19:30:00",
-                "span_hours": 12.5,
-                "paid_hours": 12.0,
-                "crosses_midnight": False,
-            },
-            "P8": {
-                "start": "15:00:00",
-                "end": "23:30:00",
-                "span_hours": 8.5,
-                "paid_hours": 8.0,
-                "crosses_midnight": False,
-            },
-            "P12": {
-                "start": "15:00:00",
-                "end": "03:30:00",
-                "span_hours": 12.5,
-                "paid_hours": 12.0,
-                "crosses_midnight": True,
-            },
-            "L3": {
-                "start": "22:00:00",
-                "end": "06:00:00",
-                "span_hours": 8.0,
-                "paid_hours": 8.0,
-                "crosses_midnight": True,
-            },
-            "DISCO": {
-                "start": "17:30:00",
-                "end": "02:00:00",
-                "span_hours": 8.5,
-                "paid_hours": 8.0,
-                "crosses_midnight": True,
-            },
-            "N8": {
-                "start": "22:00:00",
-                "end": "06:00:00",
-                "span_hours": 8.0,
-                "paid_hours": 8.0,
-                "crosses_midnight": True,
-            },
-            "N12": {
-                "start": "21:00:00",
-                "end": "09:30:00",
-                "span_hours": 12.5,
-                "paid_hours": 12.0,
-                "crosses_midnight": True,
-            },
-        }
         weights = {}
 
         model = RosterModel(
@@ -122,7 +65,7 @@ class TestUnfilledFirstWorkflow:
         )
         return model
 
-    def test_understaffed_scenario_produces_unfilled(self):
+    def test_understaffed_scenario_produces_unfilled(self, definitions):
         """With 1 staff member and 14 positions, the model should produce
         unfilled positions rather than going INFEASIBLE."""
         model = self._make_model(
@@ -130,6 +73,7 @@ class TestUnfilledFirstWorkflow:
             contracted_hours=56,  # enough hours for 7 shifts
             roster_start=date(2026, 8, 3),
             roster_end=date(2026, 8, 16),
+            definitions=definitions,
         )
         model.build_model()
         result = model.solve()

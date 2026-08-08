@@ -110,7 +110,7 @@ Ponytail decisions:
 - [ ] §4: Delete dead code, move imports, error handling, template fixes
 - [ ] §6: Documentation updates
 
-**Status: NOT STARTED**
+**Status: IN PROGRESS — §5.3 started**
 
 ### Step 8: Optional — snake_case migration
 - [ ] Mechanical pass: OR-Tools CamelCase → snake_case
