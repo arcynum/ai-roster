@@ -37,19 +37,6 @@ SKILL_HIERARCHY = ["Acute", "Resus", "Triage", "Shift Coordinator"]
 SKILL_RANK = {level: i for i, level in enumerate(SKILL_HIERARCHY)}
 
 
-def skill_rank(level: str) -> int:
-    """Return the rank of a skill level in the hierarchy."""
-    return SKILL_RANK[level]
-
-
-def satisfies_requirement(staff_skill_rank: int, required_rank: int) -> bool:
-    """Check if a staff member's highest skill rank meets a requirement.
-
-    Uses threshold semantics: a higher rank satisfies lower requirements.
-    """
-    return staff_skill_rank >= required_rank
-
-
 # ---------------------------------------------------------------------------
 # Dataclasses
 # ---------------------------------------------------------------------------
@@ -114,18 +101,6 @@ class Shift:
     span_hours: float
     paid_hours: float
     unpaid_break_minutes: int
-
-    @property
-    def is_night_shift(self) -> bool:
-        """Whether this shift is classified as a night shift."""
-        from utils import NIGHT_SHIFTS
-        return self.name in NIGHT_SHIFTS
-
-    @property
-    def is_day_shift(self) -> bool:
-        """Whether this shift is classified as a day shift."""
-        from utils import DAY_SHIFTS
-        return self.name in DAY_SHIFTS
 
 
 @dataclass

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from datetime import date as date_type, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from utils import (
@@ -20,6 +21,7 @@ from utils import (
     REST_PERIOD_SECONDS,
     SCALE,
     SHIFT_ORDER,
+    compute_adjusted_hours,
     fair_share_deviation,
 )
 
@@ -151,9 +153,7 @@ class CoverageConstraint(BaseHardConstraint):
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, staff_hours_vars=None,
-              unfilled_vars=None):
-        from datetime import date as date_type
-
+               unfilled_vars=None):
         if unfilled_vars is None or positions is None:
             return []
 
@@ -188,9 +188,9 @@ class CoverageConstraint(BaseHardConstraint):
             else:
                 weight = tier_weekday_day
 
-            penalty = model.NewIntVar(0, weight, f"unfilled_penalty_{pi}")
-            model.Add(penalty == weight).OnlyEnforceIf(unfilled_vars[pi])
-            model.Add(penalty == 0).OnlyEnforceIf(unfilled_vars[pi].Not())
+            penalty = model.new_int_var(0, weight, f"unfilled_penalty_{pi}")
+            model.Add(penalty == weight).only_enforce_if(unfilled_vars[pi])
+            model.Add(penalty == 0).only_enforce_if(unfilled_vars[pi].Not())
             penalty_terms.append(penalty)
 
             staff_vars = [assignments[si][pi] for si in range(num_staff)]
@@ -231,24 +231,6 @@ class SkillLevelRequirement(BaseHardConstraint):
                     model.Add(assignments[si][pi] == 0)
 
 
-class SkillLevelHierarchy(BaseHardConstraint):
-    """[H#84a1d5c9] [H#6db3f120] Hierarchical skill levels.
-
-    No-op at CP-SAT level. The skill hierarchy is enforced by
-    SkillLevelRequirement ([H#5e6ad8f4]) via threshold semantics.
-    Data validation in utils.validate_staff_yaml ensures skill_tags is always
-    a contiguous prefix of the hierarchy (e.g. [Acute, Resus] not [Resus]).
-    This class exists only as a toggle entry in config.yaml.
-    """
-
-    constraint_id = "[H#84a1d5c9]"
-
-    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None,
-              unfilled_vars=None):
-        pass
-
-
 class NoDoubleBooking(BaseHardConstraint):
     """[H#e91c63ab] A staff member's assigned shifts must not overlap.
 
@@ -268,7 +250,6 @@ class NoDoubleBooking(BaseHardConstraint):
         used by RestPeriodConstraint, this only checks for actual overlap
         (gap ≥ 0), not the 11h rest period.
         """
-        from datetime import datetime, timedelta
         n = len(self.SHIFT_TYPES)
         compat = [[True] * n for _ in range(n)]
         for a_idx, shift_a in enumerate(self.SHIFT_TYPES):
@@ -354,7 +335,6 @@ class RestPeriodConstraint(BaseHardConstraint):
         self, definitions: dict
     ) -> list[list[bool]]:
         """Build 8x8 rest-period compatibility table (11h gap)."""
-        from datetime import datetime, timedelta
 
         n = len(SHIFT_ORDER)
         compat: list[list[bool]] = [[True] * n for _ in range(n)]
@@ -409,7 +389,7 @@ class RestPeriodConstraint(BaseHardConstraint):
                     if vars_list:
                         row.append(vars_list[0])
                     else:
-                        row.append(model.NewBoolVar(f"fallback_works_{si}_{di}_{sh_idx}"))
+                        row.append(model.new_bool_var(f"fallback_works_{si}_{di}_{sh_idx}"))
                         model.Add(row[-1] == 0)
             works.append(row)
         return works
@@ -488,7 +468,7 @@ class NightToDayRest(BaseHardConstraint):
                     if vars_list:
                         row.append(vars_list[0])
                     else:
-                        row.append(model.NewBoolVar(f"fallback_works_{si}_{di}_{sh_idx}"))
+                        row.append(model.new_bool_var(f"fallback_works_{si}_{di}_{sh_idx}"))
                         model.Add(row[-1] == 0)
             works.append(row)
         return works
@@ -521,7 +501,6 @@ class HolidayConstraint(BaseHardConstraint):
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, staff_hours_vars=None,
               unfilled_vars=None):
-        from datetime import date as date_type, timedelta
 
         num_staff = len(staff_names)
         num_positions = len(positions)
@@ -561,27 +540,6 @@ class MaxHoursConstraint(BaseHardConstraint):
                 model.Add(staff_hours_vars[si][bi] <= 76 * SCALE)
 
 
-class ContractedHoursFloor(BaseHardConstraint):
-    """[H#d9a8b7c6] Staff must meet contracted hours floor per block.
-
-    Holidays proportionally reduce the floor; red requests do not.
-    Uses precomputed adjusted_hours via utils.compute_adjusted_hours.
-
-    NOTE: This constraint was reclassified from hard to soft (see
-    ContractedHoursFloorSoft).  It remains here as a registry entry so the
-    constraint ID is discoverable via get_hard_constraint_ids(), but it does
-    nothing at the CP-SAT level — the soft floor handles the real logic.
-    """
-
-    constraint_id = "[H#d9a8b7c6]"
-
-    def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
-              definitions, all_dates, blocks, positions, staff_hours_vars=None,
-              unfilled_vars=None):
-        # No-op — reclassified to soft constraint (ContractedHoursFloorSoft).
-        pass
-
-
 class ContractedHoursFloorSoft(BaseSoftConstraint):
     """[S#d9a8b7c6] Soft contracted-hours floor — minimises shortfall fairly.
 
@@ -599,8 +557,7 @@ class ContractedHoursFloorSoft(BaseSoftConstraint):
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
-              objective_terms=None):
-        from utils import compute_adjusted_hours
+               objective_terms=None):
 
         if staff_hours_vars is None:
             return
@@ -617,8 +574,7 @@ class ContractedHoursFloorSoft(BaseSoftConstraint):
                     block_strs,
                 )
                 # shortfall >= adjusted_hours - staff_hours, >= 0
-                max_shortfall = adj  # upper bound = full adjusted hours
-                sv = model.NewIntVar(0, max_shortfall,
+                sv = model.new_int_var(0, adj,
                                      f"shortfall_{staff_names[si]}_b{bi}")
                 model.Add(sv >= adj - staff_hours_vars[si][bi])
                 model.Add(sv >= 0)
@@ -630,13 +586,13 @@ class ContractedHoursFloorSoft(BaseSoftConstraint):
             sv for row in self._shortfall_vars for sv in row
         ]
         if all_shortfalls:
-            total_shortfall = model.NewIntVar(0,
+            total_shortfall = model.new_int_var(0,
                 len(all_shortfalls) * 76 * SCALE, "total_shortfall")
             model.Add(total_shortfall == sum(all_shortfalls))
             if objective_terms is not None:
                 objective_terms.append(total_shortfall * weight)
             else:
-                model.Minimize(total_shortfall * weight)
+                model.minimize(total_shortfall * weight)
             return total_shortfall
         return None
 
@@ -690,7 +646,7 @@ class OvertimeDistribution(BaseSoftConstraint):
         for si, staff in enumerate(staff_list):
             contracted_scaled = int(round(staff.contracted_hours_per_fortnight * SCALE))
             for bi in range(num_blocks):
-                ot = model.NewIntVar(0, 76 * SCALE, f"ot_{staff_names[si]}_b{bi}")
+                ot = model.new_int_var(0, 76 * SCALE, f"ot_{staff_names[si]}_b{bi}")
                 model.Add(ot >= staff_hours_vars[si][bi] - contracted_scaled)
                 model.Add(ot >= 0)
                 overtime_vars.append(ot)
@@ -702,7 +658,7 @@ class OvertimeDistribution(BaseSoftConstraint):
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
         else:
-            model.Minimize(total_deviation * weight)
+            model.minimize(total_deviation * weight)
         return total_deviation
 
 
@@ -723,8 +679,7 @@ class WeekdayNightFairness(BaseSoftConstraint):
 
     def apply(self, model, staff_list, staff_by_name, assignments, staff_names,
               definitions, all_dates, blocks, positions, weight, staff_hours_vars=None,
-              objective_terms=None):
-        from datetime import date as date_type
+               objective_terms=None):
 
         if staff_hours_vars is None:
             return
@@ -732,16 +687,14 @@ class WeekdayNightFairness(BaseSoftConstraint):
         num_staff = len(staff_names)
         num_blocks = len(blocks)
 
-        # Build position-index → date and shift lookups
-        pos_date: list[str] = [p["date"] for p in positions]
-
-        total_night_dev = model.NewIntVar(0, num_staff * num_blocks * 76, "total_night_dev")
+        total_night_dev = model.new_int_var(0, num_staff * num_blocks * 76, "total_night_dev")
 
         for bi, block in enumerate(blocks):
             block_set = set(block)
 
             # Night position indices and their paid hours for this block
-            # EXCLUDE weekend nights (Saturday/Sunday) per plan.md §1.3a
+            # EXCLUDE weekend nights (Saturday/Sunday) — S#d2a7f4a6 covers
+            # weekday nights only.
             night_pos_indices: list[int] = []
             night_hours: list[int] = []
             for pi, pos in enumerate(positions):
@@ -762,7 +715,7 @@ class WeekdayNightFairness(BaseSoftConstraint):
                     night_hours[j] * assignments[si][night_pos_indices[j]]
                     for j in range(len(night_pos_indices))
                 ]
-                nh = model.NewIntVar(0, 76, f"night_h_{staff_names[si]}_b{bi}")
+                nh = model.new_int_var(0, 76, f"night_h_{staff_names[si]}_b{bi}")
                 model.Add(nh == sum(terms))
                 staff_night_hours_block.append(nh)
 
@@ -780,7 +733,7 @@ class WeekdayNightFairness(BaseSoftConstraint):
         if objective_terms is not None:
             objective_terms.append(total_night_dev * weight)
         else:
-            model.Minimize(total_night_dev * weight)
+            model.minimize(total_night_dev * weight)
         return total_night_dev
 
 
@@ -821,7 +774,7 @@ class _DayOfWeekFairness(BaseSoftConstraint):
                 day_hours[j] * assignments[si][day_pos_indices[j]]
                 for j in range(len(day_pos_indices))
             ]
-            sh = model.NewIntVar(0, 76, f"{prefix}_h_{staff_names[si]}")
+            sh = model.new_int_var(0, 76, f"{prefix}_h_{staff_names[si]}")
             model.Add(sh == sum(terms))
             staff_day_hours.append(sh)
 
@@ -832,7 +785,7 @@ class _DayOfWeekFairness(BaseSoftConstraint):
         if objective_terms is not None:
             objective_terms.append(total_deviation * weight)
         else:
-            model.Minimize(total_deviation * weight)
+            model.minimize(total_deviation * weight)
         return total_deviation
 
 
@@ -937,21 +890,21 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                     # Create and_sh for each shift type
                     and_sh_vars: list[cp_model.IntVar] = []
                     for sh in range(num_shift_types):
-                        and_sh = model.NewBoolVar(f"and_{staff_names[si]}_d{di}_s{sh}")
+                        and_sh = model.new_bool_var(f"and_{staff_names[si]}_d{di}_s{sh}")
                         and_sh_vars.append(and_sh)
-                        model.AddBoolAnd([
+                        model.add_bool_and([
                             works[si][di * num_shift_types + sh],
                             works[si][di1 * num_shift_types + sh],
-                        ]).OnlyEnforceIf(and_sh)
-                        model.AddBoolOr([
+                        ]).only_enforce_if(and_sh)
+                        model.add_bool_or([
                             works[si][di * num_shift_types + sh].Not(),
                             works[si][di1 * num_shift_types + sh].Not(),
-                        ]).OnlyEnforceIf(and_sh.Not())
+                        ]).only_enforce_if(and_sh.Not())
                     # same = OR over sh of and_sh
-                    same = model.NewBoolVar(f"same_{staff_names[si]}_b{block_start}_d{idx}")
+                    same = model.new_bool_var(f"same_{staff_names[si]}_b{block_start}_d{idx}")
                     row.append(same)
-                    model.AddBoolOr(and_sh_vars).OnlyEnforceIf(same)
-                    model.AddBoolOr([av.Not() for av in and_sh_vars]).OnlyEnforceIf(same.Not())
+                    model.add_bool_or(and_sh_vars).only_enforce_if(same)
+                    model.add_bool_or([av.Not() for av in and_sh_vars]).only_enforce_if(same.Not())
                 same_vars.append(row)
 
             # --- Compute run_start[d] ---
@@ -960,22 +913,22 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                 row: list[cp_model.IntVar] = []
                 for idx, di in enumerate(block_date_indices):
                     if idx == 0:
-                        rs = model.NewBoolVar(f"run_start_{staff_names[si]}_b{block_start}_d{idx}")
+                        rs = model.new_bool_var(f"run_start_{staff_names[si]}_b{block_start}_d{idx}")
                         # rs = 1 iff works_any[si][di] = 1
                         works_any = model._works_any[si][di]
                         model.Add(rs == works_any)
                     else:
                         prev_idx = idx - 1
-                        not_same = model.NewBoolVar(f"not_same_{staff_names[si]}_b{block_start}_d{prev_idx}")
-                        model.Add(same_vars[si][prev_idx] == 0).OnlyEnforceIf(not_same)
-                        model.Add(same_vars[si][prev_idx] == 1).OnlyEnforceIf(not_same.Not())
-                        not_unassigned = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_b{block_start}_d{idx}")
+                        not_same = model.new_bool_var(f"not_same_{staff_names[si]}_b{block_start}_d{prev_idx}")
+                        model.Add(same_vars[si][prev_idx] == 0).only_enforce_if(not_same)
+                        model.Add(same_vars[si][prev_idx] == 1).only_enforce_if(not_same.Not())
+                        not_unassigned = model.new_bool_var(f"not_unassigned_{staff_names[si]}_b{block_start}_d{idx}")
                         works_any = model._works_any[si][di]
                         model.Add(not_unassigned == works_any)
-                        rs = model.NewBoolVar(f"run_start_{staff_names[si]}_b{block_start}_d{idx}")
-                        model.Add(rs == 1).OnlyEnforceIf(not_same, not_unassigned)
-                        model.Add(rs == 0).OnlyEnforceIf(not_same.Not())
-                        model.Add(rs == 0).OnlyEnforceIf(not_unassigned.Not())
+                        rs = model.new_bool_var(f"run_start_{staff_names[si]}_b{block_start}_d{idx}")
+                        model.Add(rs == 1).only_enforce_if(not_same, not_unassigned)
+                        model.Add(rs == 0).only_enforce_if(not_same.Not())
+                        model.Add(rs == 0).only_enforce_if(not_unassigned.Not())
                     row.append(rs)
                 run_start_vars.append(row)
 
@@ -989,57 +942,57 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                         if L == 1:
                             conj_bools: list[cp_model.IntVar] = [rs]
                             if idx + 1 < block_len:
-                                not_same_next = model.NewBoolVar(
+                                not_same_next = model.new_bool_var(
                                     f"not_same_next_{staff_names[si]}_b{block_start}_d{idx}",
                                 )
-                                model.Add(same_vars[si][idx] == 0).OnlyEnforceIf(not_same_next)
-                                model.Add(same_vars[si][idx] == 1).OnlyEnforceIf(not_same_next.Not())
+                                model.Add(same_vars[si][idx] == 0).only_enforce_if(not_same_next)
+                                model.Add(same_vars[si][idx] == 1).only_enforce_if(not_same_next.Not())
                                 conj_bools.append(not_same_next)
-                            exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
-                            model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
-                            model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
+                            exact_L = model.new_bool_var(f"exact_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.add_bool_and(conj_bools).only_enforce_if(exact_L)
+                            model.add_bool_or([b.Not() for b in conj_bools]).only_enforce_if(exact_L.Not())
                         else:
                             conj_bools: list[cp_model.IntVar] = [rs]
                             for k in range(L - 1):
                                 conj_bools.append(same_vars[si][idx + k])
                             if idx + L < block_len:
-                                not_same_next = model.NewBoolVar(
+                                not_same_next = model.new_bool_var(
                                     f"not_same_next_{staff_names[si]}_b{block_start}_d{idx+L-1}",
                                 )
-                                model.Add(same_vars[si][idx + L - 1] == 0).OnlyEnforceIf(not_same_next)
-                                model.Add(same_vars[si][idx + L - 1] == 1).OnlyEnforceIf(not_same_next.Not())
+                                model.Add(same_vars[si][idx + L - 1] == 0).only_enforce_if(not_same_next)
+                                model.Add(same_vars[si][idx + L - 1] == 1).only_enforce_if(not_same_next.Not())
                                 conj_bools.append(not_same_next)
-                            exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
-                            model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
-                            model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
+                            exact_L = model.new_bool_var(f"exact_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.add_bool_and(conj_bools).only_enforce_if(exact_L)
+                            model.add_bool_or([b.Not() for b in conj_bools]).only_enforce_if(exact_L.Not())
 
                         # Apply tiered penalty
                         if L == 2:
                             pass  # ideal: no penalty
                         elif L == 1 or L == 3:
-                            tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
-                            model.Add(tier_penalty == weight // 10).OnlyEnforceIf(exact_L)
-                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            tier_penalty = model.new_int_var(0, weight, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.Add(tier_penalty == weight // 10).only_enforce_if(exact_L)
+                            model.Add(tier_penalty == 0).only_enforce_if(exact_L.Not())
                             all_penalty_terms.append(tier_penalty)
                         elif L == 4:
-                            tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
-                            model.Add(tier_penalty == weight).OnlyEnforceIf(exact_L)
-                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            tier_penalty = model.new_int_var(0, weight, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.Add(tier_penalty == weight).only_enforce_if(exact_L)
+                            model.Add(tier_penalty == 0).only_enforce_if(exact_L.Not())
                             all_penalty_terms.append(tier_penalty)
                         else:
                             esc = (L - 3) * weight
-                            tier_penalty = model.NewIntVar(0, esc, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
-                            model.Add(tier_penalty == esc).OnlyEnforceIf(exact_L)
-                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            tier_penalty = model.new_int_var(0, esc, f"tier_L{L}_{staff_names[si]}_b{block_start}_d{idx}")
+                            model.Add(tier_penalty == esc).only_enforce_if(exact_L)
+                            model.Add(tier_penalty == 0).only_enforce_if(exact_L.Not())
                             all_penalty_terms.append(tier_penalty)
 
         if all_penalty_terms:
-            total_penalty = model.NewIntVar(0, len(blocks) * num_staff * self.MAX_RUN * weight, "consec_penalty")
+            total_penalty = model.new_int_var(0, len(blocks) * num_staff * self.MAX_RUN * weight, "consec_penalty")
             model.Add(total_penalty == sum(all_penalty_terms))
             if objective_terms is not None:
                 objective_terms.append(total_penalty)
             else:
-                model.Minimize(total_penalty)
+                model.minimize(total_penalty)
             return total_penalty
         return None
 
@@ -1097,20 +1050,20 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                         sh_name = SHIFT_ORDER[sh_idx]
                         vars_list = shift_to_vars.get(sh_name, [])
                         if vars_list:
-                            w = model.NewBoolVar(f"wf_{staff_names[si]}_d{di}_s{sh_idx}")
+                            w = model.new_bool_var(f"wf_{staff_names[si]}_d{di}_s{sh_idx}")
                             works_fb.append([])  # placeholder
                             works_row.append(w)
-                            model.Add(sum(vars_list) >= 1).OnlyEnforceIf(w)
-                            model.Add(sum(vars_list) == 0).OnlyEnforceIf(w.Not())
+                            model.Add(sum(vars_list) >= 1).only_enforce_if(w)
+                            model.Add(sum(vars_list) == 0).only_enforce_if(w.Not())
                         else:
-                            w = model.NewBoolVar(f"wf_{staff_names[si]}_d{di}_s{sh_idx}")
+                            w = model.new_bool_var(f"wf_{staff_names[si]}_d{di}_s{sh_idx}")
                             works_row.append(w)
                             model.Add(w == 0)
                     works_fb.append(works_row)  # fix: append after loop
-                    wa = model.NewBoolVar(f"wa_{staff_names[si]}_d{di}")
+                    wa = model.new_bool_var(f"wa_{staff_names[si]}_d{di}")
                     works_any_row.append(wa)
-                    model.Add(sum(works_row) >= 1).OnlyEnforceIf(wa)
-                    model.Add(sum(works_row) == 0).OnlyEnforceIf(wa.Not())
+                    model.Add(sum(works_row) >= 1).only_enforce_if(wa)
+                    model.Add(sum(works_row) == 0).only_enforce_if(wa.Not())
                 works_fb[si] = works_row
                 works_any_fb.append(works_any_row)
 
@@ -1123,20 +1076,20 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                     di1 = block_date_indices[idx + 1]
                     and_sh_vars: list[cp_model.IntVar] = []
                     for sh in range(num_shift_types):
-                        and_sh = model.NewBoolVar(f"and_{staff_names[si]}_d{di}_s{sh}")
+                        and_sh = model.new_bool_var(f"and_{staff_names[si]}_d{di}_s{sh}")
                         and_sh_vars.append(and_sh)
-                        model.AddBoolAnd([
+                        model.add_bool_and([
                             works_fb[si][di * num_shift_types + sh],
                             works_fb[si][di1 * num_shift_types + sh],
-                        ]).OnlyEnforceIf(and_sh)
-                        model.AddBoolOr([
+                        ]).only_enforce_if(and_sh)
+                        model.add_bool_or([
                             works_fb[si][di * num_shift_types + sh].Not(),
                             works_fb[si][di1 * num_shift_types + sh].Not(),
-                        ]).OnlyEnforceIf(and_sh.Not())
-                    same = model.NewBoolVar(f"same_{staff_names[si]}_d{idx}")
+                        ]).only_enforce_if(and_sh.Not())
+                    same = model.new_bool_var(f"same_{staff_names[si]}_d{idx}")
                     row.append(same)
-                    model.AddBoolOr(and_sh_vars).OnlyEnforceIf(same)
-                    model.AddBoolOr([av.Not() for av in and_sh_vars]).OnlyEnforceIf(same.Not())
+                    model.add_bool_or(and_sh_vars).only_enforce_if(same)
+                    model.add_bool_or([av.Not() for av in and_sh_vars]).only_enforce_if(same.Not())
                 same_vars.append(row)
 
             # --- Compute run_start[d] ---
@@ -1145,21 +1098,21 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                 row: list[cp_model.IntVar] = []
                 for idx, di in enumerate(block_date_indices):
                     if idx == 0:
-                        rs = model.NewBoolVar(f"run_start_{staff_names[si]}_d{idx}")
+                        rs = model.new_bool_var(f"run_start_{staff_names[si]}_d{idx}")
                         works_any = works_any_fb[si][di]
                         model.Add(rs == works_any)
                     else:
                         prev_idx = idx - 1
-                        not_same = model.NewBoolVar(f"not_same_{staff_names[si]}_d{prev_idx}")
-                        model.Add(same_vars[si][prev_idx] == 0).OnlyEnforceIf(not_same)
-                        model.Add(same_vars[si][prev_idx] == 1).OnlyEnforceIf(not_same.Not())
-                        not_unassigned = model.NewBoolVar(f"not_unassigned_{staff_names[si]}_d{idx}")
+                        not_same = model.new_bool_var(f"not_same_{staff_names[si]}_d{prev_idx}")
+                        model.Add(same_vars[si][prev_idx] == 0).only_enforce_if(not_same)
+                        model.Add(same_vars[si][prev_idx] == 1).only_enforce_if(not_same.Not())
+                        not_unassigned = model.new_bool_var(f"not_unassigned_{staff_names[si]}_d{idx}")
                         works_any = works_any_fb[si][di]
                         model.Add(not_unassigned == works_any)
-                        rs = model.NewBoolVar(f"run_start_{staff_names[si]}_d{idx}")
-                        model.Add(rs == 1).OnlyEnforceIf(not_same, not_unassigned)
-                        model.Add(rs == 0).OnlyEnforceIf(not_same.Not())
-                        model.Add(rs == 0).OnlyEnforceIf(not_unassigned.Not())
+                        rs = model.new_bool_var(f"run_start_{staff_names[si]}_d{idx}")
+                        model.Add(rs == 1).only_enforce_if(not_same, not_unassigned)
+                        model.Add(rs == 0).only_enforce_if(not_same.Not())
+                        model.Add(rs == 0).only_enforce_if(not_unassigned.Not())
                     row.append(rs)
                 run_start_vars.append(row)
 
@@ -1172,52 +1125,52 @@ class ConsecutiveShiftDiscouraged(BaseSoftConstraint):
                         if L == 1:
                             conj_bools: list[cp_model.IntVar] = [rs]
                             if idx + 1 < block_len:
-                                not_same_next = model.NewBoolVar(f"not_same_next_{staff_names[si]}_d{idx}")
-                                model.Add(same_vars[si][idx] == 0).OnlyEnforceIf(not_same_next)
-                                model.Add(same_vars[si][idx] == 1).OnlyEnforceIf(not_same_next.Not())
+                                not_same_next = model.new_bool_var(f"not_same_next_{staff_names[si]}_d{idx}")
+                                model.Add(same_vars[si][idx] == 0).only_enforce_if(not_same_next)
+                                model.Add(same_vars[si][idx] == 1).only_enforce_if(not_same_next.Not())
                                 conj_bools.append(not_same_next)
-                            exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_d{idx}")
-                            model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
-                            model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
+                            exact_L = model.new_bool_var(f"exact_L{L}_{staff_names[si]}_d{idx}")
+                            model.add_bool_and(conj_bools).only_enforce_if(exact_L)
+                            model.add_bool_or([b.Not() for b in conj_bools]).only_enforce_if(exact_L.Not())
                         else:
                             conj_bools: list[cp_model.IntVar] = [rs]
                             for k in range(L - 1):
                                 conj_bools.append(same_vars[si][idx + k])
                             if idx + L < block_len:
-                                not_same_next = model.NewBoolVar(f"not_same_next_{staff_names[si]}_d{idx+L-1}")
-                                model.Add(same_vars[si][idx + L - 1] == 0).OnlyEnforceIf(not_same_next)
-                                model.Add(same_vars[si][idx + L - 1] == 1).OnlyEnforceIf(not_same_next.Not())
+                                not_same_next = model.new_bool_var(f"not_same_next_{staff_names[si]}_d{idx+L-1}")
+                                model.Add(same_vars[si][idx + L - 1] == 0).only_enforce_if(not_same_next)
+                                model.Add(same_vars[si][idx + L - 1] == 1).only_enforce_if(not_same_next.Not())
                                 conj_bools.append(not_same_next)
-                            exact_L = model.NewBoolVar(f"exact_L{L}_{staff_names[si]}_d{idx}")
-                            model.AddBoolAnd(conj_bools).OnlyEnforceIf(exact_L)
-                            model.AddBoolOr([b.Not() for b in conj_bools]).OnlyEnforceIf(exact_L.Not())
+                            exact_L = model.new_bool_var(f"exact_L{L}_{staff_names[si]}_d{idx}")
+                            model.add_bool_and(conj_bools).only_enforce_if(exact_L)
+                            model.add_bool_or([b.Not() for b in conj_bools]).only_enforce_if(exact_L.Not())
 
                         if L == 2:
                             pass
                         elif L == 1 or L == 3:
-                            tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_d{idx}")
-                            model.Add(tier_penalty == weight // 10).OnlyEnforceIf(exact_L)
-                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            tier_penalty = model.new_int_var(0, weight, f"tier_L{L}_{staff_names[si]}_d{idx}")
+                            model.Add(tier_penalty == weight // 10).only_enforce_if(exact_L)
+                            model.Add(tier_penalty == 0).only_enforce_if(exact_L.Not())
                             all_penalty_terms.append(tier_penalty)
                         elif L == 4:
-                            tier_penalty = model.NewIntVar(0, weight, f"tier_L{L}_{staff_names[si]}_d{idx}")
-                            model.Add(tier_penalty == weight).OnlyEnforceIf(exact_L)
-                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            tier_penalty = model.new_int_var(0, weight, f"tier_L{L}_{staff_names[si]}_d{idx}")
+                            model.Add(tier_penalty == weight).only_enforce_if(exact_L)
+                            model.Add(tier_penalty == 0).only_enforce_if(exact_L.Not())
                             all_penalty_terms.append(tier_penalty)
                         else:
                             esc = (L - 3) * weight
-                            tier_penalty = model.NewIntVar(0, esc, f"tier_L{L}_{staff_names[si]}_d{idx}")
-                            model.Add(tier_penalty == esc).OnlyEnforceIf(exact_L)
-                            model.Add(tier_penalty == 0).OnlyEnforceIf(exact_L.Not())
+                            tier_penalty = model.new_int_var(0, esc, f"tier_L{L}_{staff_names[si]}_d{idx}")
+                            model.Add(tier_penalty == esc).only_enforce_if(exact_L)
+                            model.Add(tier_penalty == 0).only_enforce_if(exact_L.Not())
                             all_penalty_terms.append(tier_penalty)
 
         if all_penalty_terms:
-            total_penalty = model.NewIntVar(0, len(blocks) * num_staff * self.MAX_RUN * weight, "consec_penalty")
+            total_penalty = model.new_int_var(0, len(blocks) * num_staff * self.MAX_RUN * weight, "consec_penalty")
             model.Add(total_penalty == sum(all_penalty_terms))
             if objective_terms is not None:
                 objective_terms.append(total_penalty)
             else:
-                model.Minimize(total_penalty)
+                model.minimize(total_penalty)
             return total_penalty
         return None
 
@@ -1260,17 +1213,17 @@ class SkillLevelTiebreaker(BaseSoftConstraint):
                 max_penalty += over_qual
 
                 # penalty = over_qual * assignments[si][pi]
-                term = model.NewIntVar(0, over_qual, f"sq_{staff_names[si]}_{pi}")
+                term = model.new_int_var(0, over_qual, f"sq_{staff_names[si]}_{pi}")
                 model.Add(term == over_qual * assignments[si][pi])
                 penalty_terms.append(term)
 
         if penalty_terms:
-            total_sq = model.NewIntVar(0, max_penalty, "skill_tiebreaker")
+            total_sq = model.new_int_var(0, max_penalty, "skill_tiebreaker")
             model.Add(total_sq == sum(penalty_terms))
             if objective_terms is not None:
                 objective_terms.append(total_sq * weight)
             else:
-                model.Minimize(total_sq * weight)
+                model.minimize(total_sq * weight)
             return total_sq
         return None
 
@@ -1338,22 +1291,22 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
                 for idx, di in enumerate(block_date_indices):
                     cat = category[si][di]
                     if idx == 0:
-                        rs = model.NewBoolVar(f"cat_rs_{staff_names[si]}_b{bi}_d{idx}")
-                        model.Add(cat != 2).OnlyEnforceIf(rs)
-                        model.Add(cat == 2).OnlyEnforceIf(rs.Not())
+                        rs = model.new_bool_var(f"cat_rs_{staff_names[si]}_b{bi}_d{idx}")
+                        model.Add(cat != 2).only_enforce_if(rs)
+                        model.Add(cat == 2).only_enforce_if(rs.Not())
                     else:
                         prev_di = block_date_indices[idx - 1]
                         prev_cat = category[si][prev_di]
-                        different = model.NewBoolVar(f"cat_diff_{staff_names[si]}_b{bi}_d{idx}")
-                        model.Add(prev_cat != cat).OnlyEnforceIf(different)
-                        model.Add(prev_cat == cat).OnlyEnforceIf(different.Not())
-                        worked = model.NewBoolVar(f"cat_worked_{staff_names[si]}_b{bi}_d{idx}")
-                        model.Add(cat != 2).OnlyEnforceIf(worked)
-                        model.Add(cat == 2).OnlyEnforceIf(worked.Not())
-                        rs = model.NewBoolVar(f"cat_rs_{staff_names[si]}_b{bi}_d{idx}")
-                        model.Add(rs == 1).OnlyEnforceIf(different, worked)
-                        model.Add(rs == 0).OnlyEnforceIf(different.Not())
-                        model.Add(rs == 0).OnlyEnforceIf(worked.Not())
+                        different = model.new_bool_var(f"cat_diff_{staff_names[si]}_b{bi}_d{idx}")
+                        model.Add(prev_cat != cat).only_enforce_if(different)
+                        model.Add(prev_cat == cat).only_enforce_if(different.Not())
+                        worked = model.new_bool_var(f"cat_worked_{staff_names[si]}_b{bi}_d{idx}")
+                        model.Add(cat != 2).only_enforce_if(worked)
+                        model.Add(cat == 2).only_enforce_if(worked.Not())
+                        rs = model.new_bool_var(f"cat_rs_{staff_names[si]}_b{bi}_d{idx}")
+                        model.Add(rs == 1).only_enforce_if(different, worked)
+                        model.Add(rs == 0).only_enforce_if(different.Not())
+                        model.Add(rs == 0).only_enforce_if(worked.Not())
                     row.append(rs)
                 cat_run_start.append(row)
 
@@ -1365,45 +1318,45 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
                     rs = cat_run_start[si][idx]
                     cat = category[si][di]
 
-                    is_day = model.NewBoolVar(f"is_day_{staff_names[si]}_b{bi}_d{idx}")
-                    model.Add(cat == 0).OnlyEnforceIf(is_day)
-                    model.Add(cat != 0).OnlyEnforceIf(is_day.Not())
-                    day_term = model.NewIntVar(0, 1, f"day_term_{staff_names[si]}_b{bi}_d{idx}")
-                    model.Add(day_term == rs).OnlyEnforceIf(is_day)
-                    model.Add(day_term == 0).OnlyEnforceIf(is_day.Not())
+                    is_day = model.new_bool_var(f"is_day_{staff_names[si]}_b{bi}_d{idx}")
+                    model.Add(cat == 0).only_enforce_if(is_day)
+                    model.Add(cat != 0).only_enforce_if(is_day.Not())
+                    day_term = model.new_int_var(0, 1, f"day_term_{staff_names[si]}_b{bi}_d{idx}")
+                    model.Add(day_term == rs).only_enforce_if(is_day)
+                    model.Add(day_term == 0).only_enforce_if(is_day.Not())
                     day_terms.append(day_term)
 
-                    is_night = model.NewBoolVar(f"is_night_{staff_names[si]}_b{bi}_d{idx}")
-                    model.Add(cat == 1).OnlyEnforceIf(is_night)
-                    model.Add(cat != 1).OnlyEnforceIf(is_night.Not())
-                    night_term = model.NewIntVar(0, 1, f"night_term_{staff_names[si]}_b{bi}_d{idx}")
-                    model.Add(night_term == rs).OnlyEnforceIf(is_night)
-                    model.Add(night_term == 0).OnlyEnforceIf(is_night.Not())
+                    is_night = model.new_bool_var(f"is_night_{staff_names[si]}_b{bi}_d{idx}")
+                    model.Add(cat == 1).only_enforce_if(is_night)
+                    model.Add(cat != 1).only_enforce_if(is_night.Not())
+                    night_term = model.new_int_var(0, 1, f"night_term_{staff_names[si]}_b{bi}_d{idx}")
+                    model.Add(night_term == rs).only_enforce_if(is_night)
+                    model.Add(night_term == 0).only_enforce_if(is_night.Not())
                     night_terms.append(night_term)
 
-                staff_day_runs = model.NewIntVar(0, block_size, f"staff_day_runs_{staff_names[si]}_b{bi}")
-                staff_night_runs = model.NewIntVar(0, block_size, f"staff_night_runs_{staff_names[si]}_b{bi}")
+                staff_day_runs = model.new_int_var(0, block_size, f"staff_day_runs_{staff_names[si]}_b{bi}")
+                staff_night_runs = model.new_int_var(0, block_size, f"staff_night_runs_{staff_names[si]}_b{bi}")
                 model.Add(staff_day_runs == sum(day_terms))
                 model.Add(staff_night_runs == sum(night_terms))
 
-                day_excess = model.NewIntVar(0, block_size, f"day_excess_{staff_names[si]}_b{bi}")
-                night_excess = model.NewIntVar(0, block_size, f"night_excess_{staff_names[si]}_b{bi}")
+                day_excess = model.new_int_var(0, block_size, f"day_excess_{staff_names[si]}_b{bi}")
+                night_excess = model.new_int_var(0, block_size, f"night_excess_{staff_names[si]}_b{bi}")
                 model.Add(day_excess >= staff_day_runs - 2)
                 model.Add(day_excess >= 0)
                 model.Add(night_excess >= staff_night_runs - 2)
                 model.Add(night_excess >= 0)
 
-                staff_penalty = model.NewIntVar(0, 2 * block_size, f"dn_penalty_{staff_names[si]}_b{bi}")
+                staff_penalty = model.new_int_var(0, 2 * block_size, f"dn_penalty_{staff_names[si]}_b{bi}")
                 model.Add(staff_penalty == day_excess + night_excess)
                 all_penalty_terms.append(staff_penalty)
 
         if all_penalty_terms:
-            total_penalty = model.NewIntVar(0, len(all_penalty_terms) * 2 * 14, "day_night_penalty")
+            total_penalty = model.new_int_var(0, len(all_penalty_terms) * 2 * 14, "day_night_penalty")
             model.Add(total_penalty == sum(all_penalty_terms))
             if objective_terms is not None:
                 objective_terms.append(total_penalty * weight)
             else:
-                model.Minimize(total_penalty * weight)
+                model.minimize(total_penalty * weight)
             return total_penalty
         return None
 
@@ -1439,32 +1392,32 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
                 for bi_di, date_str in enumerate(block_dates):
                     pos_indices = pos_by_date.get(date_str, [])
                     if not pos_indices:
-                        off = model.NewIntVar(2, 2, f"cat_{staff_names[si]}_b{bi}_d{bi_di}")
+                        off = model.new_int_var(2, 2, f"cat_{staff_names[si]}_b{bi}_d{bi_di}")
                         row.append(off)
                         continue
 
-                    cat = model.NewIntVar(0, 2, f"cat_{staff_names[si]}_b{bi}_d{bi_di}")
+                    cat = model.new_int_var(0, 2, f"cat_{staff_names[si]}_b{bi}_d{bi_di}")
 
-                    day_worked = model.NewBoolVar(f"day_worked_{staff_names[si]}_b{bi}_d{bi_di}")
-                    night_worked = model.NewBoolVar(f"night_worked_{staff_names[si]}_b{bi}_d{bi_di}")
+                    day_worked = model.new_bool_var(f"day_worked_{staff_names[si]}_b{bi}_d{bi_di}")
+                    night_worked = model.new_bool_var(f"night_worked_{staff_names[si]}_b{bi}_d{bi_di}")
 
                     day_bools = [assignments[si][pi] for pi in pos_indices if pos_shift[pi] in DAY_SHIFTS]
                     if day_bools:
-                        model.Add(sum(day_bools) >= 1).OnlyEnforceIf(day_worked)
-                        model.Add(sum(day_bools) == 0).OnlyEnforceIf(day_worked.Not())
+                        model.Add(sum(day_bools) >= 1).only_enforce_if(day_worked)
+                        model.Add(sum(day_bools) == 0).only_enforce_if(day_worked.Not())
                     else:
                         model.Add(day_worked == 0)
 
                     night_bools = [assignments[si][pi] for pi in pos_indices if pos_shift[pi] in NIGHT_SHIFTS]
                     if night_bools:
-                        model.Add(sum(night_bools) >= 1).OnlyEnforceIf(night_worked)
-                        model.Add(sum(night_bools) == 0).OnlyEnforceIf(night_worked.Not())
+                        model.Add(sum(night_bools) >= 1).only_enforce_if(night_worked)
+                        model.Add(sum(night_bools) == 0).only_enforce_if(night_worked.Not())
                     else:
                         model.Add(night_worked == 0)
 
-                    model.Add(cat == 0).OnlyEnforceIf(day_worked)
-                    model.Add(cat == 1).OnlyEnforceIf(night_worked)
-                    model.Add(cat == 2).OnlyEnforceIf(day_worked.Not(), night_worked.Not())
+                    model.Add(cat == 0).only_enforce_if(day_worked)
+                    model.Add(cat == 1).only_enforce_if(night_worked)
+                    model.Add(cat == 2).only_enforce_if(day_worked.Not(), night_worked.Not())
 
                     row.append(cat)
                 category_vars.append(row)
@@ -1475,22 +1428,22 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
                 row: list[cp_model.IntVar] = []
                 for bi_di in range(block_size):
                     if bi_di == 0:
-                        rs = model.NewBoolVar(f"cat_rs_{staff_names[si]}_b{bi}_d0")
-                        model.Add(category_vars[si][bi_di] != 2).OnlyEnforceIf(rs)
-                        model.Add(category_vars[si][bi_di] == 2).OnlyEnforceIf(rs.Not())
+                        rs = model.new_bool_var(f"cat_rs_{staff_names[si]}_b{bi}_d0")
+                        model.Add(category_vars[si][bi_di] != 2).only_enforce_if(rs)
+                        model.Add(category_vars[si][bi_di] == 2).only_enforce_if(rs.Not())
                     else:
                         prev_cat = category_vars[si][bi_di - 1]
                         curr_cat = category_vars[si][bi_di]
-                        different = model.NewBoolVar(f"cat_diff_{staff_names[si]}_b{bi}_d{bi_di}")
-                        model.Add(prev_cat != curr_cat).OnlyEnforceIf(different)
-                        model.Add(prev_cat == curr_cat).OnlyEnforceIf(different.Not())
-                        worked = model.NewBoolVar(f"cat_worked_{staff_names[si]}_b{bi}_d{bi_di}")
-                        model.Add(curr_cat != 2).OnlyEnforceIf(worked)
-                        model.Add(curr_cat == 2).OnlyEnforceIf(worked.Not())
-                        rs = model.NewBoolVar(f"cat_rs_{staff_names[si]}_b{bi}_d{bi_di}")
-                        model.Add(rs == 1).OnlyEnforceIf(different, worked)
-                        model.Add(rs == 0).OnlyEnforceIf(different.Not())
-                        model.Add(rs == 0).OnlyEnforceIf(worked.Not())
+                        different = model.new_bool_var(f"cat_diff_{staff_names[si]}_b{bi}_d{bi_di}")
+                        model.Add(prev_cat != curr_cat).only_enforce_if(different)
+                        model.Add(prev_cat == curr_cat).only_enforce_if(different.Not())
+                        worked = model.new_bool_var(f"cat_worked_{staff_names[si]}_b{bi}_d{bi_di}")
+                        model.Add(curr_cat != 2).only_enforce_if(worked)
+                        model.Add(curr_cat == 2).only_enforce_if(worked.Not())
+                        rs = model.new_bool_var(f"cat_rs_{staff_names[si]}_b{bi}_d{bi_di}")
+                        model.Add(rs == 1).only_enforce_if(different, worked)
+                        model.Add(rs == 0).only_enforce_if(different.Not())
+                        model.Add(rs == 0).only_enforce_if(worked.Not())
                     row.append(rs)
                 cat_run_start.append(row)
 
@@ -1502,45 +1455,45 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
                     rs = cat_run_start[si][bi_di]
                     cat = category_vars[si][bi_di]
 
-                    is_day = model.NewBoolVar(f"is_day_{staff_names[si]}_b{bi}_d{bi_di}")
-                    model.Add(cat == 0).OnlyEnforceIf(is_day)
-                    model.Add(cat != 0).OnlyEnforceIf(is_day.Not())
-                    day_term = model.NewIntVar(0, 1, f"day_term_{staff_names[si]}_b{bi}_d{bi_di}")
-                    model.Add(day_term == rs).OnlyEnforceIf(is_day)
-                    model.Add(day_term == 0).OnlyEnforceIf(is_day.Not())
+                    is_day = model.new_bool_var(f"is_day_{staff_names[si]}_b{bi}_d{bi_di}")
+                    model.Add(cat == 0).only_enforce_if(is_day)
+                    model.Add(cat != 0).only_enforce_if(is_day.Not())
+                    day_term = model.new_int_var(0, 1, f"day_term_{staff_names[si]}_b{bi}_d{bi_di}")
+                    model.Add(day_term == rs).only_enforce_if(is_day)
+                    model.Add(day_term == 0).only_enforce_if(is_day.Not())
                     day_terms.append(day_term)
 
-                    is_night = model.NewBoolVar(f"is_night_{staff_names[si]}_b{bi}_d{bi_di}")
-                    model.Add(cat == 1).OnlyEnforceIf(is_night)
-                    model.Add(cat != 1).OnlyEnforceIf(is_night.Not())
-                    night_term = model.NewIntVar(0, 1, f"night_term_{staff_names[si]}_b{bi}_d{bi_di}")
-                    model.Add(night_term == rs).OnlyEnforceIf(is_night)
-                    model.Add(night_term == 0).OnlyEnforceIf(is_night.Not())
+                    is_night = model.new_bool_var(f"is_night_{staff_names[si]}_b{bi}_d{bi_di}")
+                    model.Add(cat == 1).only_enforce_if(is_night)
+                    model.Add(cat != 1).only_enforce_if(is_night.Not())
+                    night_term = model.new_int_var(0, 1, f"night_term_{staff_names[si]}_b{bi}_d{bi_di}")
+                    model.Add(night_term == rs).only_enforce_if(is_night)
+                    model.Add(night_term == 0).only_enforce_if(is_night.Not())
                     night_terms.append(night_term)
 
-                staff_day_runs = model.NewIntVar(0, block_size, f"staff_day_runs_{staff_names[si]}_b{bi}")
-                staff_night_runs = model.NewIntVar(0, block_size, f"staff_night_runs_{staff_names[si]}_b{bi}")
+                staff_day_runs = model.new_int_var(0, block_size, f"staff_day_runs_{staff_names[si]}_b{bi}")
+                staff_night_runs = model.new_int_var(0, block_size, f"staff_night_runs_{staff_names[si]}_b{bi}")
                 model.Add(staff_day_runs == sum(day_terms))
                 model.Add(staff_night_runs == sum(night_terms))
 
-                day_excess = model.NewIntVar(0, block_size, f"day_excess_{staff_names[si]}_b{bi}")
-                night_excess = model.NewIntVar(0, block_size, f"night_excess_{staff_names[si]}_b{bi}")
+                day_excess = model.new_int_var(0, block_size, f"day_excess_{staff_names[si]}_b{bi}")
+                night_excess = model.new_int_var(0, block_size, f"night_excess_{staff_names[si]}_b{bi}")
                 model.Add(day_excess >= staff_day_runs - 2)
                 model.Add(day_excess >= 0)
                 model.Add(night_excess >= staff_night_runs - 2)
                 model.Add(night_excess >= 0)
 
-                staff_penalty = model.NewIntVar(0, 2 * block_size, f"dn_penalty_{staff_names[si]}_b{bi}")
+                staff_penalty = model.new_int_var(0, 2 * block_size, f"dn_penalty_{staff_names[si]}_b{bi}")
                 model.Add(staff_penalty == day_excess + night_excess)
                 all_penalty_terms.append(staff_penalty)
 
         if all_penalty_terms:
-            total_penalty = model.NewIntVar(0, len(all_penalty_terms) * 2 * 14, "day_night_penalty")
+            total_penalty = model.new_int_var(0, len(all_penalty_terms) * 2 * 14, "day_night_penalty")
             model.Add(total_penalty == sum(all_penalty_terms))
             if objective_terms is not None:
                 objective_terms.append(total_penalty * weight)
             else:
-                model.Minimize(total_penalty * weight)
+                model.minimize(total_penalty * weight)
             return total_penalty
         return None
 
@@ -1552,7 +1505,6 @@ class DayNightRunCountPenalty(BaseSoftConstraint):
 HARD_CONSTRAINTS = [
     CoverageConstraint,
     SkillLevelRequirement,
-    SkillLevelHierarchy,
     NoDoubleBooking,
     GraduateShiftConstraint,
     RestPeriodConstraint,

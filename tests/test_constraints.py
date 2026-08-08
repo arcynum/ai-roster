@@ -683,60 +683,8 @@ class TestNightToDayRestApply:
             assert solver.Value(assignments[si][0]) + solver.Value(assignments[si][1]) <= 1
 
 
-class TestContractedHoursFloor:
-    """Test the ContractedHoursFloor hard constraint."""
-
-    def test_apply_adds_constraints(self, definitions):
-        """The apply method should add constraints to the model for staff-hours."""
-        from ortools.sat.python import cp_model
-        from constraints import ContractedHoursFloor
-        from utils import compute_adjusted_hours, SCALE
-
-        model = cp_model.CpModel()
-
-
-        from models import Staff, Classification
-        staff_list = [
-            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=40.0, red_requests=[], holidays=[]),
-        ]
-        staff_by_name = {s.name: s for s in staff_list}
-        staff_names = [s.name for s in staff_list]
-        all_dates = [f"2026-08-{d:02d}" for d in range(3, 17)]
-        blocks = [all_dates]
-        positions = [
-            {"date": "2026-08-03", "shift": "D8", "required_skill_level": None, "day_name": "Monday"},
-        ]
-
-        assignments = [
-            [model.NewBoolVar(f"x_{s}_{p}") for p in range(len(positions))]
-            for s in range(len(staff_names))
-        ]
-
-        for pi in range(len(positions)):
-            model.Add(sum(assignments[si][pi] for si in range(len(staff_names))) == 1)
-        for si in range(len(staff_names)):
-            model.Add(sum(assignments[si][pi] for pi in range(len(positions))) <= 1)
-
-        staff_hours_vars = [[model.NewIntVar(0, 20000, f"hours_{s}_{b}") for b in range(len(blocks))] for s in range(len(staff_names))]
-
-        constraint = ContractedHoursFloor()
-        constraint.apply(
-            model=model,
-            staff_list=staff_list,
-            staff_by_name=staff_by_name,
-            assignments=assignments,
-            staff_names=staff_names,
-            definitions=definitions,
-            all_dates=all_dates,
-            blocks=blocks,
-            positions=positions,
-            staff_hours_vars=staff_hours_vars,
-        )
-
-        # The constraint should have added at least one constraint
-        # We can verify by solving and checking the hour variable meets the floor
-        expected_adj = compute_adjusted_hours(40.0, [], all_dates)
-        assert expected_adj == 40.0 * SCALE
+class TestContractedHoursFloorSoft:
+    """Test the ContractedHoursFloorSoft soft constraint [S#d9a8b7c6]."""
 
     def test_soft_floor_allows_shortfall(self, definitions):
         """Soft floor should allow infeasible floors but penalise shortfall."""

@@ -16,9 +16,14 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from utils import NIGHT_SHIFTS, OUTPUT_DIR, SCALE, SHIFT_ORDER, compute_adjusted_hours, is_weekend
+
+# Traffic-light thresholds for hours-to-floor percentage.
+# Green = at or above floor (100%), yellow = 85–99%, red = below 85%.
+FLOOR_GREEN_THRESHOLD = 100.0
+FLOOR_YELLOW_THRESHOLD = 85.0
 
 if TYPE_CHECKING:
     from models import Staff, RosterSlot
@@ -80,14 +85,14 @@ def _hours_floor_info(hours: float, adjusted: float) -> tuple[float, str, str, s
     """Compute hours-to-floor percentage and traffic-light styling.
 
     Returns (pct, light_class, badge_class, label).
-    Green = at or above floor, yellow = 85-99%, red = below 85%.
+    Green = at or above floor (100%), yellow = 85–99%, red = below 85%.
     """
     if adjusted <= 0:
         return 100.0, "light-green", "badge-green", "No floor (0h)"
     pct = hours / adjusted * 100
-    if pct >= 100:
+    if pct >= FLOOR_GREEN_THRESHOLD:
         return pct, "light-green", "badge-green", f"{pct:.0f}%"
-    if pct >= 85:
+    if pct >= FLOOR_YELLOW_THRESHOLD:
         return pct, "light-yellow", "badge-yellow", f"{pct:.0f}%"
     return pct, "light-red", "badge-red", f"{pct:.0f}%"
 
@@ -100,8 +105,6 @@ def _build_context(
     roster_end: date,
     blocks: list[list[date]],
     positions: list[dict] | None = None,
-    hard_constraints: list[dict] | None = None,
-    soft_constraints: list[dict] | None = None,
 ) -> dict:
     """Build the full context dict for the Jinja2 template."""
     staff_map = {s.name: s for s in staff_list}
@@ -413,8 +416,6 @@ def _build_context(
             "blocks": hours_summary_blocks,
         },
         "soft_penalty": result.soft_penalty,
-        "hard_constraints": result.hard_constraints,
-        "soft_constraints": result.soft_constraints,
         "violations": getattr(result, "violations", []),
     }
 
@@ -428,8 +429,6 @@ def generate_html(
     blocks: list[list[date]],
     run_id: str,
     positions: list[dict] | None = None,
-    hard_constraints: list[dict] | None = None,
-    soft_constraints: list[dict] | None = None,
 ) -> Path:
     """Generate the roster HTML file and write it to output/.
 
@@ -440,15 +439,13 @@ def generate_html(
 
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_DIR),
-        autoescape=False,
+        autoescape=select_autoescape(["html"]),
     )
     template = env.get_template("roster.html")
 
     context = _build_context(result, staff_list, definitions,
-                               roster_start, roster_end, blocks,
-                               positions=positions,
-                               hard_constraints=hard_constraints,
-                               soft_constraints=soft_constraints)
+                                roster_start, roster_end, blocks,
+                                positions=positions)
     html = template.render(**context)
 
     output_path.write_text(html, encoding="utf-8")

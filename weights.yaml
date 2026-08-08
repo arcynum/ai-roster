@@ -6,7 +6,7 @@
 # AGENTS.md's file map for the full explanation.
 
 "[S#d9a8b7c6]": 1000  # soft contracted-hours floor — reclassified from hard constraint; minimizes shortfall fairly across staff. Above fairness weights (50-500)
-"[S#d2a7f4a6]": 50   # night shift fairness (weekday nights only, per §1.3a)
+"[S#d2a7f4a6]": 50   # night shift fairness — weekday nights only (excludes Sat/Sun per S#d2a7f4a6 constraint text)
 "[S#s1a2t3u4]": 50   # Saturday hours fairness (replaces blended WeekendFairness)
 "[S#s2u3n4d5]": 50   # Sunday hours fairness (replaces blended WeekendFairness)
 "[S#e9b4a1b3]": 20   # overtime distributed fairly
@@ -18,15 +18,16 @@
 # Every tier must individually exceed the worst-case combined soft-constraint
 # penalty, so the solver never leaves a position unfilled just to dodge a
 # soft-constraint penalty. See soft_constraints.md [S#e7f3a2b1].
-# Reordered per plan.md §1.2: Sunday > Saturday > weekday day > weekday night.
-# Weekend day/night fall under Saturday/Sunday tiers (higher protection).
+# Ordering: Sunday > Saturday > weekday day > weekday night (weekend day/night
+# fall under Saturday/Sunday tiers for higher protection).
 "[S#e7f3a2b1]": 220000  # unfilled penalty tier for skill-required positions (Coordinator/Triage/Resus) — highest, clinical coverage must be protected
 "[S#f1a2b3c4]": 210000  # unfilled penalty tier for Sunday, General — most desirable shift (200% loading)
 "[S#a2b3c4d5]": 200000  # unfilled penalty tier for Saturday, General — desirable shift (150% loading)
 "[S#b3c4d5e6]": 160000  # unfilled penalty tier for weekday day/afternoon, General
 "[S#c4d5e6f7]": 140000  # unfilled penalty tier for weekday night, General — least desirable, first to go unfilled
 
-# Retired unfilled tier IDs (from plan.md §1.2 — old ordering was inverted):
+# Retired unfilled tier IDs (old ordering was inverted — weekend day/night
+# absorbed into Saturday/Sunday tiers for higher protection):
 #   S#d8f2c3a4  was: General weekday day-shift (replaced by S#b3c4d5e6)
 #   S#c9e1d4b5  was: General weekday night-shift (replaced by S#c4d5e6f7)
 #   S#b0d3e5c6  was: General weekend day-shift (retired — weekend now covered by Sat/Sun tiers)

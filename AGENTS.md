@@ -186,7 +186,7 @@ Concrete patterns for the trickier constraints, so they don't each get reinvente
 - Tests should cover both a positive and a negative case per function.
 - After the roster is produced, scan it and compare against `hard_constraints.md`/`soft_constraints.md` to confirm compliance.
 - The "one runnable check" convention is for small, non-solver helper functions — it does not replace the `tests/` pytest suite for constraint/solver logic.
-- **Weight-dominance sanity check:** No unfilled tier weight may be less than the maximum soft-constraint penalty reduction obtainable by removing a single assignment (the *marginal* bound). This ensures the solver never leaves a shift unfilled just to save a soft-constraint penalty. After normalisation (§2.3), the marginal bound is ≈ 20,000 (shortfall 12h×1000 = 12,000; run-length ≤ 5,500; fairness pools ≤ 600 each; day/night ≤ 600), comfortably under the 140,000 floor tier. Log both the marginal bound and an informational total worst case on every run.
+- **Weight-dominance sanity check:** No unfilled tier weight may be less than the maximum soft-constraint penalty reduction obtainable by removing a single assignment (the *marginal* bound). This ensures the solver never leaves a shift unfilled just to save a soft-constraint penalty. After normalisation (§2.3), the marginal bound is ≈ 20,000 (shortfall 12h×1000 = 12,000; run-length ≤ 5,500; fairness pools ≤ 600 each; day/night ≤ 600), comfortably under the 140,000 floor tier. Log both the marginal bound and an informational total worst case on every run. Note: the contracted-hours floor is now a soft constraint ([S#d9a8b7c6]), reclassified from hard [H#d9a8b7c6].
 
 
 ## 10. Constraint Toggles (config.yaml)

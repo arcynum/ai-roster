@@ -47,8 +47,6 @@ class SolveResult:
         staff_hours: Dict of staff_name -> total paid hours for the period.
         shortfall: Dict of staff_name -> {block_key: hours under contracted floor}.
         soft_penalty: Dict of constraint_id -> total penalty incurred.
-        hard_constraints: List of hard constraint records (for HTML output).
-        soft_constraints: List of soft constraint records (for HTML output).
         violations: List of hard-constraint violations from the verifier.
     """
     status: str = ""
@@ -59,8 +57,6 @@ class SolveResult:
     staff_hours: dict[str, float] = field(default_factory=dict)
     shortfall: dict[str, dict[str, float]] = field(default_factory=dict)
     soft_penalty: dict[str, float] = field(default_factory=dict)
-    hard_constraints: list[dict] = field(default_factory=list)
-    soft_constraints: list[dict] = field(default_factory=list)
     violations: list[dict] = field(default_factory=list)
 
 
@@ -96,8 +92,6 @@ class RosterModel:
         weights: dict[str, int],
         blocks: list[list[str]],
         constraint_config: dict | None = None,
-        hard_constraints: list[dict] | None = None,
-        soft_constraints: list[dict] | None = None,
     ):
         self.staff_list = staff_list
         self.positions = positions
@@ -105,8 +99,6 @@ class RosterModel:
         self.weights = weights
         self.blocks = blocks
         self.constraint_config = constraint_config
-        self._hard_constraints = hard_constraints or []
-        self._soft_constraints = soft_constraints or []
 
         # Derived lookups
         self.staff_by_name: dict[str, Staff] = {s.name: s for s in staff_list}
@@ -161,7 +153,7 @@ class RosterModel:
 
         # Build combined objective from all collected penalty terms
         if self._objective_terms:
-            self.model.Minimize(sum(self._objective_terms))
+            self.model.minimize(sum(self._objective_terms))
 
     def _create_variables(self) -> None:
         """Create CP-SAT decision variables.
@@ -180,7 +172,7 @@ class RosterModel:
         for si in range(num_staff):
             row: list[cp_model.IntVar] = []
             for pi in range(num_positions):
-                var = self.model.NewBoolVar(f"x_{self.staff_names[si]}_{pi}")
+                var = self.model.new_bool_var(f"x_{self.staff_names[si]}_{pi}")
                 row.append(var)
             self._assignment_vars.append(row)
 
@@ -190,7 +182,7 @@ class RosterModel:
         # coverage constraint per position, incorporating unfilled vars.
         self._unfilled_vars: list[cp_model.IntVar] = []
         for pi in range(num_positions):
-            unfilled = self.model.NewBoolVar(f"unfilled_{pi}")
+            unfilled = self.model.new_bool_var(f"unfilled_{pi}")
             self._unfilled_vars.append(unfilled)
 
         # --- At most one shift per staff per date ---
@@ -214,11 +206,11 @@ class RosterModel:
                         scaled_paid = int(round(shift_paid * SCALE))
                         hour_vars.append(scaled_paid * self._assignment_vars[si][pi])
                 if hour_vars:
-                    total = self.model.NewIntVar(0, 76 * SCALE, f"hours_{self.staff_names[si]}_b{bi}")
+                    total = self.model.new_int_var(0, 76 * SCALE, f"hours_{self.staff_names[si]}_b{bi}")
                     self.model.Add(total == sum(hour_vars))
                     block_vars.append(total)
                 else:
-                    zero = self.model.NewIntVar(0, 0, f"hours_{self.staff_names[si]}_b{bi}")
+                    zero = self.model.new_int_var(0, 0, f"hours_{self.staff_names[si]}_b{bi}")
                     block_vars.append(zero)
             self._staff_hours_vars.append(block_vars)
 
@@ -249,54 +241,54 @@ class RosterModel:
                     ]
                     if pos_with_shift:
                         # Shift BoolVar: 1 iff any assignment for this shift is 1
-                        sb = self.model.NewBoolVar(
+                        sb = self.model.new_bool_var(
                             f"works_{self.staff_names[si]}_d{di}_s{sh_idx}"
                         )
                         shift_bools.append(sb)
                         # Channel: sb=1 iff sum(assignments for this shift) >= 1
                         assign_vars = [self._assignment_vars[si][pi] for pi in pos_with_shift]
-                        self.model.Add(sum(assign_vars) >= 1).OnlyEnforceIf(sb)
-                        self.model.Add(sum(assign_vars) == 0).OnlyEnforceIf(sb.Not())
+                        self.model.Add(sum(assign_vars) >= 1).only_enforce_if(sb)
+                        self.model.Add(sum(assign_vars) == 0).only_enforce_if(sb.Not())
                     else:
                         # No positions of this shift type on this date — always 0
-                        sb = self.model.NewBoolVar(
+                        sb = self.model.new_bool_var(
                             f"works_{self.staff_names[si]}_d{di}_s{sh_idx}"
                         )
                         self.model.Add(sb == 0)
                         shift_bools.append(sb)
 
                 # works_any[si][di]: 1 iff staff works any shift on this date
-                wa = self.model.NewBoolVar(f"works_any_{self.staff_names[si]}_d{di}")
-                self.model.Add(sum(shift_bools) >= 1).OnlyEnforceIf(wa)
-                self.model.Add(sum(shift_bools) == 0).OnlyEnforceIf(wa.Not())
+                wa = self.model.new_bool_var(f"works_any_{self.staff_names[si]}_d{di}")
+                self.model.Add(sum(shift_bools) >= 1).only_enforce_if(wa)
+                self.model.Add(sum(shift_bools) == 0).only_enforce_if(wa.Not())
 
                 # category[si][di]: IntVar 0=day, 1=night, 2=off
-                cat = self.model.NewIntVar(0, 2, f"cat_{self.staff_names[si]}_d{di}")
+                cat = self.model.new_int_var(0, 2, f"cat_{self.staff_names[si]}_d{di}")
 
                 # Day shifts: indices 0-5 (D8, D12, P8, P12, L3, DISCO)
-                day_bool = self.model.NewBoolVar(f"day_{self.staff_names[si]}_d{di}")
+                day_bool = self.model.new_bool_var(f"day_{self.staff_names[si]}_d{di}")
                 day_works = shift_bools[:num_shift_types - 2]  # first 6 = day shifts
                 if day_works:
-                    self.model.Add(sum(day_works) >= 1).OnlyEnforceIf(day_bool)
-                    self.model.Add(sum(day_works) == 0).OnlyEnforceIf(day_bool.Not())
+                    self.model.Add(sum(day_works) >= 1).only_enforce_if(day_bool)
+                    self.model.Add(sum(day_works) == 0).only_enforce_if(day_bool.Not())
                 else:
                     self.model.Add(day_bool == 0)
-                self.model.Add(cat == 0).OnlyEnforceIf(day_bool)
-                self.model.Add(cat != 0).OnlyEnforceIf(day_bool.Not())
+                self.model.Add(cat == 0).only_enforce_if(day_bool)
+                self.model.Add(cat != 0).only_enforce_if(day_bool.Not())
 
                 # Night shifts: indices 6-7 (N8, N12)
-                night_bool = self.model.NewBoolVar(f"night_{self.staff_names[si]}_d{di}")
+                night_bool = self.model.new_bool_var(f"night_{self.staff_names[si]}_d{di}")
                 night_works = shift_bools[-2:]  # last 2 = night shifts
                 if night_works:
-                    self.model.Add(sum(night_works) >= 1).OnlyEnforceIf(night_bool)
-                    self.model.Add(sum(night_works) == 0).OnlyEnforceIf(night_bool.Not())
+                    self.model.Add(sum(night_works) >= 1).only_enforce_if(night_bool)
+                    self.model.Add(sum(night_works) == 0).only_enforce_if(night_bool.Not())
                 else:
                     self.model.Add(night_bool == 0)
-                self.model.Add(cat == 1).OnlyEnforceIf(night_bool)
-                self.model.Add(cat != 1).OnlyEnforceIf(night_bool.Not())
+                self.model.Add(cat == 1).only_enforce_if(night_bool)
+                self.model.Add(cat != 1).only_enforce_if(night_bool.Not())
 
                 # Off: neither day nor night
-                self.model.Add(cat == 2).OnlyEnforceIf(day_bool.Not(), night_bool.Not())
+                self.model.Add(cat == 2).only_enforce_if(day_bool.Not(), night_bool.Not())
 
                 works_row.extend(shift_bools)
                 works_any_row.append(wa)
@@ -344,7 +336,6 @@ class RosterModel:
             logger.debug("Built merged compatibility table (rest + night/day) for §3.1")
         elif rest_enabled:
             # Only rest period — build rest-only table (8×8, missing shifts = False)
-            from datetime import datetime, timedelta
             n = len(SHIFT_ORDER)
             compat = [[True] * n for _ in range(n)]
             for a_idx, shift_a in enumerate(SHIFT_ORDER):
@@ -492,11 +483,11 @@ class RosterModel:
         }
 
         solve_start = time.perf_counter()
-        status = self.solver.Solve(self.model)
+        status = self.solver.solve(self.model)
         solve_time = time.perf_counter() - solve_start
 
         status_str = status_map.get(status, f"UNKNOWN({status})")
-        obj_val = int(self.solver.ObjectiveValue()) if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else 0
+        obj_val = int(self.solver.objective_value) if status in (cp_model.OPTIMAL, cp_model.FEASIBLE) else 0
 
         logger.info("Solver status: %s, objective: %d, time: %.2fs",
                     status_str, obj_val, solve_time)
@@ -505,8 +496,6 @@ class RosterModel:
             status=status_str,
             objective_value=obj_val,
             solve_time_s=solve_time,
-            hard_constraints=self._hard_constraints,
-            soft_constraints=self._soft_constraints,
         )
 
         if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
@@ -528,7 +517,7 @@ class RosterModel:
 
         for si in range(num_staff):
             for pi in range(num_positions):
-                if self.solver.Value(self._assignment_vars[si][pi]) == 1:
+                if self.solver.value(self._assignment_vars[si][pi]) == 1:
                     pos = self.positions[pi]
                     result.assignments.append(RosterSlot(
                         staff_name=self.staff_names[si],
@@ -563,14 +552,14 @@ class RosterModel:
                 for bi in range(len(self.blocks)):
                     if si < len(self._shortfall_vars) and bi < len(self._shortfall_vars[si]):
                         var = self._shortfall_vars[si][bi]
-                        val = self.solver.Value(var)
+                        val = self.solver.value(var)
                         block_key = f"b{bi}"
                         staff_shortfall[block_key] = val / SCALE
                 result.shortfall[staff.name] = staff_shortfall
 
         # Read back soft-constraint penalty values (no / SCALE — penalties are whole numbers after §2.3)
         for cid, var in self._soft_penalty_vars.items():
-            result.soft_penalty[cid] = self.solver.Value(var)
+            result.soft_penalty[cid] = self.solver.value(var)
 
         logger.info("Extracted %d assignments, %d unfilled positions",
                        len(result.assignments), len(result.unfilled))

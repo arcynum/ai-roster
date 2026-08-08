@@ -3,11 +3,13 @@
 ai-roster - Main driver script.
 
 Orchestrates the full roster generation pipeline:
-1. Load and validate data files
-2. Build Staff objects
-3. Build the CP-SAT model
-4. Solve
-5. Generate HTML output + log
+1. Load data files
+2. Validate data
+3. Build Staff objects
+4. Build the CP-SAT model
+5. Solve
+5.5. Verify produced roster
+6. Generate HTML output + log
 
 Usage:
     .venv/bin/python main.py
@@ -113,8 +115,6 @@ def _run(run_id: str) -> None:
         weights=weights,
         blocks=[[d.isoformat() for d in block] for block in blocks],
         constraint_config=config,
-        hard_constraints=hard_constraints,
-        soft_constraints=soft_constraints,
     )
     model.build_model()
 
@@ -138,9 +138,7 @@ def _run(run_id: str) -> None:
         from output import generate_html
         generate_html(result, staff_list, definitions,
                       roster_start, roster_end, blocks, run_id,
-                      positions=positions,
-                      hard_constraints=hard_constraints,
-                      soft_constraints=soft_constraints)
+                      positions=positions)
         sys.exit(2)
 
     # Step 5.5: Verify produced roster against hard constraints
@@ -175,9 +173,7 @@ def _run(run_id: str) -> None:
     from output import generate_html
     generate_html(result, staff_list, definitions,
                   roster_start, roster_end, blocks, run_id,
-                  positions=positions,
-                  hard_constraints=hard_constraints,
-                  soft_constraints=soft_constraints)
+                  positions=positions)
 
     logger.info("Run complete. Output: %s", OUTPUT_DIR)
     logger.info("=" * 60)

@@ -48,10 +48,13 @@ def setup_logging(run_id: str) -> logging.Logger:
     """Configure logging for a single run.
 
     Writes DEBUG+ to output/roster_<run_id>.log and INFO+ to console.
+    Clears existing handlers and disables propagation to avoid duplicate lines.
     """
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger("ai-roster")
+    logger.handlers.clear()
+    logger.propagate = False
     logger.setLevel(logging.DEBUG)
 
     # File handler — full detail
@@ -82,8 +85,13 @@ def setup_logging(run_id: str) -> logging.Logger:
 
 def load_yaml(path: Path) -> Any:
     """Load and return parsed YAML from *path*, raising on parse errors."""
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
+    try:
+        with open(path, "r") as f:
+            return yaml.safe_load(f)
+    except FileNotFoundError:
+        raise ValueError(f"Data file not found: {path}") from None
+    except yaml.YAMLError as e:
+        raise ValueError(f"Failed to parse YAML file {path}: {e}") from None
 
 
 def load_definitions(path: Path | None = None) -> dict[str, dict]:
@@ -91,6 +99,31 @@ def load_definitions(path: Path | None = None) -> dict[str, dict]:
     path = path or PROJECT_ROOT / "definitions.yaml"
     data = load_yaml(path)
     logger.info("Loaded shift definitions from %s (%d shifts)", path.name, len(data))
+
+    # Validate: all 8 VALID_SHIFT_TYPES must be present
+    missing_shifts = VALID_SHIFT_TYPES - set(data.keys())
+    if missing_shifts:
+        raise ValueError(
+            f"definitions.yaml is missing shift types: {', '.join(sorted(missing_shifts))}. "
+            f"Required: {', '.join(sorted(VALID_SHIFT_TYPES))}."
+        )
+
+    # Validate: each shift must have the 5 required keys with correct types
+    required_keys = {"start": str, "end": str, "crosses_midnight": bool,
+                     "span_hours": (int, float), "paid_hours": (int, float),
+                     "unpaid_break_minutes": int}
+    for shift_name, shift_def in data.items():
+        for key, expected_type in required_keys.items():
+            if key not in shift_def:
+                raise ValueError(
+                    f"definitions.yaml: shift {shift_name!r} is missing required key {key!r}."
+                )
+            if not isinstance(shift_def[key], expected_type):
+                raise ValueError(
+                    f"definitions.yaml: shift {shift_name!r} key {key!r} must be "
+                    f"{expected_type.__name__}, got {type(shift_def[key]).__name__}."
+                )
+
     return data
 
 
@@ -106,6 +139,20 @@ def load_roster(path: Path | None = None) -> dict:
     """Load roster configuration from roster.yaml."""
     path = path or PROJECT_ROOT / "roster.yaml"
     data = load_yaml(path)
+
+    if not isinstance(data, dict):
+        raise ValueError(f"roster.yaml: expected a mapping at top level, got {type(data).__name__}.")
+
+    if "dates" not in data:
+        raise ValueError("roster.yaml: missing required key 'dates'.")
+    if not isinstance(data["dates"], dict):
+        raise ValueError("roster.yaml: 'dates' must be a mapping.")
+    if "start" not in data["dates"] or "end" not in data["dates"]:
+        raise ValueError("roster.yaml: 'dates' must contain both 'start' and 'end' keys.")
+
+    if "roster_positions" not in data:
+        raise ValueError("roster.yaml: missing required key 'roster_positions'.")
+
     logger.info("Loaded roster period %s → %s from %s",
                 data["dates"]["start"], data["dates"]["end"], path.name)
     return data
@@ -475,7 +522,7 @@ def validate_roster_period(roster_data: dict) -> tuple[date, date]:
 
 
 def validate_roster_positions(roster_data: dict, definitions: dict,
-                              start_date: date, end_date: date) -> list[dict]:
+                               start_date: date, end_date: date) -> list[dict]:
     """Validate every roster position entry.
 
     Returns a flat list of position dicts, each with its resolved date,
@@ -484,8 +531,17 @@ def validate_roster_positions(roster_data: dict, definitions: dict,
     positions: list[dict] = []
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
                  "Saturday", "Sunday"]
+    valid_day_names = set(day_names)
 
     roster_positions = roster_data.get("roster_positions", {})
+
+    # Validate: all day_name keys in roster.yaml must be real weekdays
+    for key in roster_positions:
+        if key not in valid_day_names:
+            raise ValueError(
+                f"roster.yaml: unknown day name {key!r} — "
+                f"must be one of {', '.join(valid_day_names)}."
+            )
 
     # Track slot counters per (date, shift, skill_label) — counter resets each date
     # so slot_id means "the nth <shift>/<skill> position on this day", stable across
@@ -617,27 +673,27 @@ def fair_share_deviation(
     """
     n = len(per_staff)
     if n == 0:
-        return model.NewIntVar(0, 0, f"{prefix}_total")
+        return model.new_int_var(0, 0, f"{prefix}_total")
 
     # Total pool (IntVar)
-    total_pool = model.NewIntVar(0, n * max_val, f"{prefix}_total_pool")
+    total_pool = model.new_int_var(0, n * max_val, f"{prefix}_total_pool")
     model.Add(total_pool == sum(per_staff))
 
     sum_contracted = sum(contracted)
     if sum_contracted == 0:
-        dev_zero = model.NewIntVar(0, 0, f"{prefix}_total")
+        dev_zero = model.new_int_var(0, 0, f"{prefix}_total")
         return dev_zero
 
     # Build deviation for each staff member using multiplication-based
     # proportional share to avoid CP-SAT division:
     #   helper_i * sum_contracted == total_pool * contracted_i
     #   dev_i = |per_staff[i] - helper_i|
-    total_dev = model.NewIntVar(0, n * max_val, f"{prefix}_total")
+    total_dev = model.new_int_var(0, n * max_val, f"{prefix}_total")
     dev_terms: list = []
     for i in range(n):
-        helper = model.NewIntVar(0, n * max_val, f"{prefix}_helper_{i}")
+        helper = model.new_int_var(0, n * max_val, f"{prefix}_helper_{i}")
         model.Add(helper * sum_contracted == total_pool * contracted[i])
-        dev = model.NewIntVar(0, max_val, f"{prefix}_{i}")
+        dev = model.new_int_var(0, max_val, f"{prefix}_{i}")
         model.Add(dev >= per_staff[i] - helper)
         model.Add(dev >= helper - per_staff[i])
         dev_terms.append(dev)
