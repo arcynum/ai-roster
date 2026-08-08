@@ -112,12 +112,17 @@ Ponytail decisions:
   - [x] test_output.py stub definitions: verified acceptable (only `paid_hours` + `crosses_midnight` needed, no start/end access)
   - [x] test_integration.py hardcoded tier weights: low severity, already has companion test loading from weights.yaml
   - [x] test_soft_constraints.py `_make_position` ad-hoc `required_skill_rank`: intentional for SkillLevelTiebreaker tests
-- [ ] §5.4: Extend test_constraint_sync.py
+- [x] §5.4: Extend test_constraint_sync.py
+  - [x] IMPLEMENTED_ELSEWHERE["[H#7a3e5f91]"] pointer corrected (coverage constraint, not NoDoubleBooking)
+  - [x] test_registered_ids_appear_in_markdown: every registered constraint_id must appear in its markdown file
+  - [x] test_registered_ids_appear_in_config: every registered ID must appear in config.yaml (commented or uncommented)
+  - [x] test_weights_yaml_has_all_soft_and_unfilled_ids: every soft/unfilled ID has a weights.yaml entry; no extra live keys
+  - [x] config.yaml: added missing unfilled tier IDs ([S#f1a2b3c4], [S#a2b3c4d5], [S#b3c4d5e6], [S#c4d5e6f7])
 - [ ] §5.5: Add missing coverage (e2e smoke, regression tests)
 - [ ] §4: Delete dead code, move imports, error handling, template fixes
 - [ ] §6: Documentation updates
 
-**Status: §5.3 COMPLETE — 2026-08-08**
+**Status: §5.3, §5.4 COMPLETE — 2026-08-08**
 
 ### Step 8: Optional — snake_case migration
 - [ ] Mechanical pass: OR-Tools CamelCase → snake_case
@@ -126,4 +131,4 @@ Ponytail decisions:
 
 ---
 
-Last updated: 2026-08-08 (Step 7 §5.3 complete)
+Last updated: 2026-08-08 (Step 7 §5.3, §5.4 complete)

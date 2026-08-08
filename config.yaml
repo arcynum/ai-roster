@@ -31,3 +31,7 @@ constraints:
       # - "[S#6c1e9a4d]"  # Day/night category run-count penalty
       # - "[S#7b4e19fc]"  # Skill level tiebreaker (minimize over-qualification)
       # - "[S#e7f3a2b1]"  # Unfilled position desirability tiering (implemented in solver coverage constraint)
+      # - "[S#f1a2b3c4]"  # Unfilled penalty tier: Sunday, General
+      # - "[S#a2b3c4d5]"  # Unfilled penalty tier: Saturday, General
+      # - "[S#b3c4d5e6]"  # Unfilled penalty tier: weekday day, General
+      # - "[S#c4d5e6f7]"  # Unfilled penalty tier: weekday night, General
