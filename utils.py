@@ -86,7 +86,7 @@ def setup_logging(run_id: str) -> logging.Logger:
 def load_yaml(path: Path) -> Any:
     """Load and return parsed YAML from *path*, raising on parse errors."""
     try:
-        with open(path, "r") as f:
+        with open(path) as f:
             return yaml.safe_load(f)
     except FileNotFoundError:
         raise ValueError(f"Data file not found: {path}") from None
@@ -320,7 +320,7 @@ def _parse_constraint_file(path: Path, kind: str) -> list[dict]:
     current: dict[str, str] | None = None
     seen_ids: set[str] = set()
 
-    with open(path, "r") as f:
+    with open(path) as f:
         for line_no, line in enumerate(f, 1):
             stripped = line.strip()
             # Skip section headers (## ...)

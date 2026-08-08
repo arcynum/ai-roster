@@ -3,16 +3,17 @@
 
 from __future__ import annotations
 
-import pytest
 from datetime import date, timedelta
 
+import pytest
+
+from models import Classification, RosterSlot, Staff
 from output import (
     SHIFT_COLORS,
     _build_context,
     _day_info,
     _overtime_info,
 )
-from models import Classification, RosterSlot, Staff
 from solver import SolveResult
 from utils import SHIFT_ORDER as SHIFT_TYPES
 

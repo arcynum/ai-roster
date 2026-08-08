@@ -26,9 +26,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
-
-[tool.ty]
-target-version = "py312"
+ignore = ["E501", "F841"]  # E501: line length; F841: unused variables (pre-existing throughout codebase)
 
 [tool.pytest.ini_options]
 addopts = "-m 'not slow'"

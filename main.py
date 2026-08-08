@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import date, datetime
+from datetime import datetime
 
 from constraints import get_hard_constraint_ids, get_soft_constraint_ids
 from models import Classification, Staff
@@ -40,7 +40,6 @@ from utils import (
     validate_roster_positions,
     validate_staff_records,
 )
-
 
 logger = logging.getLogger("ai-roster")
 

@@ -1,6 +1,5 @@
 """Tests for constraints.py - compatibility table, coverage, and fairness."""
 
-import pytest
 
 from constraints import NoDoubleBooking
 
@@ -420,6 +419,7 @@ class TestNightToDayRestApply:
     def test_model_has_constraints(self, definitions):
         """The apply method should add constraints to the model."""
         from ortools.sat.python import cp_model
+
         from constraints import NightToDayRest
 
         model = cp_model.CpModel()
@@ -689,8 +689,9 @@ class TestContractedHoursFloorSoft:
     def test_soft_floor_allows_shortfall(self, definitions):
         """Soft floor should allow infeasible floors but penalise shortfall."""
         from ortools.sat.python import cp_model
+
         from constraints import ContractedHoursFloorSoft
-        from models import Staff, Classification
+        from models import Classification, Staff
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
@@ -769,8 +770,9 @@ class TestOvertimeCap:
     def test_apply_adds_constraints(self, definitions):
         """The apply method should add constraints to the model for staff-hours."""
         from ortools.sat.python import cp_model
+
         from constraints import OvertimeCap
-        from models import Staff, Classification
+        from models import Classification, Staff
 
         model = cp_model.CpModel()
 
@@ -827,8 +829,9 @@ class TestOvertimeCap:
     def test_solver_enforces_cap(self, definitions):
         """Solver should reject solutions where staff hours exceed overtime cap."""
         from ortools.sat.python import cp_model
+
         from constraints import OvertimeCap
-        from models import Staff, Classification
+        from models import Classification, Staff
         from utils import SCALE
 
         model = cp_model.CpModel()
@@ -915,8 +918,9 @@ class TestOvertimeCap:
     def test_solver_allows_within_cap(self, definitions):
         """Solver should allow solutions within the overtime cap."""
         from ortools.sat.python import cp_model
+
         from constraints import OvertimeCap
-        from models import Staff, Classification
+        from models import Classification, Staff
         from utils import SCALE
 
         model = cp_model.CpModel()
@@ -1001,8 +1005,9 @@ class TestOvertimeCap:
     def test_cap_uses_raw_contracted_not_adjusted(self, definitions):
         """Overtime cap uses raw contracted_hours_per_fortnight, not holiday-adjusted."""
         from ortools.sat.python import cp_model
+
         from constraints import OvertimeCap
-        from models import Staff, Classification
+        from models import Classification, Staff
         from utils import SCALE
 
         model = cp_model.CpModel()
@@ -1119,8 +1124,9 @@ class TestSkillLevelRequirement:
     def test_staff_with_higher_skill_can_fill_lower_position(self, definitions):
         """Triage-qualified staff (rank 2) should be assignable to Acute position (rank 0)."""
         from ortools.sat.python import cp_model
+
         from constraints import SkillLevelRequirement
-        from models import Staff, Classification
+        from models import Classification, Staff
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
@@ -1161,8 +1167,9 @@ class TestSkillLevelRequirement:
     def test_staff_with_lower_skill_cannot_fill_higher_position(self, definitions):
         """Acute-qualified staff (rank 0) should NOT be assignable to Resus position (rank 1)."""
         from ortools.sat.python import cp_model
+
         from constraints import SkillLevelRequirement
-        from models import Staff, Classification
+        from models import Classification, Staff
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
@@ -1203,8 +1210,9 @@ class TestSkillLevelRequirement:
     def test_null_skill_level_allows_any_staff(self, definitions):
         """Position with null required_skill_level should accept staff of any skill rank."""
         from ortools.sat.python import cp_model
+
         from constraints import SkillLevelRequirement
-        from models import Staff, Classification
+        from models import Classification, Staff
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
@@ -1245,8 +1253,9 @@ class TestSkillLevelRequirement:
     def test_exact_skill_match_allowed(self, definitions):
         """Resus-qualified staff should be assignable to Resus position (exact rank match)."""
         from ortools.sat.python import cp_model
+
         from constraints import SkillLevelRequirement
-        from models import Staff, Classification
+        from models import Classification, Staff
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
@@ -1286,8 +1295,9 @@ class TestSkillLevelRequirement:
     def test_shift_coordinator_can_fill_any_position(self, definitions):
         """Shift Coordinator (rank 3) should fill Acute, Resus, Triage, or Shift Coordinator positions."""
         from ortools.sat.python import cp_model
+
         from constraints import SkillLevelRequirement
-        from models import Staff, Classification, SKILL_RANK
+        from models import Classification, Staff
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
@@ -1327,8 +1337,9 @@ class TestSkillLevelRequirement:
     def test_multiple_staff_different_skills(self, definitions):
         """With 2 staff (Acute+Resus and Triage) and 1 Resus position, only Triage can fill it."""
         from ortools.sat.python import cp_model
+
         from constraints import SkillLevelRequirement
-        from models import Staff, Classification
+        from models import Classification, Staff
 
         model = cp_model.CpModel()
         solver = cp_model.CpSolver()
@@ -1395,6 +1406,7 @@ class TestMaxHoursConstraint:
     def test_variable_bound_enforces_76h_cap(self, definitions):
         """The IntVar upper bound of 76*SCALE enforces the 76h cap at variable creation."""
         from ortools.sat.python import cp_model
+
         from utils import SCALE
 
         model = cp_model.CpModel()
@@ -1446,6 +1458,7 @@ class TestMaxHoursConstraint:
     def test_at_cap_is_feasible(self, definitions):
         """Exactly 76h should be feasible (boundary case)."""
         from ortools.sat.python import cp_model
+
         from utils import SCALE
 
         model = cp_model.CpModel()
@@ -1500,6 +1513,7 @@ class TestMaxHoursConstraint:
     def test_apply_is_noop(self, definitions):
         """The apply method should be a no-op (bound is in _create_variables)."""
         from ortools.sat.python import cp_model
+
         from constraints import MaxHoursConstraint
 
         model = cp_model.CpModel()

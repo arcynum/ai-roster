@@ -26,7 +26,7 @@ FLOOR_GREEN_THRESHOLD = 100.0
 FLOOR_YELLOW_THRESHOLD = 85.0
 
 if TYPE_CHECKING:
-    from models import Staff, RosterSlot
+    from models import Staff
     from solver import SolveResult
 
 logger = logging.getLogger("ai-roster")
@@ -99,7 +99,7 @@ def _hours_floor_info(hours: float, adjusted: float) -> tuple[float, str, str, s
 
 def _build_context(
     result: SolveResult,
-    staff_list: list["Staff"],
+    staff_list: list[Staff],
     definitions: dict,
     roster_start: date,
     roster_end: date,
@@ -422,7 +422,7 @@ def _build_context(
 
 def generate_html(
     result: SolveResult,
-    staff_list: list["Staff"],
+    staff_list: list[Staff],
     definitions: dict,
     roster_start: date,
     roster_end: date,

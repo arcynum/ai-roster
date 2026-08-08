@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
 """Tests for config.yaml constraint toggles and solver filtering."""
 
-import logging
-import tempfile
 from pathlib import Path
 
 import pytest
 import yaml
 
-from typing import Any
-
 from constraints import HARD_CONSTRAINTS, SOFT_CONSTRAINTS, get_hard_constraint_ids, get_soft_constraint_ids
 from solver import RosterModel
 from utils import load_config
-
 
 # ---------------------------------------------------------------------------
 # load_config unit tests
@@ -199,7 +194,6 @@ class TestSolverConstraintFiltering:
         We intercept the constraint.apply() calls to count them without
         needing a full CP-SAT solve.
         """
-        from ortools.sat.python import cp_model
 
         from models import Classification, Staff
 

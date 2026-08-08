@@ -3,13 +3,10 @@
 
 from __future__ import annotations
 
-import pytest
 from datetime import date, timedelta
 
-from constraints import HARD_CONSTRAINTS, SOFT_CONSTRAINTS
 from models import Classification, Staff
-from solver import RosterModel, SolveResult
-from utils import SCALE
+from solver import RosterModel
 
 
 class TestUnfilledFirstWorkflow:
@@ -125,8 +122,9 @@ class TestWeightDominanceSanity:
         test would have caught the silent weight=1 bug where key mismatches
         caused all weights to collapse to the default of 1.
         """
-        import yaml
         from pathlib import Path
+
+        import yaml
 
         from constraints import get_soft_constraint_ids
         from solver import RosterModel

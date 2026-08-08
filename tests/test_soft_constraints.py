@@ -5,7 +5,6 @@ S#30c6f5ad (consecutive shift run penalty), S#7b4e19fc (skill tiebreaker),
 S#6c1e9a4d (day/night run-count penalty).
 """
 
-import pytest
 from ortools.sat.python import cp_model
 
 from constraints import (

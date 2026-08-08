@@ -11,8 +11,9 @@ Provides:
 from __future__ import annotations
 
 import logging
-from abc import ABC, abstractmethod
-from datetime import date as date_type, datetime, timedelta
+from abc import ABC
+from datetime import date as date_type
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from utils import (
@@ -27,6 +28,7 @@ from utils import (
 
 if TYPE_CHECKING:
     from ortools.sat.python import cp_model
+
     from models import Staff
 
 logger = logging.getLogger("ai-roster")
@@ -80,16 +82,16 @@ class BaseConstraint(ABC):
 
     def apply(
         self,
-        model: "cp_model.CpModel",
-        staff_list: list["Staff"],
-        staff_by_name: dict[str, "Staff"],
-        assignments: list[list["cp_model.IntVar"]],
+        model: cp_model.CpModel,
+        staff_list: list[Staff],
+        staff_by_name: dict[str, Staff],
+        assignments: list[list[cp_model.IntVar]],
         staff_names: list[str],
         definitions: dict,
         all_dates: list[str],
         blocks: list[list[str]],
         positions: list[dict],
-    ) -> "Any":
+    ) -> Any:
         """Add variables and constraints to the CP-SAT model.
 
         Returns may vary by subclass: hard constraints may return a list of
@@ -118,17 +120,17 @@ class BaseSoftConstraint(BaseConstraint):
 
     def apply(  # type: ignore[override]
         self,
-        model: "cp_model.CpModel",
-        staff_list: list["Staff"],
-        staff_by_name: dict[str, "Staff"],
-        assignments: list[list["cp_model.IntVar"]],
+        model: cp_model.CpModel,
+        staff_list: list[Staff],
+        staff_by_name: dict[str, Staff],
+        assignments: list[list[cp_model.IntVar]],
         staff_names: list[str],
         definitions: dict,
         all_dates: list[str],
         blocks: list[list[str]],
         positions: list[dict],
         weight: int,
-    ) -> "cp_model.IntVar | None":
+    ) -> cp_model.IntVar | None:
         """Add penalty variable to the objective function.
 
         Returns the top-level penalty IntVar (or None if the constraint

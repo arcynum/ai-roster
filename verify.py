@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 
 from models import SKILL_RANK, Staff
-from utils import DAY_SHIFTS, NIGHT_SHIFTS, GRADUATE_ALLOWED_SHIFTS, SCALE, compute_adjusted_hours
+from utils import DAY_SHIFTS, GRADUATE_ALLOWED_SHIFTS, NIGHT_SHIFTS, SCALE, compute_adjusted_hours
 
 logger = logging.getLogger("ai-roster")
 

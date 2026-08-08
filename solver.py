@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from ortools.sat.python import cp_model
@@ -28,7 +29,7 @@ from utils import (
 )
 
 if TYPE_CHECKING:
-    from models import Staff, RosterPosition
+    from models import Staff
 
 
 logger = logging.getLogger("ai-roster")
@@ -86,7 +87,7 @@ class RosterModel:
 
     def __init__(
         self,
-        staff_list: list["Staff"],
+        staff_list: list[Staff],
         positions: list[dict],
         definitions: dict,
         weights: dict[str, int],

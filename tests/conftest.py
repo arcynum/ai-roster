@@ -11,14 +11,13 @@ Provides:
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
 from typing import Any
 
 import pytest
 
 from models import Classification, Staff
 from solver import RosterModel
-from utils import load_definitions, SHIFT_ORDER
+from utils import load_definitions
 
 
 @pytest.fixture

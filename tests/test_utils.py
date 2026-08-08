@@ -1,6 +1,6 @@
 """Tests for utils.py - data loading, validation, and helper functions."""
 
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 
@@ -11,11 +11,8 @@ from utils import (
     get_fortnight_blocks,
     validate_roster_period,
     validate_roster_positions,
-    load_definitions,
-    load_staff,
     validate_staff_records,
 )
-from models import Staff, Classification
 
 
 class TestValidateRosterPeriod:

@@ -8,9 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from constraints import HARD_CONSTRAINTS, SOFT_CONSTRAINTS, get_hard_constraint_ids, get_soft_constraint_ids
+from constraints import get_hard_constraint_ids, get_soft_constraint_ids
 from solver import RosterModel
-
 
 # IDs documented in markdown files but implemented indirectly (not standalone constraint classes).
 # Each entry points to where it's implemented.
@@ -113,7 +112,6 @@ class TestConstraintIdSync:
 
     def test_registered_ids_appear_in_config(self):
         """Every registered ID must appear in config.yaml (commented or uncommented)."""
-        import yaml
 
         project_root = Path(__file__).resolve().parent.parent
         config_path = project_root / "config.yaml"

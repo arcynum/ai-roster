@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
-
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -69,7 +67,7 @@ class Staff:
         return max(SKILL_RANK[tag] for tag in self.skill_tags)
 
     @property
-    def highest_skill_level(self) -> Optional[str]:
+    def highest_skill_level(self) -> str | None:
         """Return the name of this staff member's highest skill level."""
         if not self.skill_tags:
             return None
@@ -117,7 +115,7 @@ class RosterPosition:
     date: str
     day_name: str
     shift: str
-    required_skill_level: Optional[str] = None
+    required_skill_level: str | None = None
     required_skill_rank: int = -1
 
     def __post_init__(self):
@@ -134,5 +132,5 @@ class RosterSlot:
     staff_name: str
     date: str
     shift: str
-    required_skill_level: Optional[str] = None
-    slot_id: Optional[str] = None
+    required_skill_level: str | None = None
+    slot_id: str | None = None

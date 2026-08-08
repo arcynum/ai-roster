@@ -10,12 +10,9 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-import pytest
-
 from models import Classification, RosterSlot, Staff
 from solver import SolveResult
 from verify import VerifierResult, Violation, verify
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
