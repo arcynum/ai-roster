@@ -137,7 +137,7 @@ class TestLoadConfig:
                 if isinstance(entry, str) and entry.strip().startswith("#"):
                     # Extract ID from commented line like "  # - "[H#...]"
                     import re
-                    m = re.search(r"\[([HS]#[a-f0-9]{8})\]", entry)
+                    m = re.search(r"\[([HS]#[A-Za-z0-9]{8})\]", entry)
                     if m:
                         commented_ids.add(m.group(1))
         known = set(get_hard_constraint_ids()) | set(get_soft_constraint_ids())
@@ -198,9 +198,10 @@ class TestSolverConstraintFiltering:
         """
         from ortools.sat.python import cp_model
 
-        staff_list: list[Any] = [
-            type("S", (), {"name": "Alice", "is_graduate": False,
-                           "red_requests": [], "holidays": []})(),
+        from models import Classification, Staff
+
+        staff_list: list[Staff] = [
+            Staff(name="Alice", classification=Classification.RN, skill_tags=["Acute"], contracted_hours_per_fortnight=56.0),
         ]
         staff_by_name = {"Alice": staff_list[0]}
         staff_names = ["Alice"]

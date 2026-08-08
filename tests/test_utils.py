@@ -143,7 +143,7 @@ class TestValidateRosterPositions:
                 ],
             },
         }
-        definitions = {"D8": {"start": "08:00:00", "end": "16:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False}}
+        definitions = {"D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False}}
         start = date(2026, 8, 3)
         end = date(2026, 8, 9)
         positions = validate_roster_positions(roster_data, definitions, start, end)
@@ -177,7 +177,7 @@ class TestValidateRosterPositions:
                 ],
             },
         }
-        definitions = {"D8": {"start": "08:00:00", "end": "16:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False}}
+        definitions = {"D8": {"start": "07:00:00", "end": "15:30:00", "span_hours": 8.5, "paid_hours": 8.0, "crosses_midnight": False}}
         start = date(2026, 8, 3)
         end = date(2026, 8, 9)
         positions = validate_roster_positions(roster_data, definitions, start, end)

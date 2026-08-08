@@ -104,13 +104,20 @@ Ponytail decisions:
 - §3.4d (pos_by_date) and §3.5 (ModelContext dataclass) skipped: high effort (40+ call sites), low immediate value (code works), high risk (easy to introduce bugs). Deferred until a concrete need arises.
 
 ### Step 7: §5.3/§5.4 test rebuild, §4 hygiene, §6 docs
-- [ ] §5.3: Fix test fixtures (real definitions, real Staff dataclass)
+- [x] §5.3: Fix test fixtures (real definitions, real Staff dataclass)
+  - [x] test_utils.py: Fixed D8 start/end times ("08:00:00"/"16:30:00" → "07:00:00"/"15:30:00") to match definitions.yaml (§5.3, lines 146, 180)
+  - [x] test_config.py: Replaced duck-typed staff (`type("S", (), {...})`) with real `models.Staff` (§5.3, lines 201-204)
+  - [x] test_constraint_sync.py: Fixed regex `[a-f0-9]+` → `[A-Za-z0-9]{8}` for canonical 8-char alphanumeric IDs (§5.3, line 34)
+  - [x] test_config.py: Fixed same regex bug at line 140 (`[a-f0-9]{8}` → `[A-Za-z0-9]{8}`)
+  - [x] test_output.py stub definitions: verified acceptable (only `paid_hours` + `crosses_midnight` needed, no start/end access)
+  - [x] test_integration.py hardcoded tier weights: low severity, already has companion test loading from weights.yaml
+  - [x] test_soft_constraints.py `_make_position` ad-hoc `required_skill_rank`: intentional for SkillLevelTiebreaker tests
 - [ ] §5.4: Extend test_constraint_sync.py
 - [ ] §5.5: Add missing coverage (e2e smoke, regression tests)
 - [ ] §4: Delete dead code, move imports, error handling, template fixes
 - [ ] §6: Documentation updates
 
-**Status: IN PROGRESS — §5.3 started**
+**Status: §5.3 COMPLETE — 2026-08-08**
 
 ### Step 8: Optional — snake_case migration
 - [ ] Mechanical pass: OR-Tools CamelCase → snake_case
@@ -119,4 +126,4 @@ Ponytail decisions:
 
 ---
 
-Last updated: 2026-08-08 (Step 6 §3.4a/c complete)
+Last updated: 2026-08-08 (Step 7 §5.3 complete)

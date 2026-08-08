@@ -31,7 +31,7 @@ IMPLEMENTED_ELSEWHERE = {
 def _extract_ids(md_path: Path) -> set[str]:
     """Extract all [H#...] and [S#...] IDs from a markdown file."""
     text = md_path.read_text()
-    return set(re.findall(r'\[[HS]#[a-f0-9]+\]', text))
+    return set(re.findall(r'\[[HS]#[A-Za-z0-9]{8}\]', text))
 
 
 class TestConstraintIdSync:
